@@ -342,3 +342,26 @@ credibilidade do que nunca tê-lo feito.
 (se o motorista vê o destino antes de aceitar e se o motorista avalia o
 passageiro), os dados da empresa para o bloco institucional, e a decisão
 sobre abrir lista de espera.
+
+## Decisão de produto: o motorista vê o destino antes de aceitar (18/11/2026)
+
+Confirmado pelo dono. O app já mostra o destino no cartão de oferta, então a
+implementação está coerente com a decisão.
+
+**É um diferencial forte para atrair motorista** — é uma das maiores
+reclamações de quem dirige nos aplicativos que escondem o destino. O site
+pode afirmar isso.
+
+**E tem o outro lado, que precisa de uma regra depois:** mostrar o destino
+permite ao motorista escolher corridas, recusando as que não interessam.
+Isso é bom para ele e ruim para o passageiro que vai para um bairro menos
+procurado, que pode ficar sem carro.
+
+Todas as plataformas que mostram destino lidam com isso de alguma forma:
+taxa de aceitação mínima, prioridade na fila para quem aceita mais, ou
+simplesmente aceitar o efeito. **Não é decisão para agora**, mas vira
+necessária quando houver distribuição de corridas de verdade (etapa 5.5 do
+PLANO.md). Fica registrada para não ser descoberta em operação.
+
+O app hoje já mostra "Taxa de aceitação" no painel do motorista — o número
+existe na tela, mas nenhuma regra usa esse número ainda.
