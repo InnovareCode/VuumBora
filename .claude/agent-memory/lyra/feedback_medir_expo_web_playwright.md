@@ -11,6 +11,16 @@ Lyra não tem ferramenta de navegador própria; mede via Bash + a skill
 sempre com `cd` para a pasta da skill e `node run.js <script-ou-código-inline>`
 (resolução de módulo depende disso).
 
+**Com vários agentes/sessões rodando em paralelo na mesma máquina, uma porta
+"responder 200" não prova que é O SEU app servindo.** Achado real (18/11/2026):
+`localhost:8098` respondeu HTTP 200 com título "VuumBora" genérico, mas era
+`expo start` de uma sessão PASSADA (o `npx expo start --web --port 8098` que eu
+tentei dar falhou silenciosamente em segundo plano com "Port already in use" —
+o processo antigo continuou de pé). Antes de medir, checar o log do processo que
+você mesma iniciou (confirma "Waiting on http://localhost:PORT") e, se a porta já
+estava ocupada, escolher outra livre (`netstat -ano | grep LISTENING` no Git Bash)
+em vez de confiar que "o healthcheck passou".
+
 **Erro já cometido: `npx expo start --web` rodado na RAIZ do monorepo.** Isso quebra
 com `Unable to resolve "../../App" from "node_modules/expo/AppEntry.js"` — a raiz não
 é um app Expo, só o workspace. Tem que rodar dentro do pacote do app
@@ -89,6 +99,24 @@ não erro de sintaxe. O seletor certo é `'input[data-testid="x"]'` (ou
 `page.fill('input[data-testid="x"]', valor)`). `ButtonCore`/`Pressable` já colocam
 `testID` no próprio elemento clicável, então `'[data-testid="x"]'` funciona normal
 para botões — a pegadinha é só em campo de texto.
+
+**Um detector de overflow que só checa `scrollWidth > clientWidth` (horizontal)
+PERDE truncamento de `numberOfLines` quando o texto quebra em MAIS linhas do que o
+limite** — isso trunca verticalmente (corta a última linha visível com "…"), não
+horizontalmente, então `scrollWidth` do próprio nó de texto fica igual a
+`clientWidth` (ele não "vaza" pros lados, só perde linha pra baixo). Achado real
+medindo a Home do motorista (18/11/2026): `MetricCard` com `numberOfLines={2}`
+cortava "Taxa de aceitação" em 3 linhas reais e `OnlineToggle` cortava "Você está
+online e recebendo corridas." em 4 — nenhum dos dois apareceu no scanner de
+`scrollWidth`. Scanner correto precisa comparar **os dois eixos**:
+```js
+if (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 2) { /* truncado */ }
+```
+(a margem de `+2` no vertical evita falso positivo por arredondamento de
+`lineHeight`). Rodar esse scanner em TODOS os breakpoints pedidos, não só no mais
+estreito — a tolerância de `+2` e o próprio limite de linhas podem só estourar num
+breakpoint do meio (ver [[bug_referencia_linha_unica_nao_cabe_breakpoint]], achado
+assim).
 
 **Placeholder de `RNTextInput` não quebra linha nem recebe reticências** — se o texto
 do placeholder for mais largo que o campo (comum em telas de 320px com

@@ -12,3 +12,5 @@
 - [boxShadow no RN 0.88: o que foi provado sobre Android](boxshadow_rn088_android_evidencia.md) — evidência de código-fonte forte, sem confirmação em device real.
 - [ScreenHeader: título fixo trunca a 320pt](bug_screenheader_title_fixo_trunca_320.md) — orçamento real de largura, títulos curtos sempre.
 - [Reaproveitar componente com numberOfLines fixo trunca em caso novo](bug_componente_reaproveitado_numberoflines_fixo.md) — RouteSummaryRow→TripDetailRow, por que duplicar em vez de generalizar.
+- [Image.resolveAssetSource não existe no react-native-web](bug_resolveassetsource_react_native_web.md) — use `imageSource`/asset number direto, nunca resolva pra URI.
+- [Referência "linha única" pode não caber em NENHUM breakpoint real](bug_referencia_linha_unica_nao_cabe_breakpoint.md) — medir largura mínima antes de tentar um breakpoint esperto.

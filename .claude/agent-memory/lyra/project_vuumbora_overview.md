@@ -225,6 +225,40 @@ Expo Router) + pacotes (`packages/tokens`, `packages/ui`, `packages/api-client`,
   referência — reuso do componente já existente em vez de criar variante nova só
   pra isso; `router.replace('/boas-vindas')` simula o logout (sem sessão real, 1.6
   ainda não implementada).
+- **Home do motorista (M05) ganhou passe de fidelidade total contra
+  `VuumBora_Claude_Design_System/referencias/premium/motorista-home-alvo.webp`
+  (18/11/2026).** Mudanças em `@vuumbora/ui` (afetam os dois apps):
+  `MetricCard` ganhou `icon?: ReactNode` e `compact?: boolean` (padding
+  `spacing['1']`, valor em `textStyle('bold','caption')` — medido que 'body'
+  16px estourava os ~58-76pt de conteúdo da grade de 4 colunas a 360-430px);
+  `Avatar` ganhou `imageSource?: ImageSourcePropType` (prioridade sobre
+  `imageUri`) para fotos locais do bundler — **nunca** usar
+  `Image.resolveAssetSource` pra virar isso numa `imageUri: string`, a API não
+  existe no `react-native-web` (ver [[bug_resolveassetsource_react_native_web]]);
+  `MapPreviewBackground` ganhou `variant?: 'natal' | 'motorista'` (default
+  `natal`, preserva o uso antigo do passageiro) — mapa do motorista agora usa o
+  asset `packages/ui/assets/map/mapa-escuro-motorista.jpg`; novo arquivo
+  `packages/ui/src/demoAssets.ts` exporta `driverDemoAvatarSource`
+  (`packages/ui/assets/people/motorista-demo.jpg`, require direto, não resolvido).
+  **Primeiro uso de `react-native-svg` no projeto:** `DriverMapPreview` desenha
+  a rota (zigzag), o pino de embarque e o halo do carro com `<Svg><Path/></Svg>`
+  sobre o mapa, com coordenadas calculadas em FRAÇÃO da largura real do card
+  (`useWindowDimensions().width - 2*theme.layout.screenPadding`), não pixel
+  fixo — fica correto em qualquer breakpoint. `lucide-react-native` não tem
+  ícone de volante de carro — `ShipWheel` é o substituto usado no selo do
+  `DriverProfileRow` (compromisso de fidelidade, não é o ícone exato da
+  referência). `QuickActionsRow` e `OnlineToggle` (motorista) passaram a usar
+  `SurfaceRaised` + `edgeTop`/`edgeBottom` (borda iluminada), igual ao
+  `QuickAccessGrid` do passageiro — trocando a borda flat que ainda usavam.
+  `HighDemandBanner` trocou `backgroundColor: ctaBackground` chapado por
+  `LinearGradient` com `theme.gradient.cta` (mesmo gradiente do `ButtonCore`).
+  **Não consegui** replicar o card "Status do motorista" como uma linha única
+  (rótulo+pílula+divisor+sinal/texto) da referência em NENHUM dos 4 breakpoints
+  pedidos (320/360/390/430) — medido que só caberia a partir de ~500px; ficou
+  em duas linhas em toda largura (ver
+  [[bug_referencia_linha_unica_nao_cabe_breakpoint]]). Scanner de overflow
+  precisa checar `scrollHeight` além de `scrollWidth` — ver
+  [[feedback_medir_expo_web_playwright]].
 - **Tipografia:** Plus Jakarta Sans (`@expo-google-fonts/plus-jakarta-sans`,
   instalado em 18/11/2026 nos dois apps). Carregamento via `useFonts` +
   `expo-splash-screen` em cada `_layout.tsx`. Nunca combine `fontSize`/`fontWeight`
