@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Briefcase, Calendar, Car, Home as HomeIcon, MessageCircle, Star, User } from 'lucide-react-native';
 import { AppShell, BottomTabBar, type BottomTabBarItem, MockBadge, PrimaryButton, theme, textStyle } from '@vuumbora/ui';
@@ -26,6 +26,7 @@ const QUICK_ACCESS_ITEMS: readonly QuickAccessItem[] = [
  * chama uma API real ainda — não existe contrato/endpoint definido (pendência para Vega).
  */
 export default function PassengerHomeScreen() {
+  const { simulated } = useLocalSearchParams<{ simulated?: string }>();
   const destination = useRideRequestStore((state) => state.destination);
   const categoryId = useRideRequestStore((state) => state.categoryId);
   const setCategory = useRideRequestStore((state) => state.setCategory);
@@ -54,6 +55,9 @@ export default function PassengerHomeScreen() {
     <AppShell scroll footer={<BottomTabBar items={tabs} activeKey="inicio" testID="home-tab-bar" />}>
       <View style={styles.content}>
         <HomeHeader notificationCount={3} />
+        {simulated === '1' ? (
+          <MockBadge label="acesso simulado, sem autenticação real" testID="simulated-access-badge" />
+        ) : null}
         <GreetingRow passengerName="Juliana" />
         <HomeMapPreview cityLabel="Natal - RN" currentAddress="Ponta Negra, Natal - RN" landmarkLabel="Morro do Careca" />
         <DestinationSearchBar onPress={() => router.push('/destino')} destinationAddress={destination?.address} />
