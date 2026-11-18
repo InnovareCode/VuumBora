@@ -365,3 +365,25 @@ PLANO.md). Fica registrada para não ser descoberta em operação.
 
 O app hoje já mostra "Taxa de aceitação" no painel do motorista — o número
 existe na tela, mas nenhuma regra usa esse número ainda.
+
+## Decisão de produto: só o passageiro avalia (18/11/2026)
+
+Confirmado pelo dono. O app já implementa assim — a tela de corrida
+concluída tem avaliação por estrelas do lado do passageiro, e o motorista
+não avalia ninguém. Nenhuma mudança de código é necessária.
+
+**O que isso deixa em aberto, para não ser surpresa depois:** sem avaliação
+do passageiro, o motorista não tem registro de quem causou problema — quem
+sujou o carro, quem foi agressivo, quem fez o motorista esperar muito. Em
+operação, isso costuma aparecer como reclamação de motorista ("por que só
+eu sou avaliado?") e como falta de instrumento para decidir se um passageiro
+deve continuar usando a plataforma.
+
+Alternativas usuais, quando e se isso virar problema:
+- avaliação mútua, como a maioria das plataformas faz;
+- só um canal de denúncia, sem nota, que resolve a parte de segurança sem
+  criar a assimetria de "nota pública" dos dois lados.
+
+**Não é decisão para agora.** Fica registrado porque, quando houver
+operação real, é um dos primeiros atritos a aparecer — e porque o site não
+pode sugerir avaliação mútua enquanto ela não existir.
