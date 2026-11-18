@@ -1,0 +1,1 @@
+- [Paleta VuumBora medida](project_paleta_vuumbora.md) — paleta fechada por pixel em docs/identidade-visual.md; armadilhas de ciano e gradiente

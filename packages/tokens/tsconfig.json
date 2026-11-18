@@ -1,0 +1,4 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": ["src", "../../VuumBora_Claude_Design_System/tokens/vuumbora.tokens.json"]
+}

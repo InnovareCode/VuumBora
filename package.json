@@ -1,0 +1,29 @@
+{
+  "name": "vuumbora",
+  "private": true,
+  "version": "0.0.0",
+  "description": "VuumBora — monorepo dos apps Passageiro e Motorista (Expo + React Native + TypeScript).",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10"
+  },
+  "packageManager": "npm@10.9.0",
+  "scripts": {
+    "passenger": "npm run start --workspace @vuumbora/passenger",
+    "driver": "npm run start --workspace @vuumbora/driver",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check": "npm run check:boundaries && npm run typecheck"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  },
+  "overrides": {
+    "react": "19.3.0",
+    "react-native": "0.88.1"
+  }
+}

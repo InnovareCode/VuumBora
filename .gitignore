@@ -9,3 +9,12 @@ build/
 *.log
 .env
 .env.local
+
+# Expo / React Native
+.expo-shared/
+web-build/
+ios/
+android/
+*.tsbuildinfo
+.metro-health-check*
+expo-env.d.ts

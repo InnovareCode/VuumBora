@@ -1,0 +1,11 @@
+{
+  "name": "@vuumbora/tokens",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tema VuumBora derivado de VuumBora_Claude_Design_System/tokens/vuumbora.tokens.json (fonte única).",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  }
+}

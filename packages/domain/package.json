@@ -1,0 +1,16 @@
+{
+  "name": "@vuumbora/domain",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Núcleo de domínio compartilhado (tipos puros) + regras isoladas por perfil em subcaminhos.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./passenger": "./src/passenger/index.ts",
+    "./driver": "./src/driver/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  }
+}
