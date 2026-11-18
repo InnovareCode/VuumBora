@@ -60,19 +60,24 @@ export default function CatalogScreen() {
       <ScreenHeader title="Catálogo de componentes" subtitle="Design system VuumBora — @vuumbora/ui" />
       <View style={styles.spacer} />
 
-      <CatalogSection title="Marca" description="BrandLogo — selo + nome, só com tokens (sem bitmap).">
-        <CatalogRow label="Pequeno/médio">
-          <BrandLogo size="sm" />
-          <BrandLogo size="md" />
+      <CatalogSection title="Marca" description="BrandLogo — recortes reais do Apolo (packages/ui/assets/brand), só funcionam sobre fundo escuro.">
+        <CatalogRow label="Horizontal (cabeçalho) — sm/md">
+          <BrandLogo variant="horizontal" size="sm" />
+          <BrandLogo variant="horizontal" size="md" />
         </CatalogRow>
         {/* Tamanho grande numa linha só dele — a palavra "VuumBora" não tem onde
             quebrar, então não pode competir por espaço com outro item na mesma
             linha (achado real do Atlas, não detectável só pela caixa). */}
-        <CatalogRow label="Grande" stacked>
-          <BrandLogo size="lg" />
+        <CatalogRow label="Horizontal — lg" stacked>
+          <BrandLogo variant="horizontal" size="lg" />
         </CatalogRow>
-        <CatalogRow label="Sem nome">
-          <BrandLogo withWordmark={false} size="lg" />
+        <CatalogRow label="Lockup (login)" stacked>
+          <BrandLogo variant="lockup" size="md" />
+        </CatalogRow>
+        <CatalogRow label="Selo (só ícone)">
+          <BrandLogo variant="selo" size="sm" />
+          <BrandLogo variant="selo" size="md" />
+          <BrandLogo variant="selo" size="lg" />
         </CatalogRow>
       </CatalogSection>
 

@@ -31,7 +31,7 @@ export { ScreenHeader } from './ScreenHeader';
 export type { ScreenHeaderProps } from './ScreenHeader';
 
 export { BrandLogo } from './BrandLogo';
-export type { BrandLogoProps, BrandLogoSize } from './BrandLogo';
+export type { BrandLogoProps, BrandLogoSize, BrandLogoVariant } from './BrandLogo';
 
 export { PrimaryButton } from './PrimaryButton';
 export type { PrimaryButtonProps } from './PrimaryButton';

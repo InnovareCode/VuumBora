@@ -1,31 +1,97 @@
-import { StyleSheet, Text, View } from 'react-native';
-import { theme } from '@vuumbora/ui';
+import { useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import {
+  BarChart3,
+  Car,
+  ClipboardList,
+  Headphones,
+  Home as HomeIcon,
+  Navigation,
+  User,
+  Wallet,
+} from 'lucide-react-native';
+import { AppShell, BottomTabBar, theme, type BottomTabBarItem } from '@vuumbora/ui';
+import { DriverHeader } from '../src/components/home/DriverHeader';
+import { DriverProfileRow } from '../src/components/home/DriverProfileRow';
+import { OnlineToggle } from '../src/components/home/OnlineToggle';
+import { DriverMapPreview } from '../src/components/home/DriverMapPreview';
+import { HighDemandBanner } from '../src/components/home/HighDemandBanner';
+import { DailySummarySection } from '../src/components/home/DailySummarySection';
+import { NewRideOfferCard } from '../src/components/home/NewRideOfferCard';
+import { QuickActionsRow, type QuickActionItem } from '../src/components/home/QuickActionsRow';
 
-/** Marcador de fundação: só prova que o app sobe com o tema. Não é tela de produto. */
-export default function FoundationPlaceholder() {
+const OFFER_COUNTDOWN_SECONDS = 15;
+
+const QUICK_ACTIONS: readonly QuickActionItem[] = [
+  { key: 'navegar', label: 'Navegar', subtitle: '(GPS)', icon: <Navigation size={20} color={theme.role.ctaBackground} strokeWidth={1.75} /> },
+  { key: 'historico', label: 'Histórico', subtitle: 'de corridas', icon: <ClipboardList size={20} color={theme.role.ctaBackground} strokeWidth={1.75} /> },
+  { key: 'suporte', label: 'Suporte', subtitle: 'Ajuda e contato', icon: <Headphones size={20} color={theme.role.ctaBackground} strokeWidth={1.75} /> },
+];
+
+/**
+ * M05 — Dashboard do motorista (VuumBora_Claude_Design_System/referencias/motorista_home.png).
+ * Tela só de UI: nenhuma ação abaixo (toggle online, aceitar/recusar oferta, atalhos,
+ * abas) chama uma API real ainda — não existe contrato/endpoint definido (pendência
+ * para Vega). Duas regras de domínio (MOTORISTA.md) que o CÓDIGO respeita, não só a
+ * aparência: `registrationApproved` bloqueia o toggle online (ver `OnlineToggle`), e o
+ * contador da oferta é só demonstração local — quem expira de verdade é o servidor.
+ */
+export default function DriverHomeScreen() {
+  const [online, setOnline] = useState(true);
+  const [secondsRemaining, setSecondsRemaining] = useState(OFFER_COUNTDOWN_SECONDS);
+
+  // DEMO: cadastro/documentação aprovados viria de uma sessão real (M04). Fixo em
+  // `true` aqui só para a tela ficar navegável sem backend — nunca usar como estado
+  // de produção.
+  const registrationApproved = true;
+
+  // Contador de DEMONSTRAÇÃO: conta até 0 e para. Não decide nada sozinho (não
+  // recusa a oferta automaticamente) — a regra "quem expira é o servidor" fica
+  // explícita no MockBadge do próprio card.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSecondsRemaining((current) => (current > 0 ? current - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const tabs: readonly BottomTabBarItem[] = [
+    { key: 'inicio', label: 'Início', icon: ({ color, active }) => <HomeIcon size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
+    { key: 'corridas', label: 'Corridas', icon: ({ color, active }) => <Car size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
+    { key: 'ganhos', label: 'Ganhos', icon: ({ color, active }) => <Wallet size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
+    { key: 'desempenho', label: 'Desempenho', icon: ({ color, active }) => <BarChart3 size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
+    { key: 'perfil', label: 'Perfil', icon: ({ color, active }) => <User size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
+  ];
+
   return (
-    <View style={styles.root} accessibilityRole="summary">
-      <Text style={styles.title}>VuumBora Motorista</Text>
-      <Text style={styles.note}>Fundação do monorepo — nenhuma tela implementada.</Text>
-    </View>
+    <AppShell scroll footer={<BottomTabBar items={tabs} activeKey="inicio" testID="driver-tab-bar" />}>
+      <View style={styles.content}>
+        <DriverHeader notificationCount={3} />
+        <DriverProfileRow driverName="Carlos Santos" approved={registrationApproved} />
+        <OnlineToggle online={online} approved={registrationApproved} onToggle={setOnline} />
+        <DriverMapPreview cityLabel="São Paulo - SP" />
+        <HighDemandBanner />
+
+        <DailySummarySection earningsLabel="R$ 247,90" ridesLabel="12" ratingLabel="4,95" acceptanceLabel="92%" />
+
+        <NewRideOfferCard
+          passengerName="Ana Oliveira"
+          pickupDistanceLabel="2,3 km até o embarque"
+          pickupAddress="Rua Haddock Lobo, 347 – Cerqueira César"
+          destinationLabel="Itaim Bibi – SP"
+          priceLabel="R$ 32,40"
+          surgeLabel="Dinâmica +20%"
+          secondsRemaining={secondsRemaining}
+          onAccept={() => {}}
+          onDecline={() => {}}
+        />
+
+        <QuickActionsRow items={QUICK_ACTIONS} />
+      </View>
+    </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: theme.layout.screenPadding,
-    backgroundColor: theme.role.screen,
-  },
-  title: {
-    color: theme.role.textPrimary,
-    fontSize: theme.typography.size.title,
-    fontWeight: theme.typography.weight.bold,
-  },
-  note: {
-    marginTop: theme.spacing['2'],
-    color: theme.role.textSecondary,
-    fontSize: theme.typography.size.small,
-  },
+  content: { gap: theme.spacing['5'] },
 });
