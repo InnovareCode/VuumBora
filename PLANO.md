@@ -157,3 +157,17 @@ antes de qualquer travamento. A Fase 5 é onde o projeto para, se as decisões 1
 4. Nada entra como pronto sem medição — quem escreveu não é quem aprova.
 5. Decisão sua que aparecer no caminho vira pergunta objetiva, com recomendação,
    não um "o que você acha?".
+
+---
+
+## Repositório
+
+`https://github.com/InnovareCode/VuumBora.git` — conectado em 18/11/2026,
+branch `main`. O histórico completo (26 commits) foi publicado.
+
+Antes do primeiro push houve varredura do que ia ser publicado: nenhum token,
+chave ou segredo nos arquivos versionados, e `.env`, `.missao-atual` e
+`.missoes-quadro.json` confirmados como ignorados.
+
+**Nunca commitar:** o `.env` (token do Mapbox) e os arquivos de estado de
+sessão da equipe. O `.gitignore` já barra os três.
