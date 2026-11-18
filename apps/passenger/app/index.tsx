@@ -45,7 +45,7 @@ export default function PassengerHomeScreen() {
 
   const tabs: readonly BottomTabBarItem[] = [
     { key: 'inicio', label: 'Início', icon: ({ color, active }) => <HomeIcon size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
-    { key: 'viagens', label: 'Viagens', icon: ({ color, active }) => <Car size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
+    { key: 'viagens', label: 'Viagens', icon: ({ color, active }) => <Car size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => router.push('/historico') },
     {
       key: 'mensagens',
       label: 'Mensagens',
@@ -53,7 +53,7 @@ export default function PassengerHomeScreen() {
       badgeCount: 2,
       onPress: () => {},
     },
-    { key: 'perfil', label: 'Perfil', icon: ({ color, active }) => <User size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
+    { key: 'perfil', label: 'Perfil', icon: ({ color, active }) => <User size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => router.push('/perfil') },
   ];
 
   return (
