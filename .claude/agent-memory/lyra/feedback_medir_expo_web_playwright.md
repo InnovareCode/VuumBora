@@ -70,3 +70,29 @@ DOM real (`getComputedStyle`), nunca assumidos do token — um seletor de texto
 leitura de contraste sem sentido (ex.: `rgb(0,0,0)` de um wrapper sem texto); checar
 visualmente pelo screenshot antes de reportar um número de contraste estranho como
 bug real.
+
+**O mesmo erro de `exactOptionalPropertyTypes` aparece com `errorMessage?: string`**
+em `InputCore`/`ButtonCore` quando a mensagem vem de `fieldState.error?.message`
+(React Hook Form) ou de um `useState<string | undefined>` de erro de envio —
+`errorMessage={algo}` com `algo: string | undefined` quebra do mesmo jeito que
+`testID`. Resolvido nas telas de auth (P01/Login/Cadastro, 18/11/2026) com um
+helper puro `fieldErrorProps(fieldState.error)` em
+`apps/passenger/src/lib/fieldErrorProps.ts` que devolve `{error:true, errorMessage}`
+ou `{error:true}` (nunca a chave com `undefined`) e é espalhado (`{...fieldErrorProps(...)}`)
+no JSX — mesma ideia de `toRideDraft`, extraída para o caso de campo de formulário.
+
+**`testID` em `InputCore` vai no `<RNTextInput>` interno, não no `View` wrapper.**
+Isso significa que no DOM renderizado (RN Web) o atributo `data-testid` cai direto
+no elemento `<input>` — um seletor Playwright `'[data-testid="x"] input'` (tratando
+o testID como se fosse de um container) não encontra nada e **dá timeout silencioso**,
+não erro de sintaxe. O seletor certo é `'input[data-testid="x"]'` (ou
+`page.fill('input[data-testid="x"]', valor)`). `ButtonCore`/`Pressable` já colocam
+`testID` no próprio elemento clicável, então `'[data-testid="x"]'` funciona normal
+para botões — a pegadinha é só em campo de texto.
+
+**Placeholder de `RNTextInput` não quebra linha nem recebe reticências** — se o texto
+do placeholder for mais largo que o campo (comum em telas de 320px com
+`leftAccessory` tomando espaço), ele é cortado no meio sem aviso visual (ex.:
+"seu@email.com ou (00) 00000-0000" virou "seu@email.com ou (00) 0000" em 320px na
+tela de Login). Só aparece numa screenshot real no menor breakpoint — não dá pra
+prever pelo tamanho da string. Correção: placeholder mais curto, não CSS.

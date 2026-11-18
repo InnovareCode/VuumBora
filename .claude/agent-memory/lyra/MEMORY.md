@@ -1,10 +1,12 @@
 - [Projeto Vuumbora — visão geral](project_vuumbora_overview.md) — monorepo, tokens, @vuumbora/ui, onde fica cada coisa.
 - [RN Web: flexWrap sem flex:1 corta em vez de quebrar linha](bug_rn_web_flexwrap_sem_flex1.md) — causa raiz + correção.
 - [RN Web: hitSlop sozinho não garante alvo de toque 44px](bug_touch_target_hitslop_insuficiente.md) — causa raiz + correção.
-- [Medir Expo Router web com Playwright](feedback_medir_expo_web_playwright.md) — onde servir, print completo, seletor `:visible` com telas empilhadas, `exactOptionalPropertyTypes`.
+- [Medir Expo Router web com Playwright](feedback_medir_expo_web_playwright.md) — onde servir, print completo, seletor `:visible`, `exactOptionalPropertyTypes`, testID do InputCore vai no `<input>`, placeholder pode truncar sem elipse.
 - [Desenhar ícone composto (lupa) com Views e transform](bug_icone_view_transform_sem_transformorigin.md) — rotacionar sem transformOrigin desconecta as peças.
 - [Checar overflow por elemento, não só pelo documento](feedback_checar_overflow_por_elemento.md) — por que `scrollWidth`/`getBoundingClientRect` do documento não bastam.
 - [Tipografia Plus Jakarta Sans no RN/Expo](licoes-tipografia-plus-jakarta-sans.md) — fontFamily por peso, tabular-nums, símbolos fora da marca.
 - [Chrome `--screenshot` CLI pode mentir sobre o viewport](bug_chrome_screenshot_cli_viewport_mentiroso.md) — reprodução que não bate com CDP/Playwright.
 - [Script de teste: `<button>` não é `<div>`](feedback_leaf_detection_button_nao_e_div.md) — falso positivo clássico ao filtrar "nó-folha de texto".
-- [Marcar dado mock visivelmente (MockBadge)](feedback_marcar_dado_mock_visivelmente.md) — padrão da P03, repete em toda tela baseada em mockup.
+- [Marcar dado mock visivelmente (MockBadge)](feedback_marcar_dado_mock_visivelmente.md) — padrão da P03; visual virou chip neutro tracejado em 18/11/2026 (direção de arte item 1).
+- [Flex fixo espreme texto flex:1 vizinho](bug_flex_fixo_espreme_texto_flex1_vizinho.md) — badge de largura fixa cortou "Agendar" para "A." na grade 2×2.
+- [boxShadow no RN 0.88: o que foi provado sobre Android](boxshadow_rn088_android_evidencia.md) — evidência de código-fonte forte, sem confirmação em device real.

@@ -20,10 +20,15 @@
  * (MapView/RouteOverlay/LocationMarker) — fora deste escopo.
  */
 export { theme, tokens } from '@vuumbora/tokens';
-export type { Theme, Tokens } from '@vuumbora/tokens';
+export type { Theme, Tokens, GradientStop, BoxShadowValue } from '@vuumbora/tokens';
 
 export { textStyle, textStyleForSize, tabularNums, glyphStyle } from './typography';
 export type { TextWeightKey, TextSizeKey } from './typography';
+
+export { gradientColors, gradientLocations } from './gradient';
+
+export { SurfaceRaised } from './SurfaceRaised';
+export type { SurfaceRaisedProps } from './SurfaceRaised';
 
 export { AppShell } from './AppShell';
 export type { AppShellProps } from './AppShell';

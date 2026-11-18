@@ -93,6 +93,75 @@ Expo Router) + pacotes (`packages/tokens`, `packages/ui`, `packages/api-client`,
   **`InputCore` ganhou `onFocus?`/`onBlur?`** (opcionais, repassados do `RNTextInput`
   interno) para a P04 saber qual campo (origem/destino) está ativo e aplicar o resultado
   do autocomplete nele — primeiro caso de extensão da base de input desde que ela existe.
+- **Telas de entrada do passageiro (P01/P02 + Login, 18/11/2026):**
+  `apps/passenger/app/{boas-vindas,login,cadastro}.tsx` — rotas FLAT (sem grupo
+  `(auth)`, seguindo o precedente de `destino.tsx`/`confirmacao.tsx` etc., não o
+  grupo que o comentário do `_layout.tsx` cogitava). **`react-hook-form` +
+  `zod` + `@hookform/resolvers` entraram só em `apps/passenger`** (instalados via
+  `npx expo install`, primeira vez que a dupla aparece no projeto — schemas em
+  `apps/passenger/src/schemas/authSchemas.ts`, mensagens em português, validação
+  de FORMATO apenas, não regra de negócio). Padrão de campo: `Controller` do RHF +
+  `TextInput`/`PhoneInput`/`PasswordInput` de `@vuumbora/ui`, ícone via
+  `leftAccessory` (primeiro uso dessa prop no app) com ícone `lucide-react-native`
+  cor `theme.role.textMuted`. Erro de campo: ver helper `fieldErrorProps` em
+  [[feedback_medir_expo_web_playwright]] (mesma causa raiz do `exactOptionalPropertyTypes`
+  já documentada ali, agora também pra `errorMessage`).
+  **Sem autenticação real** (`src/lib/simulateAuthRequest.ts` é only placeholder —
+  pendência pro Vega): ao "logar"/"cadastrar", navega com
+  `router.replace({pathname:'/', params:{simulated:'1'}})` e a Home
+  (`apps/passenger/app/index.tsx`) lê esse param via `useLocalSearchParams` e mostra
+  um `MockBadge` — é assim que a ação fica **visivelmente** marcada como simulada
+  (mesmo padrão do [[feedback_marcar_dado_mock_visivelmente]]).
+  **Login social (Google/Apple) é decisão de negócio pendente** (docs/decisoes-do-dono.md
+  item 8) — botões sempre `disabled` + `MockBadge`, sem SDK nenhum instalado; vivem em
+  `apps/passenger/src/components/auth/SocialSignInSection.tsx`.
+  **Termos de Uso/Política de Privacidade e "Recuperar acesso" não existem de
+  verdade** — em vez de navegar pra rota vazia, o toque revela um aviso inline
+  (`UnavailableNoticeBanner`, `accessibilityLiveRegion="polite"`, não é erro então
+  não usa `accessibilityRole="alert"`) explicando que ainda não está disponível.
+  **Componentes locais ficam em `apps/passenger/src/components/auth/`**
+  (`AuthHeader`, `LegalNotice`, `SocialSignInSection`, `UnavailableNoticeBanner`) —
+  não em `packages/ui`, por restrição de coordenação (outra missão mexendo em
+  `packages/ui`/tokens em paralelo em 18/11/2026); se algo ali for de fato
+  transversal (ex.: `UnavailableNoticeBanner`), avaliar promover depois.
+- **Direção de arte "premium" (`docs/direcao-de-arte.md`, Apolo, 18/11/2026)
+  aplicada — itens 1 a 6 da seção 9 (18/11/2026).** Tokens novos em
+  `vuumbora.tokens.json`: `gradient.cta/surfaceRaised/surfaceOverlay/searchLight/screen`,
+  `elevation.0-3/cta`, `glow.selected`, `color.border.subtle` (`edgeBottom`),
+  `color.highlight.*` (rim do CTA, halo do selecionado), `color.overlay.*`
+  (`glassOnMap`, `tabBar`), `color.text.onLightMuted`, e dimensões
+  `screenPaddingCompact/buttonHeightProminent/searchHeight(Compact)/mockChipHeight`
+  — todos espelhados em `theme.role.*`/`theme.gradient`/`theme.elevation`/`theme.glow`
+  por `packages/tokens/src/index.ts`. `BoxShadowValue`/`GradientStop` são os tipos
+  exportados; a prop RN `boxShadow` aceita o array de shadow direto, sem
+  serializar string CSS — ver [[boxshadow_rn088_android_evidencia]] antes de
+  assumir que funciona (ou não) no Android.
+- **`expo-linear-gradient` e `expo-image` instalados nos dois apps** (decisão do
+  dono, 18/11/2026) — `expo-linear-gradient` também é peerDependency de
+  `packages/ui` (ButtonCore/SurfaceRaised/AppShell importam direto). Plugin
+  `expo-image` adicionado em `app.config.ts` dos dois apps (config dinâmico não
+  escreve plugin sozinho, precisa editar à mão). **Não usar `expo-blur`**
+  (decisão do dono: custa quadros no Android, "vidro" da referência é opaco).
+- **`SurfaceRaised` (novo componente em `packages/ui`)**: `LinearGradient` fino
+  que aplica `gradient.surface.raised` — todo card/atalho (`InfoCard`,
+  `QuickAccessGrid`, `RideCategoryCard`, `PaymentMethodOption`,
+  `SafetyPromoBanner`) usa ele no lugar de `backgroundColor: theme.role.surface`
+  chapado. Quem dá volume ao card é a borda (`theme.role.edgeTop`/`edgeBottom`,
+  "top-lit edge"), não o gradiente — ele é quase imperceptível sozinho, de
+  propósito. `gradientColors`/`gradientLocations` (`packages/ui/src/gradient.ts`)
+  convertem `theme.gradient.*` (array `{color,position}`) para o par
+  `colors`/`locations` do `expo-linear-gradient`.
+- **Bug real achado aplicando a grade 2×2 do `QuickAccessGrid`** (ícone ao lado
+  do texto abaixo de 375pt): colocar o `MockBadge` como IRMÃO de largura fixa do
+  bloco de texto `flex:1`, com `marginLeft:'auto'`, espremeu o texto a ~12px
+  (cortou "Agendar" para "A."). Corrigido empilhando o badge DENTRO do bloco de
+  texto. Causa raiz generalizável em [[bug_flex_fixo_espreme_texto_flex1_vizinho]].
+- **Pendência de arquitetura deixada pela direção de arte:** o item 5 (§9) pede
+  categorias em LISTA vertical com caixa de ícone (`vehicle.iconBox`) abaixo de
+  375pt, mas isso exige mudar `categoryRow` (hoje `flexDirection:'row'`) dentro
+  de `apps/passenger/app/index.tsx` — fora do escopo permitido numa sessão em
+  que outra missão mexe em `apps/passenger/app/`. `RideCategoryCard` continua
+  no formato vertical (ícone em cima) em toda largura até isso ser liberado.
 - **Tipografia:** Plus Jakarta Sans (`@expo-google-fonts/plus-jakarta-sans`,
   instalado em 18/11/2026 nos dois apps). Carregamento via `useFonts` +
   `expo-splash-screen` em cada `_layout.tsx`. Nunca combine `fontSize`/`fontWeight`

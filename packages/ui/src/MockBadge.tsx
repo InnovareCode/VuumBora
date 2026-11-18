@@ -14,6 +14,11 @@ export interface MockBadgeProps {
  * "Agendar" etc.) que ainda não é regra de negócio real — nunca deve ser lido como
  * informação confiável. Ver especificacoes/PASSAGEIRO.md: "mockups são propostas,
  * não recursos implementados".
+ *
+ * Visual neutro (chip tracejado, sem amarelo) — direção de arte §4/§9 item 1: o selo
+ * amarelo competia com o CTA pelo único foco de amarelo da tela. Continua visível
+ * (contraste de texto e borda preservados) e continua tendo `accessibilityLabel`
+ * explícito — a honestidade do dado mock não depende da cor.
  */
 export const MockBadge = memo(function MockBadge({ label = 'demonstração', testID }: MockBadgeProps) {
   return (
@@ -31,15 +36,16 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: theme.layout.mockChipHeight,
     gap: theme.spacing['1'],
     paddingHorizontal: theme.spacing['2'],
-    paddingVertical: 2,
     borderRadius: theme.radius.pill,
     borderWidth: 1,
-    borderColor: theme.role.warning,
-    backgroundColor: theme.role.surfaceElevated,
+    borderStyle: 'dashed',
+    borderColor: theme.role.borderControl,
+    backgroundColor: 'transparent',
     alignSelf: 'flex-start',
   },
-  glyph: { color: theme.role.warning, ...glyphStyle(theme.typography.weight.bold, 'caption') },
-  label: { color: theme.role.warning, ...textStyle('semibold', 'caption') },
+  glyph: { color: theme.role.textSecondary, ...glyphStyle(theme.typography.weight.bold, 'caption') },
+  label: { color: theme.role.textSecondary, ...textStyle('medium', 'caption') },
 });

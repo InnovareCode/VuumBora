@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from '@vuumbora/tokens';
+import { SurfaceRaised } from './SurfaceRaised';
 import { textStyle } from './typography';
 
 export interface InfoCardProps {
@@ -42,34 +43,33 @@ export const InfoCard = memo(function InfoCard({
 
   if (!onPress) {
     return (
-      <View style={styles.card} testID={testID}>
+      <SurfaceRaised style={styles.card} testID={testID}>
         {content}
-      </View>
+      </SurfaceRaised>
     );
   }
 
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? title}
-      testID={testID}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-    >
-      {content}
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? title} testID={testID}>
+      {({ pressed }) => (
+        <SurfaceRaised style={[styles.card, pressed && styles.cardPressed]}>{content}</SurfaceRaised>
+      )}
     </Pressable>
   );
 });
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: theme.role.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing['4'],
     borderWidth: 1,
-    borderColor: theme.role.border,
+    // Borda iluminada de cima (direção de arte §4/§9 item 2, "top-lit edge"): simula
+    // luz vinda de cima, é o que separa o card do fundo sem precisar de gradiente forte.
+    // Fundo: direção de arte §4/§9 item 6, `gradient.surface.raised` (ver SurfaceRaised).
+    borderTopColor: theme.role.edgeTop,
+    borderColor: theme.role.edgeBottom,
   },
-  cardPressed: { backgroundColor: theme.role.surfaceElevated },
+  cardPressed: { opacity: 0.85 },
   row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['3'] },
   leading: {
     width: theme.layout.touchTarget,

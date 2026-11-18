@@ -62,8 +62,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     minHeight: theme.layout.bottomNavigationHeight,
     borderTopWidth: 1,
-    borderTopColor: theme.role.border,
-    backgroundColor: theme.role.surface,
+    // Direção de arte §4/§9 item 6: superfície translúcida (surface.tabBar) + sombra
+    // para cima (elevation.3) + borda superior em edgeBottom (não edgeTop — a luz
+    // vem do conteúdo acima, não da própria barra).
+    borderTopColor: theme.role.edgeBottom,
+    backgroundColor: theme.role.tabBarSurface,
+    boxShadow: theme.elevation['3'],
     paddingTop: theme.spacing['2'],
   },
   tab: {

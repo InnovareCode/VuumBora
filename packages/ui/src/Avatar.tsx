@@ -22,7 +22,11 @@ function initialsOf(name: string): string {
   return (first + last).toUpperCase() || '?';
 }
 
-/** Avatar circular: foto quando houver `imageUri`, senão iniciais sobre fundo de marca. */
+/**
+ * Avatar circular: foto quando houver `imageUri`, senão iniciais sobre fundo escuro com
+ * anel amarelo (direção de arte §4/§9 item 1: disco cheio de amarelo era um foco de
+ * amarelo competindo com o CTA; o anel mantém o destaque de marca sem virar fundo).
+ */
 export const Avatar = memo(function Avatar({ name, imageUri, size = 'md', testID }: AvatarProps) {
   const dimension = SIZE[size];
   const style = [styles.circle, { width: dimension, height: dimension, borderRadius: dimension / 2 }];
@@ -49,9 +53,11 @@ export const Avatar = memo(function Avatar({ name, imageUri, size = 'md', testID
 const styles = StyleSheet.create({
   circle: { overflow: 'hidden' },
   fallback: {
-    backgroundColor: theme.role.ctaBackground,
+    backgroundColor: theme.role.surfaceElevated,
+    borderWidth: 2,
+    borderColor: theme.role.ctaBackground,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  initials: { color: theme.role.ctaText },
+  initials: { color: theme.role.ctaBackground },
 });

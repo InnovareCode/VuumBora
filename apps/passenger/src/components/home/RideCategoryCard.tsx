@@ -1,7 +1,12 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Car, Check, Clock } from 'lucide-react-native';
-import { theme, textStyle, tabularNums } from '@vuumbora/ui';
+import { SurfaceRaised, theme, textStyle, tabularNums } from '@vuumbora/ui';
+
+// Direção de arte §4/§9 item 4: halo do card selecionado. `boxShadow` com cor é a
+// única forma de um glow colorido no RN (elevation/shadow* nativo não aceita cor no
+// Android) — ver nota de validação em ButtonCore.tsx (mesma pendência de prova em Android).
+const SELECTED_GLOW = theme.glow.selected;
 
 export interface RideCategoryCardProps {
   readonly name: string;
@@ -21,44 +26,54 @@ export const RideCategoryCard = memo(function RideCategoryCard({ name, etaLabel,
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={`${name}, estimativa ${etaLabel}, preço estimado ${priceLabel}${selected ? ', selecionado' : ''}`}
-      style={[styles.card, selected && styles.cardSelected]}
+      style={styles.pressable}
     >
-      {selected ? (
-        <View style={styles.checkBadge}>
-          <Check size={13} color={theme.role.ctaText} strokeWidth={3} />
-        </View>
-      ) : null}
-      <Car size={28} color={selected ? theme.role.ctaBackground : theme.role.textSecondary} strokeWidth={1.75} />
-      <Text style={styles.name} numberOfLines={2}>
-        {name}
-      </Text>
-      <View style={styles.etaRow}>
-        <Clock size={12} color={theme.role.textMuted} strokeWidth={2} />
-        <Text style={styles.eta} numberOfLines={1}>
-          {etaLabel}
+      <SurfaceRaised style={[styles.card, selected && styles.cardSelected, selected && { boxShadow: SELECTED_GLOW }]}>
+        {selected ? (
+          <View style={styles.checkBadge}>
+            <Check size={13} color={theme.role.ctaText} strokeWidth={3} />
+          </View>
+        ) : null}
+        <Car size={28} color={selected ? theme.role.ctaBackground : theme.role.textSecondary} strokeWidth={1.75} />
+        <Text style={styles.name} numberOfLines={2}>
+          {name}
         </Text>
-      </View>
-      <Text style={styles.price} numberOfLines={1}>
-        {priceLabel}
-      </Text>
+        <View style={styles.etaRow}>
+          <Clock size={12} color={theme.role.textMuted} strokeWidth={2} />
+          <Text style={styles.eta} numberOfLines={1}>
+            {etaLabel}
+          </Text>
+        </View>
+        <Text style={styles.price} numberOfLines={1}>
+          {priceLabel}
+        </Text>
+      </SurfaceRaised>
     </Pressable>
   );
 });
 
 const styles = StyleSheet.create({
+  pressable: { flex: 1 },
   card: {
-    flex: 1,
     minHeight: theme.layout.touchTarget,
-    backgroundColor: theme.role.surface,
     borderRadius: theme.radius.lg,
     borderWidth: 1.5,
-    borderColor: theme.role.border,
+    // Borda iluminada de cima (direção de arte §4/§9 item 2).
+    borderTopColor: theme.role.edgeTop,
+    borderColor: theme.role.edgeBottom,
     paddingVertical: theme.spacing['3'],
     paddingHorizontal: theme.spacing['1'],
     alignItems: 'center',
     gap: 4,
   },
-  cardSelected: { borderColor: theme.role.ctaBackground, backgroundColor: theme.role.surfaceElevated },
+  // Selecionado: borda 2pt amarela (item 4) + halo (`boxShadow`, aplicado inline).
+  // Fundo continua `gradient.surface.raised` (SurfaceRaised é opaco; backgroundColor
+  // aqui não apareceria por baixo do gradiente).
+  cardSelected: {
+    borderWidth: 2,
+    borderTopColor: theme.role.ctaBackground,
+    borderColor: theme.role.ctaBackground,
+  },
   checkBadge: {
     position: 'absolute',
     top: -8,

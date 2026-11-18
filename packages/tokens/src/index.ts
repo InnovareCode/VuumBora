@@ -43,6 +43,41 @@ function numbers<G extends Group<number>>(group: G): { readonly [K in keyof G]: 
   return out as { readonly [K in keyof G]: number };
 }
 
+/** Um stop de gradiente linear (cor + posição 0–1), consumido por expo-linear-gradient. */
+export interface GradientStop {
+  readonly color: string;
+  readonly position: number;
+}
+function gradients<G extends { readonly [key: string]: Token<readonly GradientStop[]> }>(
+  group: G
+): { readonly [K in keyof G]: readonly GradientStop[] } {
+  const out: Record<string, readonly GradientStop[]> = {};
+  for (const [key, token] of Object.entries(group)) out[key] = token.$value;
+  return out as { readonly [K in keyof G]: readonly GradientStop[] };
+}
+
+/**
+ * Formato aceito diretamente pela prop de estilo `boxShadow` do React Native 0.88
+ * (`ReadonlyArray<BoxShadowValue>` — ver node_modules/react-native/Libraries/StyleSheet/StyleSheetTypes.js).
+ * Guardamos os tokens já nesse formato para não ter que serializar/parsear string CSS.
+ */
+export interface BoxShadowValue {
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly color?: string;
+  readonly blurRadius?: number;
+  readonly spreadDistance?: number;
+  readonly inset?: boolean;
+}
+
+function shadows<G extends { readonly [key: string]: Token<readonly BoxShadowValue[]> }>(
+  group: G
+): { readonly [K in keyof G]: readonly BoxShadowValue[] } {
+  const out: Record<string, readonly BoxShadowValue[]> = {};
+  for (const [key, token] of Object.entries(group)) out[key] = token.$value;
+  return out as { readonly [K in keyof G]: readonly BoxShadowValue[] };
+}
+
 export type FontWeight = '400' | '500' | '600' | '700';
 
 function fontWeights<G extends Group<number>>(group: G): { readonly [K in keyof G]: FontWeight } {
@@ -59,6 +94,12 @@ export const tokens = {
     background: colors(raw.color.background),
     text: colors(raw.color.text),
     border: colors(raw.color.border),
+    // Cores de apoio da direção de arte (docs/direcao-de-arte.md §4): rim light do
+    // CTA e halo do card selecionado — translúcidas, usadas só dentro de `boxShadow`.
+    highlight: colors(raw.color.highlight),
+    // Superfícies translúcidas SEM blur (chip sobre mapa/foto, tab bar) — ver §5
+    // do mesmo doc sobre por que não usamos expo-blur.
+    overlay: colors(raw.color.overlay),
     semantic: colors(raw.color.semantic),
     map: colors(raw.color.map),
   },
@@ -73,6 +114,11 @@ export const tokens = {
   },
   layout: dimensions(raw.layout, 'layout'),
   opacity: numbers(raw.opacity),
+  // Direção de arte §4 (docs/direcao-de-arte.md): gradiente para expo-linear-gradient,
+  // sombra/halo prontos para a prop `boxShadow` do RN 0.88 (ver BoxShadowValue acima).
+  gradient: gradients(raw.gradient),
+  elevation: shadows(raw.elevation),
+  glow: shadows(raw.glow),
 } as const;
 
 /**
@@ -92,11 +138,23 @@ export const theme = {
     ctaBackground: tokens.color.brand.yellow,
     ctaBackgroundPressed: tokens.color.brand.yellowPressed,
     ctaText: tokens.color.text.onYellow,
+    // Texto sobre fundo CLARO não-CTA (gradient.searchLight) — mesma cor que ctaText
+    // (navy), nome diferente porque o papel é outro (pílula de busca, não botão).
+    textOnLight: tokens.color.text.onYellow,
+    textOnLightMuted: tokens.color.text.onLightMuted,
     border: tokens.color.border.default,
     borderEmphasis: tokens.color.border.emphasis,
     // Limite de CONTROLE (input, checkbox, toggle): o unico que passa 3:1 nos
     // quatro fundos. `border`/`borderEmphasis` sao decorativos e reprovam.
     borderControl: tokens.color.border.strong,
+    // Borda iluminada de cima (direção de arte §4/§9 item 2, "top-lit edge"): todo
+    // card/campo/botão secundário usa borderTopColor=edgeTop e borderColor (demais
+    // lados)=edgeBottom. edgeTop reaproveita borderEmphasis — luz vem do mesmo tom.
+    edgeTop: tokens.color.border.emphasis,
+    edgeBottom: tokens.color.border.subtle,
+    // Direção de arte §4/§9 item 6/7: superfícies translúcidas SEM blur (ver §5 do doc).
+    tabBarSurface: tokens.color.overlay.tabBar,
+    glassOnMap: tokens.color.overlay.glassOnMap,
     success: tokens.color.semantic.success,
     danger: tokens.color.semantic.danger,
     // Preenchimento de erro (badge, DangerButton, toast). Texto branco por cima

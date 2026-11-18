@@ -70,11 +70,12 @@ export const InputCore = memo(function InputCore({
   const [focused, setFocused] = useState(false);
   const editable = !disabled && !loading;
 
-  const borderColor = error
-    ? theme.role.dangerFill
-    : focused
-      ? theme.role.ctaBackground
-      : theme.role.borderControl;
+  // Estado de destaque (foco/erro): borda uniforme nos 4 lados, é um indicador de
+  // estado, não a luz ambiente do card. Estado padrão: borda iluminada de cima
+  // (direção de arte §4/§9 item 2) — mesma técnica de InfoCard/RideCategoryCard.
+  const highlighted = error || focused;
+  const borderColor = error ? theme.role.dangerFill : focused ? theme.role.ctaBackground : theme.role.edgeBottom;
+  const borderTopColor = highlighted ? borderColor : theme.role.edgeTop;
 
   return (
     <View style={styles.wrapper}>
@@ -85,7 +86,8 @@ export const InputCore = memo(function InputCore({
           {
             backgroundColor: disabled ? theme.role.surfaceElevated : theme.role.input,
             borderColor,
-            borderWidth: focused || error ? 2 : 1,
+            borderTopColor,
+            borderWidth: highlighted ? 2 : 1,
           },
         ]}
       >

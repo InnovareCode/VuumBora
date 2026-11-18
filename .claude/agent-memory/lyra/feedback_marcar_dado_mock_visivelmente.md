@@ -14,8 +14,14 @@ reforçou isso na P03: todo dado fabricado (preço, ETA, nome do usuário, "10% 
 marcado como mock, não só documentado em comentário de código.
 
 **Padrão criado na P03 (18/11/2026):** componente `MockBadge` em `packages/ui`
-(selo pequeno com glifo `!` + texto curto, cor `theme.role.warning`,
-`accessibilityLabel="Dado de X, não é real"`). Uso:
+(selo pequeno com glifo `!` + texto curto, `accessibilityLabel="Dado de X, não
+é real"`). **Visual mudou em 18/11/2026 (mesmo dia, direção de arte §9 item
+1):** era borda+texto `theme.role.warning` (amarelo) — virou chip NEUTRO
+(borda tracejada `theme.role.borderControl`, texto `theme.role.textSecondary`,
+sem preenchimento). Motivo: o selo amarelo competia com o CTA pelo único foco
+de amarelo da tela (regra "amarelo nunca é fundo/decoração, só ação"). A
+honestidade do dado mock não depende da cor — `accessibilityLabel` e o texto
+continuam fazendo esse trabalho. Uso (inalterado):
 - **Um selo por ponto de dado fabricado**, texto curto e específico (`"nome de
   exemplo"`, `"mapa ilustrativo"`, `"preço e tempo estimados"`, `"promoção
   fictícia"`, `"demo"`) — nunca um aviso genérico único no topo da tela (isso

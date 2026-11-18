@@ -1,7 +1,10 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check } from 'lucide-react-native';
-import { theme, textStyle } from '@vuumbora/ui';
+import { SurfaceRaised, theme, textStyle } from '@vuumbora/ui';
+
+// Direção de arte §4/§9 item 4 — mesmo halo do card de categoria (RideCategoryCard).
+const SELECTED_GLOW = theme.glow.selected;
 
 export interface PaymentMethodOptionProps {
   readonly label: string;
@@ -26,19 +29,24 @@ export const PaymentMethodOption = memo(function PaymentMethodOption({
       accessibilityState={{ selected, checked: selected }}
       accessibilityLabel={`${label}, ${description}${selected ? ', selecionado' : ''}`}
       testID={testID}
-      style={({ pressed }) => [styles.option, selected && styles.optionSelected, pressed && styles.optionPressed]}
     >
-      <View style={styles.textBlock}>
-        <Text style={styles.label} numberOfLines={1}>
-          {label}
-        </Text>
-        <Text style={styles.description} numberOfLines={1}>
-          {description}
-        </Text>
-      </View>
-      <View style={[styles.radio, selected && styles.radioSelected]}>
-        {selected ? <Check size={14} color={theme.role.ctaText} strokeWidth={3} /> : null}
-      </View>
+      {({ pressed }) => (
+        <SurfaceRaised
+          style={[styles.option, selected && styles.optionSelected, selected && { boxShadow: SELECTED_GLOW }, pressed && styles.optionPressed]}
+        >
+          <View style={styles.textBlock}>
+            <Text style={styles.label} numberOfLines={1}>
+              {label}
+            </Text>
+            <Text style={styles.description} numberOfLines={1}>
+              {description}
+            </Text>
+          </View>
+          <View style={[styles.radio, selected && styles.radioSelected]}>
+            {selected ? <Check size={14} color={theme.role.ctaText} strokeWidth={3} /> : null}
+          </View>
+        </SurfaceRaised>
+      )}
     </Pressable>
   );
 });
@@ -49,16 +57,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: theme.layout.touchTarget,
-    backgroundColor: theme.role.surface,
     borderRadius: theme.radius.lg,
     borderWidth: 1.5,
-    borderColor: theme.role.border,
+    // Borda iluminada de cima (direção de arte §4/§9 item 2). Fundo: item 6
+    // (`gradient.surface.raised`, ver SurfaceRaised).
+    borderTopColor: theme.role.edgeTop,
+    borderColor: theme.role.edgeBottom,
     paddingHorizontal: theme.spacing['4'],
     paddingVertical: theme.spacing['3'],
     gap: theme.spacing['3'],
   },
-  optionSelected: { borderColor: theme.role.ctaBackground, backgroundColor: theme.role.surfaceElevated },
-  optionPressed: { backgroundColor: theme.role.surfaceElevated },
+  // Selecionado: borda 2pt amarela (item 4) + halo (`boxShadow`, aplicado inline).
+  optionSelected: {
+    borderWidth: 2,
+    borderTopColor: theme.role.ctaBackground,
+    borderColor: theme.role.ctaBackground,
+  },
+  optionPressed: { opacity: 0.85 },
   textBlock: { flex: 1 },
   label: { color: theme.role.textPrimary, ...textStyle('semibold', 'body') },
   description: { color: theme.role.textSecondary, ...textStyle('regular', 'small'), marginTop: 2 },
