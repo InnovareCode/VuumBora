@@ -286,18 +286,17 @@ gerador de CSS a partir do mesmo `vuumbora.tokens.json`.
   ("corrida simulada: progresso, ETA e contato" / em-andamento: "trajeto e contato
   simulados"); `SafetyActionsRow.tsx` (compartilhado entre as duas telas) perdeu o
   `MockBadge` próprio.
-  **Ficou de fora (componente compartilhado, fora da minha coordenação — avisei o
-  Atlas em vez de editar):** `StatusBadge` ainda preenchido (`#6EA8FF` cheio no
-  "Motorista encontrado", não tingido); `ButtonCore` variante `danger` ainda
-  `dangerFill` cheio ("Cancelar corrida"/"Cancelar busca" continuam vermelho sólido,
-  não contorno); `ScreenHeader` ainda reserva a caixa de 44pt mesmo sem `onBack`
-  (título de a-caminho/em-andamento/concluida desalinhado em x72); `StarRating` ainda
-  no glifo `★/☆` do sistema. Mapa como protagonista de a-caminho/em-andamento (item 13
-  da auditoria, esforço alto) também não entrou — é frente separada.
+  **Ficou de fora na época** (StatusBadge preenchido, ButtonCore danger cheio,
+  ScreenHeader reservando caixa sem onBack, StarRating em glifo) — **todos os 4
+  resolvidos em 18/11/2026, packages/ui liberado**, ver [[feedback_ds_itens_compartilhados_packages_ui]].
+  Mapa como protagonista de a-caminho/em-andamento (item 13 da auditoria, esforço
+  alto) continua fora — é frente separada.
 - **`HighDemandBanner.tsx` (motorista) — selo de mock sobre fundo claro corrigido
   (18/11/2026, pedido direto do Atlas, fora do escopo original da frente passageiro):**
-  ver [[feedback_mockbadge_sem_variante_fundo_claro]] — não editei o `MockBadge`
-  compartilhado, criei `MockNoticeOnLight` local no mesmo arquivo.
+  criei `MockNoticeOnLight` LOCAL nesse dia; **promovido a prop `onLight` do
+  `MockBadge` compartilhado em 18/11/2026** (segundo passo previsto) — ver
+  [[feedback_mockbadge_sem_variante_fundo_claro]] (atualizada) e
+  [[feedback_ds_itens_compartilhados_packages_ui]].
 - **Tipografia:** Plus Jakarta Sans (`@expo-google-fonts/plus-jakarta-sans`,
   instalado em 18/11/2026 nos dois apps). Carregamento via `useFonts` +
   `expo-splash-screen` em cada `_layout.tsx`. Nunca combine `fontSize`/`fontWeight`

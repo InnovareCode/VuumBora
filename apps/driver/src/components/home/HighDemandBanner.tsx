@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight, Zap } from 'lucide-react-native';
-import { gradientColors, gradientLocations, theme, textStyle, glyphStyle } from '@vuumbora/ui';
+import { gradientColors, gradientLocations, theme, textStyle, MockBadge } from '@vuumbora/ui';
 
 const BANNER_COLORS = gradientColors(theme.gradient.cta);
 const BANNER_LOCATIONS = gradientLocations(theme.gradient.cta);
@@ -41,35 +41,16 @@ export const HighDemandBanner = memo(function HighDemandBanner({ onPress }: High
           <ChevronRight size={20} color={theme.role.ctaText} strokeWidth={2.25} />
         </View>
         <View style={styles.mockRow}>
-          <MockNoticeOnLight label="sinal de demanda ilustrativo" />
+          {/* Selo sobre FUNDO CLARO (gradient.cta amarelo) — `onLight` troca
+              textSecondary/borderControl (pensados pra fundo escuro) por ctaText
+              (navy), senão o contraste cai pra ~1,17:1. Promovido a prop compartilhada
+              do MockBadge nesta sessão — ver [[feedback_mockbadge_sem_variante_fundo_claro]]. */}
+          <MockBadge label="sinal de demanda ilustrativo" onLight />
         </View>
       </LinearGradient>
     </Pressable>
   );
 });
-
-/**
- * Selo de "não é real" sobre FUNDO CLARO (o gradiente de marca amarelo do banner) —
- * auditoria Apolo: o `MockBadge` compartilhado (`@vuumbora/ui`) é desenhado pra fundo
- * escuro (texto/borda em `theme.role.textSecondary`/`borderControl`) e sobre amarelo
- * media 1,17:1 de contraste, quase ilegível. Em vez de adicionar uma variante no
- * componente compartilhado sem combinar (ele é usado em outras 27 telas, quase todas
- * de fundo escuro), replico localmente o mesmo desenho (chip tracejado + glifo "!")
- * só com a cor invertida pra `theme.role.ctaText` (navy) — é a mesma regra que já
- * vale pra qualquer texto sobre amarelo no projeto (docs/identidade-visual.md §7).
- * Única tela com selo de mock sobre fundo claro hoje; se aparecer um segundo caso,
- * vale promover isto a uma prop `onLight` do `MockBadge` em vez de duplicar de novo.
- */
-function MockNoticeOnLight({ label }: { readonly label: string }) {
-  return (
-    <View style={styles.mockBadgeLight} accessibilityRole="text" accessibilityLabel={`Dado de ${label}, não é real`}>
-      <Text style={styles.mockGlyphLight}>!</Text>
-      <Text style={styles.mockLabelLight} numberOfLines={1}>
-        {label}
-      </Text>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   banner: {
@@ -84,19 +65,4 @@ const styles = StyleSheet.create({
   title: { color: theme.role.ctaText, ...textStyle('bold', 'small') },
   subtitle: { color: theme.role.ctaText, ...textStyle('regular', 'caption') },
   mockRow: { paddingLeft: 30 },
-  mockBadgeLight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: theme.layout.mockChipHeight,
-    gap: theme.spacing['1'],
-    paddingHorizontal: theme.spacing['2'],
-    borderRadius: theme.radius.pill,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: theme.role.ctaText,
-    backgroundColor: 'transparent',
-    alignSelf: 'flex-start',
-  },
-  mockGlyphLight: { color: theme.role.ctaText, ...glyphStyle(theme.typography.weight.bold, 'caption') },
-  mockLabelLight: { color: theme.role.ctaText, ...textStyle('medium', 'caption') },
 });

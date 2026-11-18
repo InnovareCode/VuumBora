@@ -10,6 +10,7 @@ const RAISED_LOCATIONS = gradientLocations(theme.gradient.surfaceRaised);
 export interface SurfaceRaisedProps {
   readonly children?: ReactNode;
   readonly style?: StyleProp<ViewStyle>;
+  readonly accessibilityLabel?: string;
   readonly testID?: string | undefined;
 }
 
@@ -20,9 +21,9 @@ export interface SurfaceRaisedProps {
  * imperceptível sozinho, de propósito (medição completa em docs/direcao-de-arte.md §0/§4).
  * `style` recebe borderRadius/borderWidth/padding do card chamador.
  */
-export const SurfaceRaised = memo(function SurfaceRaised({ children, style, testID }: SurfaceRaisedProps) {
+export const SurfaceRaised = memo(function SurfaceRaised({ children, style, accessibilityLabel, testID }: SurfaceRaisedProps) {
   return (
-    <LinearGradient colors={RAISED_COLORS} locations={RAISED_LOCATIONS} style={style} testID={testID}>
+    <LinearGradient colors={RAISED_COLORS} locations={RAISED_LOCATIONS} style={style} accessibilityLabel={accessibilityLabel} testID={testID}>
       {children}
     </LinearGradient>
   );

@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme, tokens, type BoxShadowValue } from '@vuumbora/tokens';
+import { withAlpha } from './colorAlpha';
 import { gradientColors, gradientLocations } from './gradient';
 import { glyphStyle, textStyle } from './typography';
 
@@ -32,6 +33,10 @@ const CTA_COLORS = gradientColors(theme.gradient.cta);
 const CTA_LOCATIONS = gradientLocations(theme.gradient.cta);
 const OVERLAY_COLORS = gradientColors(theme.gradient.surfaceOverlay);
 const OVERLAY_LOCATIONS = gradientLocations(theme.gradient.surfaceOverlay);
+
+// Fundo tingido do botão "danger" (auditoria A3: "rgba(208,42,56,.10)") — calculado a
+// partir do token, nunca um HEX literal (ver colorAlpha.ts).
+const DANGER_TINT = withAlpha(theme.role.dangerFill, 0.1);
 
 // "Brilho" do CTA medido na referência: 1px claro em cima + 1px quente embaixo,
 // NUNCA halo (ver docs/direcao-de-arte.md §0/§4). `boxShadow` com `inset` é a única
@@ -73,16 +78,20 @@ interface VisualState {
 }
 
 function getVisualState(variant: ButtonVariant, pressed: boolean, disabled: boolean, error: boolean): VisualState {
+  // secondary E danger são contorno (direção de arte §3.1): desabilitado, os dois caem
+  // no mesmo tratamento neutro (borda + fundo surfaceElevated), sem cor de ação.
+  const hasOutline = variant === 'secondary' || variant === 'danger';
+
   if (disabled) {
     return {
       text: theme.role.textMuted,
-      borderColor: variant === 'secondary' ? theme.role.borderControl : 'transparent',
-      borderTopColor: variant === 'secondary' ? theme.role.borderControl : 'transparent',
-      borderWidth: variant === 'secondary' ? 1.5 : 0,
+      borderColor: hasOutline ? theme.role.borderControl : 'transparent',
+      borderTopColor: hasOutline ? theme.role.borderControl : 'transparent',
+      borderWidth: hasOutline ? 1.5 : 0,
       // CTA desabilitado: gradient.surfaceOverlay, sem rim nem sombra (spec §4/§9 item 3).
       ctaGradient: false,
       overlayGradient: variant === 'primary',
-      flatBackground: variant === 'secondary' ? theme.role.surfaceElevated : undefined,
+      flatBackground: hasOutline ? theme.role.surfaceElevated : undefined,
     };
   }
 
@@ -109,14 +118,19 @@ function getVisualState(variant: ButtonVariant, pressed: boolean, disabled: bool
         flatBackground: pressed ? theme.role.surface : undefined,
       };
     case 'danger':
+      // Direção de arte §3.1: cancelar não é a ação principal da tela — contorno
+      // vermelho + fundo levemente tingido (nunca vermelho cheio, que virava o maior
+      // bloco de cor da tela e competia com o CTA — auditoria A3). Texto em `danger`
+      // (claro, para o contorno); borda e tingimento usam `dangerFill` como referência
+      // de cor, igual à régua do botão secundário (borda cheia, fundo a 10%).
       return {
-        text: theme.role.textPrimary,
-        borderColor: 'transparent',
-        borderTopColor: 'transparent',
-        borderWidth: 0,
+        text: theme.role.danger,
+        borderColor: theme.role.dangerFill,
+        borderTopColor: theme.role.dangerFill,
+        borderWidth: 1.5,
         ctaGradient: false,
         overlayGradient: false,
-        flatBackground: theme.role.dangerFill,
+        flatBackground: DANGER_TINT,
       };
   }
 }

@@ -2,6 +2,7 @@ import { memo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { theme } from '@vuumbora/tokens';
 import { LoadingSkeleton } from './LoadingSkeleton';
+import { SurfaceRaised } from './SurfaceRaised';
 import { glyphStyle, tabularNums, textStyle } from './typography';
 
 export type MetricTrend = 'up' | 'down' | 'neutral';
@@ -37,7 +38,7 @@ export const MetricCard = memo(function MetricCard({
   testID,
 }: MetricCardProps) {
   return (
-    <View
+    <SurfaceRaised
       style={[styles.card, compact && styles.cardCompact]}
       testID={testID}
       accessibilityLabel={`${label}: ${loading ? 'carregando' : value}`}
@@ -74,14 +75,19 @@ export const MetricCard = memo(function MetricCard({
         </>
       )}
       {helperText ? <Text style={styles.helper}>{helperText}</Text> : null}
-    </View>
+    </SurfaceRaised>
   );
 });
 
 const styles = StyleSheet.create({
+  // Auditoria M3: o card não tinha borda nenhuma (fundo chapado `theme.role.surface`
+  // sem traço). Agora usa `SurfaceRaised` (gradiente sutil, como os outros cards do DS)
+  // + a mesma borda iluminada de cima (`edgeTop`/`edgeBottom`, item 2).
   card: {
-    backgroundColor: theme.role.surface,
     borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderTopColor: theme.role.edgeTop,
+    borderColor: theme.role.edgeBottom,
     padding: theme.spacing['4'],
     gap: theme.spacing['1'],
   },

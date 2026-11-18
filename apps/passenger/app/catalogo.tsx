@@ -122,7 +122,7 @@ export default function CatalogScreen() {
         </CatalogRow>
       </CatalogSection>
 
-      <CatalogSection title="DangerButton" description="Ação destrutiva — fundo dangerFill (nunca danger), texto branco.">
+      <CatalogSection title="DangerButton" description="Ação destrutiva — contorno dangerFill + fundo levemente tingido, texto danger (§3.1).">
         <CatalogRow label="Padrão">
           <DangerButton label="Cancelar corrida" onPress={() => undefined} />
         </CatalogRow>

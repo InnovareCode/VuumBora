@@ -1,8 +1,27 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { LifeBuoy, MapPin } from 'lucide-react-native';
-import { AppShell, MockBadge, PrimaryButton, ScreenHeader, SecondaryButton, StarRating, StatusBadge, SurfaceRaised, TextInput, theme, textStyle, tabularNums } from '@vuumbora/ui';
+import { LifeBuoy, MapPin, Star } from 'lucide-react-native';
+import {
+  AppShell,
+  MockBadge,
+  PrimaryButton,
+  ScreenHeader,
+  SecondaryButton,
+  StarRating,
+  StatusBadge,
+  SurfaceRaised,
+  TextInput,
+  theme,
+  textStyle,
+  tabularNums,
+  type StarRatingIconProps,
+} from '@vuumbora/ui';
+
+// Auditoria F3: estrela em ícone lucide (não mais o glifo ★/☆ do sistema).
+const starIcon = ({ filled, size, color }: StarRatingIconProps) => (
+  <Star size={size} color={color} fill={filled ? color : 'none'} strokeWidth={1.75} />
+);
 import { ReceiptBreakdownRow } from '../src/components/trip/ReceiptBreakdownRow';
 import { formatMoneyBRL } from '../src/utils/money';
 import { useRideRequestStore } from '../src/store/useRideRequestStore';
@@ -110,12 +129,12 @@ export default function TripCompletedScreen() {
           <Text style={styles.sectionTitle}>Avalie {assignedDriver?.name ?? 'o motorista'}</Text>
           {ratingSubmitted && rating ? (
             <View style={styles.ratingDoneCard} testID="rating-submitted">
-              <StarRating value={rating.stars} testID="submitted-rating-display" />
+              <StarRating value={rating.stars} icon={starIcon} testID="submitted-rating-display" />
               <Text style={styles.ratingDoneText}>Obrigada pela avaliação!</Text>
             </View>
           ) : (
             <SurfaceRaised style={styles.ratingCard}>
-              <StarRating value={stars} onChange={setStars} accessibilityLabel="Avaliar a corrida de 1 a 5 estrelas" testID="rating-input" />
+              <StarRating value={stars} onChange={setStars} icon={starIcon} accessibilityLabel="Avaliar a corrida de 1 a 5 estrelas" testID="rating-input" />
               <TextInput
                 label="Comentário (opcional)"
                 value={comment}

@@ -1,9 +1,17 @@
 ---
 name: feedback_mockbadge_sem_variante_fundo_claro
-description: MockBadge (@vuumbora/ui) só tem cores fixas para fundo escuro (textSecondary/borderControl) — sobre fundo claro (ex. gradient.cta amarelo) o texto quase some. Decisão tomada e por quê, ao corrigir HighDemandBanner do motorista (18/11/2026).
+description: MockBadge (@vuumbora/ui) só tinha cores fixas para fundo escuro (textSecondary/borderControl) — sobre fundo claro (ex. gradient.cta amarelo) o texto quase some. RESOLVIDO em 18/11/2026 — promovido a prop onLight do componente compartilhado (ver atualização no fim).
 metadata:
   type: feedback
 ---
+
+**ATUALIZAÇÃO (18/11/2026, mesmo dia à tarde, packages/ui liberado):** promovido —
+`MockBadge` ganhou `onLight?: boolean` (troca `textSecondary`/`borderControl` por
+`theme.role.ctaText`). `HighDemandBanner.tsx` foi reescrito pra usar
+`<MockBadge onLight ... />` no lugar do `MockNoticeOnLight` local (removido, junto com
+os 3 estilos `mockBadgeLight`/`mockGlyphLight`/`mockLabelLight` que ele usava). Se
+aparecer um TERCEIRO caso de selo sobre fundo claro, é só passar `onLight` — nada a
+inventar de novo. O raciocínio original (abaixo) explica por que esperei até agora.
 
 **Causa raiz:** `packages/ui/src/MockBadge.tsx` não tem prop de variante — `glyph`/
 `label` sempre usam `theme.role.textSecondary` e a borda `theme.role.borderControl`,

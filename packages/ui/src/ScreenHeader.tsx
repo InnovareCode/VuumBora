@@ -19,9 +19,7 @@ export const ScreenHeader = memo(function ScreenHeader({ title, subtitle, onBack
         <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Voltar" hitSlop={8} style={styles.backButton}>
           <Text style={styles.backGlyph}>‹</Text>
         </Pressable>
-      ) : (
-        <View style={styles.backButton} />
-      )}
+      ) : null}
       <View style={styles.titleBlock}>
         <Text style={styles.title} numberOfLines={1}>
           {title}

@@ -46,7 +46,13 @@ export const AppShell = memo(function AppShell({
   style,
   testID,
 }: AppShellProps) {
-  const content = <View style={[padded && styles.padded, !scroll && styles.flexFill, style]}>{children}</View>;
+  // Auditoria B1 (causa raiz do "scrim que acaba antes do fim da tela" nas boas-vindas):
+  // com `scroll`, este wrapper NÃO crescia (`!scroll && styles.flexFill` nunca aplicava
+  // flex a ele) — o `ScrollView.contentContainerStyle` já tinha `flexGrow:1`, mas isso só
+  // estica o CONTAINER da rolagem; o filho único dentro dele (este `View`) só ocupa o
+  // espaço quando ele mesmo também tem `flexGrow`. Sem isso, telas com `flex:1` no
+  // próprio conteúdo (ex. `boas-vindas.tsx`) não tinham altura disponível pra crescer.
+  const content = <View style={[padded && styles.padded, scroll ? styles.scrollFill : styles.flexFill, style]}>{children}</View>;
 
   return (
     <SafeAreaView
@@ -80,6 +86,7 @@ const styles = StyleSheet.create({
   rootTransparent: { backgroundColor: 'transparent' },
   padded: { padding: theme.layout.screenPadding },
   flexFill: { flex: 1 },
+  scrollFill: { flexGrow: 1 },
   scrollContent: { flexGrow: 1 },
   // Altura aproxima o alcance do radial medido (120% x 420px a partir do topo) —
   // ver $description de gradient.screen sobre a conversão linear.

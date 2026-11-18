@@ -1,8 +1,13 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Car } from 'lucide-react-native';
-import { Avatar, StarRating, SurfaceRaised, theme, textStyle, tabularNums } from '@vuumbora/ui';
+import { Car, Star } from 'lucide-react-native';
+import { Avatar, StarRating, SurfaceRaised, theme, textStyle, tabularNums, type StarRatingIconProps } from '@vuumbora/ui';
 import type { AssignedDriverInfo } from '../../data/mockDriverAssignment';
+
+// Auditoria F3: estrela em ícone lucide (não mais o glifo ★/☆ do sistema).
+const starIcon = ({ filled, size, color }: StarRatingIconProps) => (
+  <Star size={size} color={color} fill={filled ? color : 'none'} strokeWidth={1.75} />
+);
 
 export interface DriverInfoCardProps {
   readonly driver: AssignedDriverInfo;
@@ -22,7 +27,7 @@ export const DriverInfoCard = memo(function DriverInfoCard({ driver, variant = '
           {driver.name}
         </Text>
         <View style={styles.ratingRow}>
-          <StarRating value={driver.rating} size={compact ? 12 : 16} {...(testID !== undefined ? { testID: `${testID}-rating` } : {})} />
+          <StarRating value={driver.rating} size={compact ? 12 : 16} icon={starIcon} {...(testID !== undefined ? { testID: `${testID}-rating` } : {})} />
           <Text style={styles.ratingValue}>{driver.rating.toFixed(1)}</Text>
         </View>
         {!compact ? (

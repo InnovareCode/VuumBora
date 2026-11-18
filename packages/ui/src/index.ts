@@ -27,6 +27,8 @@ export type { TextWeightKey, TextSizeKey } from './typography';
 
 export { gradientColors, gradientLocations } from './gradient';
 
+export { withAlpha } from './colorAlpha';
+
 export { SurfaceRaised } from './SurfaceRaised';
 export type { SurfaceRaisedProps } from './SurfaceRaised';
 
@@ -88,7 +90,7 @@ export { BottomTabBar } from './BottomTabBar';
 export type { BottomTabBarProps, BottomTabBarItem } from './BottomTabBar';
 
 export { StarRating } from './StarRating';
-export type { StarRatingProps } from './StarRating';
+export type { StarRatingProps, StarRatingIconProps } from './StarRating';
 
 export { VehicleIllustration } from './VehicleIllustration';
 export type { VehicleIllustrationProps, VehicleIllustrationVariant } from './VehicleIllustration';

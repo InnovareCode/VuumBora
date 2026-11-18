@@ -169,11 +169,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   // Caixa de ícone 48pt (direção de arte §6, "padrão P05") — substitui a ilustração do
-  // veículo abaixo de 360pt, onde ela não cabe com legibilidade.
+  // veículo abaixo de 360pt, onde ela não cabe com legibilidade. Raio igual ao do card
+  // (`radius.lg`, não `radius.md`) — pedido do dono: a caixa acompanha a curvatura do
+  // card em vez de ter um raio menor e destoar dela por dentro.
   iconBox: {
     width: theme.spacing['9'],
     height: theme.spacing['9'],
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.lg,
     backgroundColor: theme.role.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',

@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { textStyle, theme } from '@vuumbora/ui';
+import { textStyle, theme, withAlpha } from '@vuumbora/ui';
 
 export type PressedButtonVariant = 'primary' | 'secondary' | 'danger';
 
@@ -16,10 +16,18 @@ export interface PressedButtonPreviewProps {
 export function PressedButtonPreview({ variant, label }: PressedButtonPreviewProps) {
   const visual =
     variant === 'primary'
-      ? { background: theme.role.ctaBackgroundPressed, text: theme.role.ctaText, borderWidth: 0 }
+      ? { background: theme.role.ctaBackgroundPressed, text: theme.role.ctaText, borderColor: 'transparent', borderWidth: 0 }
       : variant === 'secondary'
-        ? { background: theme.role.surface, text: theme.role.textPrimary, borderWidth: 1.5 }
-        : { background: theme.role.dangerFill, text: theme.role.textPrimary, borderWidth: 0, opacity: 0.85 };
+        ? { background: theme.role.surface, text: theme.role.textPrimary, borderColor: theme.role.borderControl, borderWidth: 1.5 }
+        : {
+            // Danger agora é contorno (direção de arte §3.1) — "pressionado" só escurece
+            // com opacity, igual ao `ButtonCore` real (não tem fundo próprio por estado).
+            background: withAlpha(theme.role.dangerFill, 0.1),
+            text: theme.role.danger,
+            borderColor: theme.role.dangerFill,
+            borderWidth: 1.5,
+            opacity: 0.85,
+          };
 
   return (
     <View
@@ -27,7 +35,7 @@ export function PressedButtonPreview({ variant, label }: PressedButtonPreviewPro
         styles.base,
         {
           backgroundColor: visual.background,
-          borderColor: theme.role.borderControl,
+          borderColor: visual.borderColor,
           borderWidth: visual.borderWidth,
           opacity: 'opacity' in visual ? visual.opacity : 1,
         },
