@@ -1,0 +1,18 @@
+/* VuumBora — token CSS para website/dashboard; mobile consome JSON/TS */
+:root {
+  --vb-bg: #070D18;
+  --vb-surface: #111B2A;
+  --vb-elevated: #192536;
+  --vb-yellow: #FFCC00;
+  --vb-yellow-pressed: #E6B800;
+  --vb-orange: #F5A400;
+  --vb-text: #FFFFFF;
+  --vb-text-secondary: #B9C4D2;
+  --vb-text-on-yellow: #0B1220;
+  --vb-border: #2D3A4C;
+  --vb-success: #22C55E;
+  --vb-danger: #F04452;
+  --vb-radius-card: 16px;
+  --vb-radius-button: 12px;
+  --vb-button-height: 52px;
+}

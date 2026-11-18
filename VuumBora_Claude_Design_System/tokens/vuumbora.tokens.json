@@ -1,0 +1,267 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "name": "VuumBora Design Tokens",
+  "version": "1.0.0",
+  "status": "proposed-from-approved-yellow-dark-logo",
+  "notes": "Cores aproximadas e operacionalizadas a partir da logomarca e mockups aprovados; validar contraste e finalizar com o time antes da publicação.",
+  "color": {
+    "brand": {
+      "yellow": {
+        "$type": "color",
+        "$value": "#FFCC00"
+      },
+      "yellowPressed": {
+        "$type": "color",
+        "$value": "#E6B800"
+      },
+      "orange": {
+        "$type": "color",
+        "$value": "#F5A400"
+      },
+      "navy": {
+        "$type": "color",
+        "$value": "#0B1220"
+      }
+    },
+    "background": {
+      "base": {
+        "$type": "color",
+        "$value": "#070D18"
+      },
+      "surface": {
+        "$type": "color",
+        "$value": "#111B2A"
+      },
+      "elevated": {
+        "$type": "color",
+        "$value": "#192536"
+      },
+      "input": {
+        "$type": "color",
+        "$value": "#1F2B3D"
+      }
+    },
+    "text": {
+      "primary": {
+        "$type": "color",
+        "$value": "#FFFFFF"
+      },
+      "secondary": {
+        "$type": "color",
+        "$value": "#B9C4D2"
+      },
+      "muted": {
+        "$type": "color",
+        "$value": "#8D9AAC"
+      },
+      "onYellow": {
+        "$type": "color",
+        "$value": "#0B1220"
+      }
+    },
+    "border": {
+      "default": {
+        "$type": "color",
+        "$value": "#2D3A4C"
+      },
+      "emphasis": {
+        "$type": "color",
+        "$value": "#46566C"
+      }
+    },
+    "semantic": {
+      "success": {
+        "$type": "color",
+        "$value": "#22C55E"
+      },
+      "danger": {
+        "$type": "color",
+        "$value": "#F04452"
+      },
+      "warning": {
+        "$type": "color",
+        "$value": "#FFCC00"
+      },
+      "info": {
+        "$type": "color",
+        "$value": "#38BDF8"
+      }
+    },
+    "map": {
+      "route": {
+        "$type": "color",
+        "$value": "#FFCC00"
+      },
+      "pickup": {
+        "$type": "color",
+        "$value": "#22C55E"
+      },
+      "destination": {
+        "$type": "color",
+        "$value": "#F04452"
+      },
+      "userLocation": {
+        "$type": "color",
+        "$value": "#38BDF8"
+      }
+    }
+  },
+  "spacing": {
+    "0": {
+      "$type": "dimension",
+      "$value": "0px"
+    },
+    "1": {
+      "$type": "dimension",
+      "$value": "4px"
+    },
+    "2": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "3": {
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "4": {
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "5": {
+      "$type": "dimension",
+      "$value": "20px"
+    },
+    "6": {
+      "$type": "dimension",
+      "$value": "24px"
+    },
+    "7": {
+      "$type": "dimension",
+      "$value": "32px"
+    },
+    "8": {
+      "$type": "dimension",
+      "$value": "40px"
+    },
+    "9": {
+      "$type": "dimension",
+      "$value": "48px"
+    },
+    "10": {
+      "$type": "dimension",
+      "$value": "64px"
+    }
+  },
+  "radius": {
+    "sm": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "md": {
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "lg": {
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "xl": {
+      "$type": "dimension",
+      "$value": "20px"
+    },
+    "xxl": {
+      "$type": "dimension",
+      "$value": "24px"
+    },
+    "pill": {
+      "$type": "dimension",
+      "$value": "999px"
+    }
+  },
+  "typography": {
+    "family": {
+      "$type": "fontFamily",
+      "$value": "Inter"
+    },
+    "size": {
+      "caption": {
+        "$type": "dimension",
+        "$value": "12px"
+      },
+      "small": {
+        "$type": "dimension",
+        "$value": "14px"
+      },
+      "body": {
+        "$type": "dimension",
+        "$value": "16px"
+      },
+      "subtitle": {
+        "$type": "dimension",
+        "$value": "18px"
+      },
+      "title": {
+        "$type": "dimension",
+        "$value": "22px"
+      },
+      "heading": {
+        "$type": "dimension",
+        "$value": "28px"
+      },
+      "display": {
+        "$type": "dimension",
+        "$value": "34px"
+      }
+    },
+    "weight": {
+      "regular": {
+        "$type": "fontWeight",
+        "$value": 400
+      },
+      "medium": {
+        "$type": "fontWeight",
+        "$value": 500
+      },
+      "semibold": {
+        "$type": "fontWeight",
+        "$value": 600
+      },
+      "bold": {
+        "$type": "fontWeight",
+        "$value": 700
+      }
+    }
+  },
+  "layout": {
+    "screenPadding": {
+      "$type": "dimension",
+      "$value": "20px"
+    },
+    "touchTarget": {
+      "$type": "dimension",
+      "$value": "44px"
+    },
+    "buttonHeight": {
+      "$type": "dimension",
+      "$value": "52px"
+    },
+    "inputHeight": {
+      "$type": "dimension",
+      "$value": "52px"
+    },
+    "bottomNavigationHeight": {
+      "$type": "dimension",
+      "$value": "68px"
+    }
+  },
+  "opacity": {
+    "disabled": {
+      "$type": "number",
+      "$value": 0.45
+    },
+    "scrim": {
+      "$type": "number",
+      "$value": 0.65
+    }
+  }
+}

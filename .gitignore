@@ -1,0 +1,11 @@
+# estado de sessao da squad (nunca versionar)
+.missao-atual
+.missoes-quadro.json
+
+node_modules/
+.expo/
+dist/
+build/
+*.log
+.env
+.env.local
