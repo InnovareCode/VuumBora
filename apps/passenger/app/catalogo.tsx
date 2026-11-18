@@ -61,9 +61,14 @@ export default function CatalogScreen() {
       <View style={styles.spacer} />
 
       <CatalogSection title="Marca" description="BrandLogo — selo + nome, só com tokens (sem bitmap).">
-        <CatalogRow label="Tamanhos">
+        <CatalogRow label="Pequeno/médio">
           <BrandLogo size="sm" />
           <BrandLogo size="md" />
+        </CatalogRow>
+        {/* Tamanho grande numa linha só dele — a palavra "VuumBora" não tem onde
+            quebrar, então não pode competir por espaço com outro item na mesma
+            linha (achado real do Atlas, não detectável só pela caixa). */}
+        <CatalogRow label="Grande" stacked>
           <BrandLogo size="lg" />
         </CatalogRow>
         <CatalogRow label="Sem nome">
@@ -71,7 +76,7 @@ export default function CatalogScreen() {
         </CatalogRow>
       </CatalogSection>
 
-      <CatalogSection title="PrimaryButton" description="CTA principal — ctaBackground/ctaBackgroundPressed, texto ctaText.">
+      <CatalogSection title="PrimaryButton" description="CTA principal. Tokens: ctaBackground, ctaBackgroundPressed, ctaText.">
         <CatalogRow label="Padrão">
           <PrimaryButton label="Solicitar corrida" onPress={() => undefined} />
         </CatalogRow>
@@ -94,7 +99,7 @@ export default function CatalogScreen() {
         </CatalogRow>
       </CatalogSection>
 
-      <CatalogSection title="SecondaryButton" description="Ação de apoio — surfaceElevated/surface, borda borderControl.">
+      <CatalogSection title="SecondaryButton" description="Ação de apoio. Tokens: surfaceElevated, surface. Borda: borderControl.">
         <CatalogRow label="Padrão">
           <SecondaryButton label="Ver detalhes" onPress={() => undefined} />
         </CatalogRow>
@@ -154,7 +159,7 @@ export default function CatalogScreen() {
         </CatalogRow>
       </CatalogSection>
 
-      <CatalogSection title="PasswordInput" description="TextInput + alternância Mostrar/Ocultar (estado local do componente).">
+      <CatalogSection title="PasswordInput" description="TextInput com alternância Mostrar ou Ocultar (estado local do componente).">
         <CatalogRow label="Padrão" stacked>
           <PasswordInput label="Senha" value={passwordValue} onChangeText={setPasswordValue} />
         </CatalogRow>
@@ -274,7 +279,7 @@ export default function CatalogScreen() {
         </CatalogRow>
       </CatalogSection>
 
-      <CatalogSection title="EmptyState" description="Vazio neutro (sem resultado/histórico) — distinto de ErrorState.">
+      <CatalogSection title="EmptyState" description="Vazio neutro (sem resultado ou histórico) — distinto de ErrorState.">
         <EmptyState
           title="Nenhum destino salvo"
           description="Seus lugares favoritos aparecem aqui."
@@ -282,7 +287,7 @@ export default function CatalogScreen() {
         />
       </CatalogSection>
 
-      <CatalogSection title="ErrorState" description="Falha de API/rede — accessibilityRole='alert' para leitores de tela.">
+      <CatalogSection title="ErrorState" description="Falha de API ou rede — usa accessibilityRole alert para leitores de tela.">
         <ErrorState
           description="Não foi possível carregar seus dados. Verifique a conexão."
           onRetry={() => undefined}
@@ -291,7 +296,7 @@ export default function CatalogScreen() {
 
       <CatalogSection
         title="Demonstração ao vivo"
-        description="Sem chamada de API real — só prova que loading/sucesso funcionam de fato (não é estático)."
+        description="Sem chamada de API real — só prova que carregamento e sucesso funcionam de fato (não é estático)."
       >
         <View style={styles.demoRow}>
           <PrimaryButton label="Testar carregamento" loading={demoLoading} onPress={runDemo} />
