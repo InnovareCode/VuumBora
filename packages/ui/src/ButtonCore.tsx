@@ -5,7 +5,7 @@
  * (spinner substitui o rótulo, interação bloqueada) e erro (borda `dangerFill`
  * + legenda com ícone, nunca só cor).
  */
-import { memo, useCallback } from 'react';
+import { memo, useCallback, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -22,6 +22,8 @@ export type ButtonVariant = 'primary' | 'secondary' | 'danger';
 export interface ButtonCoreProps {
   readonly variant: ButtonVariant;
   readonly label: string;
+  /** Ícone à esquerda do rótulo (cor já resolvida pelo chamador). Oculto durante `loading`. */
+  readonly icon?: ReactNode;
   readonly onPress?: (event: GestureResponderEvent) => void;
   readonly disabled?: boolean;
   readonly loading?: boolean;
@@ -75,6 +77,7 @@ function getVisualState(variant: ButtonVariant, pressed: boolean, disabled: bool
 export const ButtonCore = memo(function ButtonCore({
   variant,
   label,
+  icon,
   onPress,
   disabled = false,
   loading = false,
@@ -121,9 +124,12 @@ export const ButtonCore = memo(function ButtonCore({
           return loading ? (
             <ActivityIndicator color={v.text} />
           ) : (
-            <Text style={[styles.label, { color: v.text }]} numberOfLines={1}>
-              {label}
-            </Text>
+            <View style={styles.content}>
+              {icon ? <View style={styles.icon}>{icon}</View> : null}
+              <Text style={[styles.label, { color: v.text }]} numberOfLines={1}>
+                {label}
+              </Text>
+            </View>
           );
         }}
       </Pressable>
@@ -145,6 +151,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: theme.spacing['6'],
   },
+  content: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['2'] },
+  icon: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
   label: textStyle('semibold', 'body'),
   errorRow: {
     flexDirection: 'row',

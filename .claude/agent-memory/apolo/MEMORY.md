@@ -1,2 +1,3 @@
 - [Paleta VuumBora medida](project_paleta_vuumbora.md) — paleta fechada por pixel em docs/identidade-visual.md; armadilhas de ciano e gradiente
 - [Tipografia VuumBora proposta](project_tipografia_vuumbora.md) — Jakarta recomendada, aguardando dono; armadilhas de tnum e RN
+- [Recortes da marca e ícones](project_recortes_marca.md) — como os PNGs da marca/ícones foram gerados; armadilhas do bitmap original

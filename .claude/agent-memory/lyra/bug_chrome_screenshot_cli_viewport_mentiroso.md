@@ -38,6 +38,20 @@ está na FERRAMENTA DE CAPTURA, não na página.
    de render que diverge" como hipótese, sem precisar lidar com o flag
    `--screenshot` nem com permissão de escrita em disco de um processo solto.
 
+**Confirmado depois, com certeza total (18/11/2026):** o Atlas abriu a mesma
+página num navegador real com viewport 390 de verdade e mediu `document.
+scrollWidth`/`body.scrollWidth`/viewport = 390/390/390, zero overflow — batendo
+exatamente com o que eu já tinha medido por três rodadas seguidas (CDP, Range
+API, scrollWidth do container do ScrollView). O defeito inteiro, nas três
+rodadas de "corte" reportado, era o instrumento de captura
+(`chrome --headless --screenshot` com `--window-size`), nunca o layout. Lição
+que valeu o tempo: **quando a mesma técnica de medição (por elemento, contexto
+novo, sem cache) devolve o mesmo resultado limpo em rodadas sucessivas e o
+"achado" muda de causa a cada vez (fator de escala → palavra sem quebra →
+largura do container), o padrão em si já é sinal de que o problema está no
+instrumento, não no alvo.** Não precisa esperar a quarta rodada pra levantar
+essa hipótese com mais força.
+
 **Armadilha de ambiente:** rodar `chrome.exe` como processo solto via Bash (sem
 ser Playwright) pode receber "Acesso negado" ao tentar escrever QUALQUER arquivo
 em disco, em qualquer pasta, mesmo com `--user-data-dir` dedicado e sem

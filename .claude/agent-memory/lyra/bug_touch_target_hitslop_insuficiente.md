@@ -33,3 +33,16 @@ await page.evaluate(() =>
 ```
 Qualquer `width`/`height` < 44 numa Pressable real (não decorativa) é reprovação,
 mesmo que o `hitSlop` esteja lá. Ver [[feedback_medir_expo_web_playwright]].
+
+**Segundo caso real, causa raiz diferente (18/11/2026, `HomeMapPreview` dos botões de
+zoom +/- do passageiro):** a `Pressable` (`zoomButton`) NÃO tinha `width` próprio —
+herdava a largura do pai (`zoomGroup`, `width: 44`) por `alignItems: 'stretch'`
+(padrão). Só que `zoomGroup` também tinha `borderWidth: 1` nos dois lados: a borda
+consome 2px da CAIXA DE CONTEÚDO em que o filho esticado se encaixa, então o filho
+media **42px**, não 44, mesmo com o pai "certo" no papel. Medição por elemento
+(`getBoundingClientRect` do `[role="button"]`) pegou os 42px reais; só de ler o
+código (pai com `width: theme.layout.touchTarget`) pareceria correto.
+**Correção:** dar `width`/`height: theme.layout.touchTarget` explícito na própria
+`Pressable` que é o alvo de toque, nunca confiar em herdar de um pai com borda —
+mesma lição de sempre, variante nova: "o pai tem o valor certo" não é prova de que o
+FILHO (o que de fato recebe o toque) mede o mesmo.

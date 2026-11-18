@@ -27,9 +27,30 @@ Expo Router) + pacotes (`packages/tokens`, `packages/ui`, `packages/api-client`,
 - **`packages/ui/src/index.ts`** é o catálogo oficial de componentes transversais
   (AppShell, ScreenHeader, BrandLogo, PrimaryButton/SecondaryButton/DangerButton,
   TextInput/PasswordInput/PhoneInput/SearchInput, InfoCard, MetricCard, StatusBadge,
-  EmptyState, ErrorState, LoadingSkeleton — implementados em 18/11/2026). Faltam:
-  Toast, Modal, BottomSheet, BottomTabBar, Avatar, StarRating, MockBadge e o adaptador
-  de mapa (MapView/RouteOverlay/LocationMarker, aguarda escolha de SDK).
+  EmptyState, ErrorState, LoadingSkeleton, Avatar, MockBadge, BottomTabBar —
+  os 3 últimos entraram na P03/Home do passageiro em 18/11/2026, ainda faltam no
+  catálogo visual `apps/passenger/app/catalogo.tsx`). Faltam: Toast, Modal,
+  BottomSheet, StarRating e o adaptador de mapa (MapView/RouteOverlay/LocationMarker,
+  aguarda escolha de SDK).
+- **Ícones: `lucide-react-native` + `react-native-svg`** instalados em
+  `apps/passenger` em 18/11/2026 (decisão do dono para a P03 — ícones de traço
+  consistente). Decisão de arquitetura: `packages/ui` continua SEM depender da lib de
+  ícone — componentes transversais que precisam de ícone (`BottomTabBar`,
+  `ButtonCore.icon`) recebem o ícone pronto via prop `ReactNode`/render-prop
+  `({active, color}) => ReactNode`, nunca importam `lucide-react-native` direto. Isso
+  mantém a `ui` agnóstica de lib de ícone; só o app escolhe e importa. Se o driver
+  também precisar de ícones, instalar lá também (ainda não feito).
+- **`AppShell` ganhou prop `footer?: ReactNode`** (18/11/2026) para telas com
+  `BottomTabBar` fixo abaixo da área rolável. Empiricamente confirmado: o
+  `ScrollView` interno do `AppShell` **não precisa de `style={{flex:1}}` explícito**
+  para respeitar o espaço do `footer` — ele já herda `clientHeight = altura do
+  SafeAreaView − altura do footer` corretamente (medido: viewport 800, footer 68,
+  `ScrollView.clientHeight` = 732, exatamente a conta). Rolar até o fim não causa
+  sobreposição com o footer (medido nos 3 breakpoints). Não "consertar" isso de novo
+  sem medir primeiro — já foi confirmado correto.
+- **`ButtonCore` ganhou prop `icon?: ReactNode`** (ícone à esquerda do rótulo,
+  oculto durante `loading`) — passa por `PrimaryButton`/`SecondaryButton`/
+  `DangerButton` automaticamente (são só `Omit<ButtonCoreProps,'variant'>`).
 - **Botões/Inputs são compostos sobre uma base interna não exportada**
   (`ButtonCore.tsx`, `InputCore.tsx`) — os 3 botões e os 4 campos são wrappers finos.
   Ao adicionar um novo botão/input, estender a base em vez de duplicar lógica de
@@ -49,6 +70,10 @@ Expo Router) + pacotes (`packages/tokens`, `packages/ui`, `packages/api-client`,
 - `AppShell` usa `SafeAreaView` de `react-native-safe-area-context` → precisa de
   `SafeAreaProvider` no `_layout.tsx` raiz de cada app (adicionado no passenger em
   18/11/2026; o driver AINDA NÃO TEM — conferir antes de usar `AppShell` lá).
+- **`BrandLogo` é provisório.** O dono mandou a logomarca de verdade
+  (`Imagens/LogoMarca.png`). O Apolo vai gerar os recortes antes de qualquer
+  integração — **não mexer em `BrandLogo` por conta própria** até o Atlas passar
+  os assets prontos (combinado em 18/11/2026).
 - **Tipografia:** Plus Jakarta Sans (`@expo-google-fonts/plus-jakarta-sans`,
   instalado em 18/11/2026 nos dois apps). Carregamento via `useFonts` +
   `expo-splash-screen` em cada `_layout.tsx`. Nunca combine `fontSize`/`fontWeight`

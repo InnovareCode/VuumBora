@@ -7,3 +7,4 @@
 - [Tipografia Plus Jakarta Sans no RN/Expo](licoes-tipografia-plus-jakarta-sans.md) — fontFamily por peso, tabular-nums, símbolos fora da marca.
 - [Chrome `--screenshot` CLI pode mentir sobre o viewport](bug_chrome_screenshot_cli_viewport_mentiroso.md) — reprodução que não bate com CDP/Playwright.
 - [Script de teste: `<button>` não é `<div>`](feedback_leaf_detection_button_nao_e_div.md) — falso positivo clássico ao filtrar "nó-folha de texto".
+- [Marcar dado mock visivelmente (MockBadge)](feedback_marcar_dado_mock_visivelmente.md) — padrão da P03, repete em toda tela baseada em mockup.

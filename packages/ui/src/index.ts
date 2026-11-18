@@ -13,9 +13,10 @@
  * Regras: estilos só via `theme` (nenhum HEX/dimensão literal); todo componente interativo tem
  * props tipadas, estados loading/disabled/error, rótulo de acessibilidade e teste de interação.
  *
- * Estado atual: catálogo base implementado (ver apps/passenger/app/catalogo.tsx).
- * Faltam: Toast, Modal, BottomSheet, BottomTabBar, Avatar, StarRating, MockBadge
- * e o adaptador de mapa (MapView/RouteOverlay/LocationMarker) — fora deste escopo.
+ * Estado atual: catálogo base implementado (ver apps/passenger/app/catalogo.tsx). Avatar,
+ * MockBadge e BottomTabBar entraram na P03 (18/11/2026) — ainda faltam no catálogo visual.
+ * Faltam: Toast, Modal, BottomSheet, StarRating e o adaptador de mapa
+ * (MapView/RouteOverlay/LocationMarker) — fora deste escopo.
  */
 export { theme, tokens } from '@vuumbora/tokens';
 export type { Theme, Tokens } from '@vuumbora/tokens';
@@ -70,3 +71,12 @@ export type { ErrorStateProps } from './ErrorState';
 
 export { LoadingSkeleton } from './LoadingSkeleton';
 export type { LoadingSkeletonProps, LoadingSkeletonVariant } from './LoadingSkeleton';
+
+export { Avatar } from './Avatar';
+export type { AvatarProps, AvatarSize } from './Avatar';
+
+export { MockBadge } from './MockBadge';
+export type { MockBadgeProps } from './MockBadge';
+
+export { BottomTabBar } from './BottomTabBar';
+export type { BottomTabBarProps, BottomTabBarItem } from './BottomTabBar';
