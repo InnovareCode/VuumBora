@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LocateFixed, MapPin, Minus, Plus } from 'lucide-react-native';
-import { MockBadge, theme, textStyle, tokens } from '@vuumbora/ui';
+import { MapPreviewBackground, MockBadge, theme, textStyle, tokens } from '@vuumbora/ui';
 
 export interface HomeMapPreviewProps {
   readonly cityLabel: string;
@@ -13,12 +13,14 @@ export interface HomeMapPreviewProps {
 }
 
 /**
- * Mapa placeholder — SDK de mapa ainda NÃO escolhido (docs/decisions.md). Reproduz só a
- * GEOMETRIA do mockup (rótulo de cidade, marco, pino central, controles de zoom/localização,
- * chip de endereço) com formas/tokens, sem nenhum dado geográfico real. Fica em
- * apps/passenger porque os rótulos (cidade, marco) são conteúdo deste mock específico — o
- * adaptador de mapa de verdade (MapView/RouteOverlay/LocationMarker) é decisão futura de
- * arquitetura, não algo a improvisar aqui.
+ * Mapa placeholder — SDK de mapa ainda NÃO escolhido (docs/decisions.md). Fundo:
+ * `MapPreviewBackground` (asset `mapa-escuro-natal.jpg`, direção de arte §7.1/§9 item 7) —
+ * NÃO é dado geográfico real, é ilustração procedural de malha urbana. Chips sobre o
+ * mapa (rótulo de cidade, marco, controles, chip de endereço) usam `theme.role.glassOnMap`
+ * (opaco, sem blur — ver docs/direcao-de-arte.md §5) para ficarem legíveis sobre a foto.
+ * Fica em apps/passenger porque os rótulos (cidade, marco) são conteúdo deste mock
+ * específico — o adaptador de mapa de verdade (MapView/RouteOverlay/LocationMarker) é
+ * decisão futura de arquitetura, não algo a improvisar aqui.
  */
 export const HomeMapPreview = memo(function HomeMapPreview({
   cityLabel,
@@ -30,22 +32,22 @@ export const HomeMapPreview = memo(function HomeMapPreview({
 }: HomeMapPreviewProps) {
   return (
     <View style={styles.root} accessibilityRole="image" accessibilityLabel={`Mapa ilustrativo (mock) de ${cityLabel}`}>
+      <MapPreviewBackground />
+
       <View style={styles.mockTag}>
         <MockBadge label="mapa ilustrativo" />
       </View>
 
-      <Text style={styles.cityLabel}>{cityLabel}</Text>
+      <View style={styles.cityChip}>
+        <Text style={styles.cityLabel}>{cityLabel}</Text>
+      </View>
 
       {landmarkLabel ? (
-        <View style={styles.landmark}>
+        <View style={[styles.landmark, styles.glassChip]}>
           <MapPin size={16} color={theme.role.warning} strokeWidth={2} fill={theme.role.warning} />
           <Text style={styles.landmarkLabel}>{landmarkLabel}</Text>
         </View>
       ) : null}
-
-      {/* Vias decorativas — só geometria, sem dado real de ruas. */}
-      <View style={[styles.road, styles.roadDiagonal]} />
-      <View style={[styles.road, styles.roadVertical]} />
 
       <View style={styles.centerMarkerRing}>
         <View style={styles.centerMarkerDot} />
@@ -88,10 +90,25 @@ const styles = StyleSheet.create({
     borderColor: theme.role.border,
   },
   mockTag: { position: 'absolute', top: theme.spacing['2'], right: theme.spacing['2'], zIndex: 2 },
-  cityLabel: {
+  // Chip translúcido sobre o mapa (direção de arte §5/§9 item 7, `theme.role.glassOnMap`)
+  // — opaco, SEM blur. Precisa de fundo próprio porque o mapa agora é foto/ilustração
+  // (antes era `surfaceElevated` chapado, e o texto flutuava direto sobre ele).
+  glassChip: {
+    backgroundColor: theme.role.glassOnMap,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing['2'],
+    paddingVertical: 4,
+  },
+  cityChip: {
     position: 'absolute',
     top: theme.spacing['3'],
     left: theme.spacing['3'],
+    backgroundColor: theme.role.glassOnMap,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing['2'],
+    paddingVertical: 4,
+  },
+  cityLabel: {
     color: theme.role.textPrimary,
     ...textStyle('bold', 'subtitle'),
   },
@@ -104,15 +121,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   landmarkLabel: { color: theme.role.textSecondary, ...textStyle('medium', 'caption') },
-  road: { position: 'absolute', backgroundColor: theme.role.border },
-  roadDiagonal: {
-    width: 220,
-    height: 2,
-    top: 150,
-    left: -30,
-    transform: [{ rotate: '-18deg' }],
-  },
-  roadVertical: { width: 2, height: MAP_HEIGHT, left: 70, top: 0 },
   centerMarkerRing: {
     position: 'absolute',
     top: MAP_HEIGHT / 2 - 18,
@@ -144,7 +152,7 @@ const styles = StyleSheet.create({
     width: theme.layout.touchTarget,
     height: theme.layout.touchTarget,
     borderRadius: theme.layout.touchTarget / 2,
-    backgroundColor: theme.role.surface,
+    backgroundColor: theme.role.glassOnMap,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -152,7 +160,7 @@ const styles = StyleSheet.create({
   },
   zoomGroup: {
     borderRadius: theme.layout.touchTarget / 2,
-    backgroundColor: theme.role.surface,
+    backgroundColor: theme.role.glassOnMap,
     borderWidth: 1,
     borderColor: theme.role.border,
     overflow: 'hidden',
@@ -170,7 +178,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: theme.role.surface,
+    backgroundColor: theme.role.glassOnMap,
     borderRadius: theme.radius.pill,
     paddingHorizontal: theme.spacing['3'],
     paddingVertical: theme.spacing['2'],

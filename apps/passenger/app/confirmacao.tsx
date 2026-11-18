@@ -37,7 +37,7 @@ export default function ConfirmationScreen() {
   }
 
   return (
-    <AppShell scroll>
+    <AppShell scroll glow>
       <View style={styles.content}>
         <ScreenHeader title="Confirmar corrida" subtitle="Confira antes de solicitar" onBack={() => router.back()} testID="confirmation-header" />
 
@@ -119,7 +119,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.role.surface,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: theme.role.border,
+    // Borda iluminada de cima (direção de arte §4/§9 item 2) — este card ficou de fora
+    // da 1ª passagem por ser estilo inline, não um componente transversal listado lá.
+    borderTopColor: theme.role.edgeTop,
+    borderColor: theme.role.edgeBottom,
     padding: theme.spacing['4'],
     gap: theme.spacing['3'],
   },

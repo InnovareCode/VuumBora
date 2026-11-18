@@ -62,7 +62,7 @@ export default function DestinationScreen() {
   }
 
   return (
-    <AppShell scroll>
+    <AppShell scroll glow>
       <View style={styles.content}>
         <ScreenHeader title="Para onde vamos?" onBack={() => router.back()} testID="destination-header" />
 

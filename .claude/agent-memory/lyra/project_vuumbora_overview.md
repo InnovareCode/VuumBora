@@ -156,12 +156,45 @@ Expo Router) + pacotes (`packages/tokens`, `packages/ui`, `packages/api-client`,
   bloco de texto `flex:1`, com `marginLeft:'auto'`, espremeu o texto a ~12px
   (cortou "Agendar" para "A."). Corrigido empilhando o badge DENTRO do bloco de
   texto. Causa raiz generalizável em [[bug_flex_fixo_espreme_texto_flex1_vizinho]].
-- **Pendência de arquitetura deixada pela direção de arte:** o item 5 (§9) pede
-  categorias em LISTA vertical com caixa de ícone (`vehicle.iconBox`) abaixo de
-  375pt, mas isso exige mudar `categoryRow` (hoje `flexDirection:'row'`) dentro
-  de `apps/passenger/app/index.tsx` — fora do escopo permitido numa sessão em
-  que outra missão mexe em `apps/passenger/app/`. `RideCategoryCard` continua
-  no formato vertical (ícone em cima) em toda largura até isso ser liberado.
+- **Itens 7/8/9 da direção de arte + os 3 sub-itens bloqueados por arquivo
+  aplicados (18/11/2026, `apps/passenger/app/` liberado).** `RideCategoryCard`
+  ganhou responsividade própria (`useWindowDimensions`, igual ao padrão do
+  `QuickAccessGrid`): lista vertical com `iconBox` 48pt (`theme.spacing['9']`)
+  abaixo de 375pt, ilustração do veículo (`VehicleIllustration`, novo em
+  `packages/ui`) a partir de 360pt — logo a zona 360–374 é lista COM
+  ilustração, não ícone genérico. `index.tsx` escolhe `categoryRow` (linha) vs
+  `categoryColumn` (pilha) no mesmo breakpoint 375. Medido @320: touch target
+  das linhas ≥66pt de altura (sobra folgada sobre os 44pt mínimos).
+  `confirmacao.tsx` (`styles.card`, inline): borda trocou `theme.role.border`
+  por `borderTopColor: edgeTop` / `borderColor: edgeBottom`. `AppShell` ganhou
+  `glow` ligado em `index.tsx` (home), `confirmacao.tsx` e `destino.tsx` — o
+  comentário do próprio `AppShell` ("Nunca sobre mapa") não se aplica aqui
+  porque `HomeMapPreview` é um card opaco de 260pt, não uma tela de mapa
+  cheia; o `glow` (absoluto, 420pt do topo) fica atrás do card e nunca
+  aparece por cima dele (confirmado via DOM: o nó do gradiente mede
+  top:0/height:420, o card do mapa começa bem depois). `HomeMapPreview` trocou
+  o placeholder desenhado (vias procedurais com `View`) pelo asset
+  `mapa-escuro-natal.jpg` via novo componente `MapPreviewBackground`
+  (`packages/ui`, `Image` do RN core, `resizeMode="cover"`) — os chips (cidade,
+  marco, controles, chip de endereço) viraram `theme.role.glassOnMap` em vez
+  de `theme.role.surface` chapado. `boas-vindas.tsx` ganhou o fundo fotográfico
+  + scrim da maquete `tools/art-assets/onboarding-premium.html`: novo
+  componente `OnboardingBackground` (`packages/ui`, único lugar do pacote que
+  usa **`expo-image`** — peerDependency nova, só porque `contentPosition`
+  percentual não existe no `Image` do RN core e a maquete pede `center 30%`)
+  renderizado ATRÁS do `AppShell`, que por sua vez precisou de uma prop nova
+  `transparent` (omite o `backgroundColor: theme.role.screen` opaco pra foto
+  aparecer). O bloco de texto/CTA migrou pro rodapé (headline+promise+botões
+  juntos, como a maquete — antes ficavam junto do logo no topo) sobre
+  `gradient.photoScrim` (token NOVO, `vuumbora.tokens.json`, não existia antes
+  desta sessão). Logo menor (`BrandLogo size="md"` em vez de `"lg"`) quando
+  `useWindowDimensions().height < 640` — span de 320×568 ainda passa de
+  568 pra ~614px de conteúdo (medido), ou seja **precisa de ~46px de rolagem
+  nesse breakpoint específico**, não é "cabe 100% sem rolar" como a maquete
+  HTML original. Dois `declare module` novos em `packages/ui/src/assets.d.ts`
+  (`*.jpg`, além do `*.png` que já existia) — mesma mecânica de visibilidade
+  transitiva via triple-slash já documentada ali (qualquer arquivo do
+  programa que importe algo de `BrandLogo` já puxa o `.d.ts` inteiro).
 - **Tipografia:** Plus Jakarta Sans (`@expo-google-fonts/plus-jakarta-sans`,
   instalado em 18/11/2026 nos dois apps). Carregamento via `useFonts` +
   `expo-splash-screen` em cada `_layout.tsx`. Nunca combine `fontSize`/`fontWeight`

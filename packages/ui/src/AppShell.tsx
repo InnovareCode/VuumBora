@@ -22,6 +22,13 @@ export interface AppShellProps {
    * brilho compete com o mapa por atenção e não foi medido sobre ele).
    */
   readonly glow?: boolean;
+  /**
+   * `true` quando o chamador desenha o próprio fundo (ex.: `OnboardingBackground` atrás
+   * do `AppShell`, direção de arte §9 item 9) — omite o `backgroundColor:
+   * theme.role.screen` opaco para a imagem aparecer por baixo. Nunca combinar com `glow`
+   * (o brilho de topo é pensado para `theme.role.screen`, não para foto).
+   */
+  readonly transparent?: boolean;
   /** Slot fixo abaixo da área rolável (ex.: `BottomTabBar`) — nunca rola junto com `children`. */
   readonly footer?: ReactNode;
   readonly style?: StyleProp<ViewStyle>;
@@ -29,11 +36,24 @@ export interface AppShellProps {
 }
 
 /** Moldura de tela: safe area + fundo `theme.role.screen` + padding padrão. Todo app parte daqui. */
-export const AppShell = memo(function AppShell({ children, scroll = false, padded = true, glow = false, footer, style, testID }: AppShellProps) {
+export const AppShell = memo(function AppShell({
+  children,
+  scroll = false,
+  padded = true,
+  glow = false,
+  transparent = false,
+  footer,
+  style,
+  testID,
+}: AppShellProps) {
   const content = <View style={[padded && styles.padded, !scroll && styles.flexFill, style]}>{children}</View>;
 
   return (
-    <SafeAreaView style={styles.root} testID={testID} edges={footer ? EDGES_WITH_FOOTER : EDGES_DEFAULT}>
+    <SafeAreaView
+      style={[styles.root, transparent && styles.rootTransparent]}
+      testID={testID}
+      edges={footer ? EDGES_WITH_FOOTER : EDGES_DEFAULT}
+    >
       {glow ? (
         <LinearGradient
           colors={SCREEN_GLOW_COLORS}
@@ -57,6 +77,7 @@ export const AppShell = memo(function AppShell({ children, scroll = false, padde
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.role.screen },
+  rootTransparent: { backgroundColor: 'transparent' },
   padded: { padding: theme.layout.screenPadding },
   flexFill: { flex: 1 },
   scrollContent: { flexGrow: 1 },

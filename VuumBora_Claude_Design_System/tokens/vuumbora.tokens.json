@@ -408,6 +408,15 @@
         { "color": "#070D18", "position": 1 }
       ],
       "$description": "Direção de arte §4/§9 item 6. Brilho de topo da tela. Aproximação LINEAR vertical do radial medido (radial-gradient 120% 420px at 50% -60px, #0E1A2E -> transparente sobre background.base) — expo-linear-gradient só faz linear; ver docs/direcao-de-arte.md §5. Só em telas com cabeçalho na área escura. Nunca sobre mapa."
+    },
+    "photoScrim": {
+      "$type": "gradient",
+      "$value": [
+        { "color": "rgba(7,13,24,0)", "position": 0 },
+        { "color": "rgba(7,13,24,0.92)", "position": 0.55 },
+        { "color": "#070D18", "position": 1 }
+      ],
+      "$description": "Direção de arte §7.1/§9 item 9. Vertical (180°), atrás de texto sobre foto (boas-vindas) — SEMPRE presente sob título/CTA quando há imagem de fundo. Aproximação do scrim da maquete (tools/art-assets/onboarding-premium.html: transparente -> rgba(7,13,24,.92) a 96px do topo do bloco -> #070D18 na base), convertido para frações porque o bloco de texto tem altura variável."
     }
   },
   "elevation": {

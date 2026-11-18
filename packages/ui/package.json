@@ -15,6 +15,7 @@
     "react": "*",
     "react-native": "*",
     "react-native-safe-area-context": "*",
-    "expo-linear-gradient": "*"
+    "expo-linear-gradient": "*",
+    "expo-image": "*"
   }
 }

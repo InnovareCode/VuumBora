@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Briefcase, Calendar, Car, Home as HomeIcon, MessageCircle, Star, User } from 'lucide-react-native';
 import { AppShell, BottomTabBar, type BottomTabBarItem, MockBadge, PrimaryButton, theme, textStyle } from '@vuumbora/ui';
 import { HomeHeader } from '../src/components/home/HomeHeader';
@@ -27,6 +27,11 @@ const QUICK_ACCESS_ITEMS: readonly QuickAccessItem[] = [
  */
 export default function PassengerHomeScreen() {
   const { simulated } = useLocalSearchParams<{ simulated?: string }>();
+  const { width } = useWindowDimensions();
+  // Direção de arte §6/§9 item 5: abaixo de 375pt a grade 3 colunas não cabe com
+  // legibilidade — vira lista vertical (1 card por linha, RideCategoryCard cuida do
+  // próprio layout interno a partir dessa mesma largura).
+  const categoryList = width < 375;
   const destination = useRideRequestStore((state) => state.destination);
   const categoryId = useRideRequestStore((state) => state.categoryId);
   const setCategory = useRideRequestStore((state) => state.setCategory);
@@ -52,7 +57,7 @@ export default function PassengerHomeScreen() {
   ];
 
   return (
-    <AppShell scroll footer={<BottomTabBar items={tabs} activeKey="inicio" testID="home-tab-bar" />}>
+    <AppShell scroll glow footer={<BottomTabBar items={tabs} activeKey="inicio" testID="home-tab-bar" />}>
       <View style={styles.content}>
         <HomeHeader notificationCount={3} />
         {simulated === '1' ? (
@@ -68,11 +73,12 @@ export default function PassengerHomeScreen() {
             <Text style={styles.sectionTitle}>Escolha sua viagem</Text>
             <MockBadge label="preço e tempo estimados" />
           </View>
-          <View style={styles.categoryRow}>
+          <View style={categoryList ? styles.categoryColumn : styles.categoryRow}>
             {MOCK_RIDE_CATEGORIES.map((category) => (
               <RideCategoryCard
                 key={category.key}
                 name={category.name}
+                vehicleVariant={category.key}
                 etaLabel={category.etaLabel}
                 priceLabel={category.priceLabel}
                 selected={categoryId === category.key}
@@ -108,5 +114,6 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing['2'] },
   sectionTitle: { color: theme.role.textPrimary, ...textStyle('bold', 'body') },
   categoryRow: { flexDirection: 'row', gap: theme.spacing['2'] },
+  categoryColumn: { gap: theme.spacing['2'] },
   helperText: { color: theme.role.textSecondary, ...textStyle('regular', 'small'), textAlign: 'center' },
 });

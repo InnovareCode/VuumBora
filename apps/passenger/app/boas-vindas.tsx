@@ -1,51 +1,90 @@
 import { router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
-import { AppShell, BrandLogo, PrimaryButton, SecondaryButton, theme, textStyle } from '@vuumbora/ui';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  AppShell,
+  BrandLogo,
+  OnboardingBackground,
+  PrimaryButton,
+  SecondaryButton,
+  gradientColors,
+  gradientLocations,
+  theme,
+  textStyle,
+} from '@vuumbora/ui';
 import { LegalNotice } from '../src/components/auth/LegalNotice';
+
+const SCRIM_COLORS = gradientColors(theme.gradient.photoScrim);
+const SCRIM_LOCATIONS = gradientLocations(theme.gradient.photoScrim);
 
 /**
  * P01 — Boas-vindas (VuumBora_Claude_Design_System/referencias/premium/passageiro/
  * P01-boas-vindas.webp). Primeira tela de entrada do passageiro: marca, promessa
  * curta, Entrar/Cadastrar e o aviso de termos. Sem autenticação real — os botões só
  * navegam para as telas de login/cadastro.
+ *
+ * Fundo noturno com scrim (direção de arte §7.1/§9 item 9, maquete
+ * `tools/art-assets/onboarding-premium.html`): `OnboardingBackground` cobre a tela
+ * inteira atrás do `AppShell` (por isso `transparent`); o bloco de texto/CTA no rodapé
+ * fica sobre `gradient.photoScrim` — sem o scrim, o título cai sobre a parte mais clara
+ * da foto e o contraste medido cai para 1,49:1 (com scrim: 16,8:1).
  */
 export default function WelcomeScreen() {
+  const { height } = useWindowDimensions();
+  // Direção de arte §6: logo menor em telas baixas (<640pt de altura) — abre espaço
+  // pro bloco de texto/CTA do rodapé não precisar rolar em 320×568.
+  const compact = height < 640;
+
   return (
-    <AppShell scroll testID="welcome-screen">
-      <View style={styles.content}>
-        <View style={styles.brandBlock}>
-          <BrandLogo variant="lockup" size="lg" />
-          <Text style={styles.headline}>
-            Bem-vindo ao <Text style={styles.headlineAccent}>VuumBora!</Text>
-          </Text>
-          <Text style={styles.promise}>Sua mobilidade urbana com mais praticidade, segurança e economia.</Text>
-        </View>
+    <View style={styles.screen}>
+      <OnboardingBackground />
+      <AppShell scroll transparent testID="welcome-screen">
+        <View style={styles.content}>
+          <View style={[styles.brandBlock, compact && styles.brandBlockCompact]}>
+            <BrandLogo variant="lockup" size={compact ? 'md' : 'lg'} />
+          </View>
 
-        <View style={styles.spacer} />
+          <View style={styles.spacer} />
 
-        <View style={styles.actions}>
-          <PrimaryButton
-            label="Entrar"
-            onPress={() => router.push('/login')}
-            accessibilityLabel="Entrar"
-            testID="welcome-login-button"
-          />
-          <SecondaryButton
-            label="Cadastrar"
-            onPress={() => router.push('/cadastro')}
-            accessibilityLabel="Cadastrar"
-            testID="welcome-cadastro-button"
-          />
-          <LegalNotice />
+          <View style={styles.bottomBlock}>
+            <LinearGradient colors={SCRIM_COLORS} locations={SCRIM_LOCATIONS} style={styles.scrim} pointerEvents="none" />
+            <Text style={styles.headline}>
+              Bem-vindo ao <Text style={styles.headlineAccent}>VuumBora!</Text>
+            </Text>
+            <Text style={styles.promise}>Sua mobilidade urbana com mais praticidade, segurança e economia.</Text>
+            <View style={styles.actions}>
+              <PrimaryButton
+                label="Entrar"
+                onPress={() => router.push('/login')}
+                accessibilityLabel="Entrar"
+                testID="welcome-login-button"
+              />
+              <SecondaryButton
+                label="Cadastrar"
+                onPress={() => router.push('/cadastro')}
+                accessibilityLabel="Cadastrar"
+                testID="welcome-cadastro-button"
+              />
+            </View>
+            <LegalNotice />
+          </View>
         </View>
-      </View>
-    </AppShell>
+      </AppShell>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { flex: 1, minHeight: 480, gap: theme.spacing['6'] },
-  brandBlock: { alignItems: 'center', gap: theme.spacing['3'], marginTop: theme.spacing['6'] },
+  screen: { flex: 1, backgroundColor: theme.role.screen },
+  content: { flex: 1, minHeight: 480 },
+  brandBlock: { alignItems: 'center', marginTop: theme.spacing['6'] },
+  brandBlockCompact: { marginTop: theme.spacing['4'] },
+  spacer: { flex: 1, minHeight: theme.spacing['4'] },
+  // O scrim (`gradient.photoScrim`) cobre uma faixa acima do bloco de texto (não só o
+  // bloco em si, `top` negativo) — mesmo recurso da maquete (`.bottom:before`,
+  // `top:-96px`), para a transição começar antes do título, não embaixo dele.
+  bottomBlock: { position: 'relative', gap: theme.spacing['3'], paddingTop: theme.spacing['6'] },
+  scrim: { position: 'absolute', top: -theme.spacing['10'], left: -theme.layout.screenPadding, right: -theme.layout.screenPadding, bottom: -theme.layout.screenPadding },
   headline: { color: theme.role.textPrimary, ...textStyle('bold', 'heading'), textAlign: 'center' },
   headlineAccent: { color: theme.role.ctaBackground },
   promise: {
@@ -54,6 +93,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: theme.spacing['3'],
   },
-  spacer: { flex: 1, minHeight: theme.spacing['6'] },
-  actions: { gap: theme.spacing['3'] },
+  actions: { gap: theme.spacing['3'], marginTop: theme.spacing['3'] },
 });
