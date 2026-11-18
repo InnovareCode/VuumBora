@@ -24,3 +24,6 @@ docs/prints/
 
 # imagens de trabalho do dono (nao versionar)
 Imagens/Aplicativo Usuário/
+
+# originais do Runway (pesados; o derivado otimizado vai versionado)
+docs/prints/runway/
