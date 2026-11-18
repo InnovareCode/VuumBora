@@ -275,3 +275,22 @@ o projeto `vuumbora`. Eles **não são usados pelo site institucional** — fica
 reservados para quando a Fase 5 (backend/API) estiver pronta e o Vulcano
 configurar o `vuumbora-backend` para falar com eles. O terreno já está
 preparado; não é preciso (e não se deve) configurar nada neles agora.
+
+---
+
+## Publicado em 18/11/2026
+
+O site entrou no ar em **https://www.vuumbora.com.br**, servido pelo
+Easypanel, com HTTPS funcionando e redirecionamento de HTTP para HTTPS.
+
+Confirmado de fora: resposta 200, certificado válido e a página renderizando
+com a identidade correta.
+
+O DNS resolve por Cloudflare (IPs 172.67.x e 104.21.x), ou seja, o domínio
+passa por ela antes de chegar ao servidor. Isso traz cache e proteção, e
+também significa que **mudanças podem demorar a aparecer** por causa do cache
+da Cloudflare: ao publicar algo que não aparece, limpar o cache lá é o
+primeiro lugar a olhar, antes de suspeitar do deploy.
+
+**Continua pendente:** o painel do Easypanel segue acessível por HTTP e por
+IP, sem certificado — ver seção 0. O dono optou por publicar o site primeiro.
