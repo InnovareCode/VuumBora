@@ -32,15 +32,24 @@ Transformar os mockups aprovados da marca VuumBora em interfaces reproduzíveis,
 | Superfície | background.surface | `#111B2A` |
 | Cards em destaque | background.elevated | `#192536` |
 | Ação principal | brand.yellow | `#FFCC00` |
-| Ação pressionada | brand.yellowPressed | `#E6B800` |
-| Apoio | brand.orange | `#F5A400` |
+| Ação pressionada | brand.yellowPressed | `#FDB601` |
+| Apoio | brand.yellowDeep | `#FEA101` |
+| Texto sobre amarelo | text.onYellow / brand.navy | `#0C111B` |
 | Texto primário | text.primary | `#FFFFFF` |
 | Texto secundário | text.secondary | `#B9C4D2` |
-| Borda | border.default | `#2D3A4C` |
+| Borda decorativa | border.default | `#2D3A4C` |
+| Borda de controle | border.strong | `#66768E` |
 | Sucesso | semantic.success | `#22C55E` |
-| Erro | semantic.danger | `#F04452` |
+| Erro (texto/ícone) | semantic.danger | `#FF6B75` |
+| Erro (preenchimento) | semantic.dangerFill | `#D02A38` |
+| Aviso | semantic.warning | `#FEA101` |
+| Informação / localização | semantic.info | `#6EA8FF` |
 
-A cor aproximada de uma imagem PNG não equivale a manual oficial vetorial. Estes tokens são a proposta técnica derivada da referência aprovada, e podem ser ajustados por avaliação visual e contraste.
+**Paleta medida e aprovada em 18/11/2026.** Os HEX acima saíram da medição pixel a pixel da logomarca (System.Drawing + CIEDE2000) e passaram em WCAG AA em todos os pares em uso. A origem de cada cor e a tabela de contraste estão em `docs/identidade-visual.md`.
+
+Mudanças em relação à proposta inicial: `brand.orange` virou `brand.yellowDeep`; `yellowPressed`, `navy`, `danger` e `warning` foram corrigidos; `semantic.info` e `map.userLocation` eram `#38BDF8` — **ciano, fora da identidade** — e passaram a `#6EA8FF` (matiz 216°, igual ao navy da marca).
+
+**Fonte única:** `tokens/vuumbora.tokens.json`. Nenhum HEX deve ser escrito fora dele — `scripts/check-boundaries.mjs` barra o commit que fizer isso.
 
 ## 5. Acessibilidade e consistência
 - Alvo de toque mínimo recomendado: 44 × 44 px; botões principais 52 px.

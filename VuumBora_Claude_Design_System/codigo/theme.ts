@@ -1,3 +1,10 @@
+// ⚠️ LEGADO — NÃO USAR. Mantido apenas como registro do kit original.
+//
+// Este arquivo tem HEX desatualizados (paleta anterior à medição de 18/11/2026)
+// e nomes de token que divergem do JSON. O app NÃO o importa: a fonte única é
+// ../tokens/vuumbora.tokens.json, derivada em packages/tokens (@vuumbora/tokens).
+// Para consumir o tema no código: import { theme } from "@vuumbora/tokens".
+
 // VuumBora — tokens TypeScript para React Native (proposta)
 export const VuumBoraTheme = {
   colors: {

@@ -1,9 +1,9 @@
 {
   "$schema": "https://design-tokens.github.io/community-group/format/",
   "name": "VuumBora Design Tokens",
-  "version": "1.0.0",
-  "status": "proposed-from-approved-yellow-dark-logo",
-  "notes": "Cores aproximadas e operacionalizadas a partir da logomarca e mockups aprovados; validar contraste e finalizar com o time antes da publicação.",
+  "version": "1.1.0",
+  "status": "approved-measured-from-logo",
+  "notes": "Paleta medida pixel a pixel na logomarca (System.Drawing + CIEDE2000) e validada em WCAG AA; aprovada pelo dono em 18/11/2026. Origem de cada cor e tabela de contraste em docs/identidade-visual.md. Fonte unica: packages/tokens deriva deste arquivo. Nao duplicar HEX em outro lugar.",
   "color": {
     "brand": {
       "yellow": {
@@ -12,15 +12,19 @@
       },
       "yellowPressed": {
         "$type": "color",
-        "$value": "#E6B800"
+        "$value": "#FDB601"
       },
-      "orange": {
+      "yellowDeep": {
         "$type": "color",
-        "$value": "#F5A400"
+        "$value": "#FEA101"
       },
       "navy": {
         "$type": "color",
-        "$value": "#0B1220"
+        "$value": "#0C111B"
+      },
+      "white": {
+        "$type": "color",
+        "$value": "#FFFFFF"
       }
     },
     "background": {
@@ -56,7 +60,7 @@
       },
       "onYellow": {
         "$type": "color",
-        "$value": "#0B1220"
+        "$value": "#0C111B"
       }
     },
     "border": {
@@ -67,6 +71,10 @@
       "emphasis": {
         "$type": "color",
         "$value": "#46566C"
+      },
+      "strong": {
+        "$type": "color",
+        "$value": "#66768E"
       }
     },
     "semantic": {
@@ -76,15 +84,19 @@
       },
       "danger": {
         "$type": "color",
-        "$value": "#F04452"
+        "$value": "#FF6B75"
+      },
+      "dangerFill": {
+        "$type": "color",
+        "$value": "#D02A38"
       },
       "warning": {
         "$type": "color",
-        "$value": "#FFCC00"
+        "$value": "#FEA101"
       },
       "info": {
         "$type": "color",
-        "$value": "#38BDF8"
+        "$value": "#6EA8FF"
       }
     },
     "map": {
@@ -98,11 +110,11 @@
       },
       "destination": {
         "$type": "color",
-        "$value": "#F04452"
+        "$value": "#FF6B75"
       },
       "userLocation": {
         "$type": "color",
-        "$value": "#38BDF8"
+        "$value": "#6EA8FF"
       }
     }
   },
@@ -262,6 +274,22 @@
     "scrim": {
       "$type": "number",
       "$value": 0.65
+    }
+  },
+  "gradient": {
+    "brand": {
+      "$type": "gradient",
+      "$value": [
+        {
+          "color": "#FED202",
+          "position": 0
+        },
+        {
+          "color": "#FEA101",
+          "position": 1
+        }
+      ],
+      "$description": "Gradiente medido no logo (p95 -> p5). So em splash, hero e ilustracao. Nunca sob texto."
     }
   }
 }
