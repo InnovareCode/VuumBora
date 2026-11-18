@@ -1,0 +1,38 @@
+.builtHeading {
+  margin-top: var(--spacing-9);
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.builtList {
+  margin-top: var(--spacing-6);
+}
+
+.legend {
+  margin-top: var(--spacing-5);
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  max-width: 60ch;
+}
+
+.ctaBlock {
+  margin-top: var(--spacing-9);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--spacing-6);
+}
+
+.ctaColumn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-3);
+}
+
+.ctaNote {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  max-width: 42ch;
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { NAV_LINKS } from '@/content/nav';
 import styles from './Header.module.css';
 
 /**
@@ -46,10 +47,11 @@ export function MobileNavToggle({ navId }: { navId: string }) {
           if ((event.target as HTMLElement).tagName === 'A') setOpen(false);
         }}
       >
-        <a href="#como-funciona">Como funciona</a>
-        <a href="#seja-motorista">Seja motorista</a>
-        <a href="#seguranca">Segurança</a>
-        <a href="#faq">Perguntas frequentes</a>
+        {NAV_LINKS.map((link) => (
+          <a key={link.href} href={link.href}>
+            {link.label}
+          </a>
+        ))}
       </div>
     </>
   );

@@ -1,10 +1,12 @@
-import { BecomeDriver } from '@/components/BecomeDriver';
+import { ClosingBanner } from '@/components/ClosingBanner';
+import { CredibilitySection } from '@/components/CredibilitySection';
+import { DriverSection } from '@/components/DriverSection';
 import { FaqSection } from '@/components/FaqSection';
 import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { Hero } from '@/components/Hero';
-import { HowItWorks } from '@/components/HowItWorks';
-import { SafetySection } from '@/components/SafetySection';
+import { PassengerSection } from '@/components/PassengerSection';
+import { ServicesSection } from '@/components/ServicesSection';
 
 export default function HomePage() {
   return (
@@ -12,11 +14,13 @@ export default function HomePage() {
       <Header />
       <main id="conteudo">
         <Hero />
-        <HowItWorks />
-        <BecomeDriver />
-        <SafetySection />
+        <PassengerSection />
+        <DriverSection />
+        <ServicesSection />
+        <CredibilitySection />
         <FaqSection />
       </main>
+      <ClosingBanner />
       <Footer />
     </>
   );

@@ -1,14 +1,8 @@
 import Image from 'next/image';
+import { NAV_LINKS } from '@/content/nav';
 import { Container } from './Container';
 import { MobileNavToggle } from './MobileNavToggle';
 import styles from './Header.module.css';
-
-const NAV_LINKS = [
-  { href: '#como-funciona', label: 'Como funciona' },
-  { href: '#seja-motorista', label: 'Seja motorista' },
-  { href: '#seguranca', label: 'Segurança' },
-  { href: '#faq', label: 'Perguntas frequentes' },
-] as const;
 
 export function Header() {
   return (

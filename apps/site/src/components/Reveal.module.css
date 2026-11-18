@@ -1,0 +1,31 @@
+.reveal {
+  opacity: 1;
+  transform: none;
+}
+
+/* Só aplica o estado "ainda não entrou" quando o JS confirmou que pode medir
+   e animar (ver Reveal.tsx) — então isto nunca é o estado inicial de verdade,
+   só uma troca depois de montado. */
+.reveal[data-hidden='true'] {
+  opacity: 0;
+  transform: translateY(24px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reveal {
+    transition:
+      opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+/* Cinto de segurança extra: sem JS, o atributo nunca muda de 'false', mas se
+   algum dia o padrão mudar, isto garante que reduzir movimento sempre vence. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal[data-hidden='true'] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

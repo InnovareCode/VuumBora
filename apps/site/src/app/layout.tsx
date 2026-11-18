@@ -17,7 +17,7 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'VuumBora — Mobilidade urbana (em breve)',
+    default: 'VuumBora — app de corrida para passageiros e motoristas (em construção)',
     template: '%s · VuumBora',
   },
   description: SITE_DESCRIPTION,
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     locale: 'pt_BR',
     url: '/',
     siteName: SITE_NAME,
-    title: 'VuumBora — Mobilidade urbana (em breve)',
+    title: 'VuumBora — app de corrida para passageiros e motoristas (em construção)',
     description: SITE_DESCRIPTION,
     images: [
       {
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'VuumBora — Mobilidade urbana (em breve)',
+    title: 'VuumBora — app de corrida para passageiros e motoristas (em construção)',
     description: SITE_DESCRIPTION,
     images: ['/og-image.jpg'],
   },
@@ -62,6 +62,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" className={jakarta.variable}>
       <body>
+        {/* Cinto de segurança: se o JS não rodar, nada do Reveal (entrada ao
+            rolar) deve ficar escondido — o padrão já é visível (ver
+            Reveal.tsx), isto só reforça caso o atributo mude no futuro. */}
+        <noscript>
+          <style>{`[data-hidden='true']{opacity:1 !important;transform:none !important;}`}</style>
+        </noscript>
         <a href="#conteudo" className="skip-link">
           Pular para o conteúdo
         </a>

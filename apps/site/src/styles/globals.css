@@ -38,6 +38,16 @@
 html {
   color-scheme: dark;
   -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  /* Compensa o cabeçalho sticky nos links âncora do menu — página mais
+     longa (mais seções) significa mais navegação por âncora. */
+  scroll-padding-top: 88px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 body {

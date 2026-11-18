@@ -14,9 +14,11 @@
 - [Reaproveitar componente com numberOfLines fixo trunca em caso novo](bug_componente_reaproveitado_numberoflines_fixo.md) — RouteSummaryRow→TripDetailRow, por que duplicar em vez de generalizar.
 - [Image.resolveAssetSource não existe no react-native-web](bug_resolveassetsource_react_native_web.md) — use `imageSource`/asset number direto, nunca resolva pra URI.
 - [Referência "linha única" pode não caber em NENHUM breakpoint real](bug_referencia_linha_unica_nao_cabe_breakpoint.md) — medir largura mínima antes de tentar um breakpoint esperto.
-- [apps/site — Next.js static export](project_site_nextjs_static_export.md) — site público novo: gerador de tokens→CSS, favicon/OG gerados, domínio, pendências do dono.
+- [apps/site — Next.js static export](project_site_nextjs_static_export.md) — gerador de tokens→CSS, favicon/OG, domínio, pendências do dono, e a reforma premium de 18/11/2026 (content/ por seção, PhoneFrame, Reveal, movimento).
 - [CSS: override antes da regra base perde](bug_css_module_ordem_override_perde_para_base.md) — menu mobile não sumia no desktop; ordem no arquivo decide empate de especificidade.
 - [Playwright fullPage + position:sticky cria fantasma](bug_playwright_fullpage_sticky_fantasma.md) — confirmar com screenshot de viewport único antes de reportar bug de layout.
 - [MockBadge sem variante para fundo claro](feedback_mockbadge_sem_variante_fundo_claro.md) — RESOLVIDO: promovido a prop `onLight` em 18/11/2026 (ver atualização no topo do arquivo).
 - [Itens DS pendentes de packages/ui liberado](feedback_ds_itens_compartilhados_packages_ui.md) — StatusBadge tingido, ButtonCore danger contorno, ScreenHeader sem caixa vazia, StarRating lucide, MetricCard com borda, helper `withAlpha`.
 - [AppShell scroll sem flexGrow](bug_appshell_scroll_sem_flexgrow.md) — causa raiz do "scrim que acaba antes do fim da tela"; medir com altura REAL do device, não viewport alto.
+- [Moldura CSS com ilha sobre print real cobre texto](bug_phoneframe_ilha_sobre_print_real.md) — PhoneFrame: decoração de device só nas bordas, nunca sobre o miolo de screenshot real.
+- [Medir site no navegador sem ferramenta de browser](feedback_medir_site_sem_browser_tool.md) — playwright-core casando versão com cache de Chromium já no disco, armadilhas de scroll/EBUSY.

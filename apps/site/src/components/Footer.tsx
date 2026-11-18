@@ -1,13 +1,8 @@
 import Image from 'next/image';
+import { FOOTER_CONTENT } from '@/content/footer';
+import { NAV_LINKS } from '@/content/nav';
 import { Container } from './Container';
 import styles from './Footer.module.css';
-
-const NAV_LINKS = [
-  { href: '#como-funciona', label: 'Como funciona' },
-  { href: '#seja-motorista', label: 'Seja motorista' },
-  { href: '#seguranca', label: 'Segurança' },
-  { href: '#faq', label: 'Perguntas frequentes' },
-] as const;
 
 export function Footer() {
   return (
@@ -16,14 +11,11 @@ export function Footer() {
         <div className={styles['top']}>
           <div className={styles['brandColumn']}>
             <Image src="/brand/vuumbora-horizontal.png" alt="VuumBora" width={140} height={34} />
-            <p className={styles['tagline']}>
-              Mobilidade urbana em desenvolvimento. Nenhum valor, prazo ou cidade mostrado aqui é
-              definitivo.
-            </p>
+            <p className={styles['tagline']}>{FOOTER_CONTENT.tagline}</p>
           </div>
 
           <nav aria-label="Rodapé">
-            <p className={styles['columnTitle']}>Site</p>
+            <p className={styles['columnTitle']}>{FOOTER_CONTENT.siteColumnTitle}</p>
             <ul className={styles['navList']}>
               {NAV_LINKS.map((link) => (
                 <li key={link.href}>
@@ -34,31 +26,28 @@ export function Footer() {
           </nav>
 
           <div>
-            <p className={styles['columnTitle']}>Legal</p>
+            <p className={styles['columnTitle']}>{FOOTER_CONTENT.legalColumnTitle}</p>
             <ul className={styles['navList']}>
-              <li className={styles['legalItem']}>
-                <span className={styles['legalName']}>Termos de Uso</span>
-                <span className={styles['legalNote']}>Em elaboração — ainda não publicados.</span>
-              </li>
-              <li className={styles['legalItem']}>
-                <span className={styles['legalName']}>Política de Privacidade</span>
-                <span className={styles['legalNote']}>Em elaboração — ainda não publicada.</span>
-              </li>
+              {FOOTER_CONTENT.legal.map((item) => (
+                <li key={item.name} className={styles['legalItem']}>
+                  <span className={styles['legalName']}>{item.name}</span>
+                  <span className={styles['legalNote']}>{item.note}</span>
+                </li>
+              ))}
             </ul>
           </div>
 
           <div>
-            <p className={styles['columnTitle']}>Contato</p>
-            <p className={styles['contactNote']}>
-              Ainda estamos definindo nossos canais de atendimento. Enquanto isso, não há um
-              e-mail ou telefone de suporte ativo — assim que existir, ele aparece aqui.
-            </p>
+            <p className={styles['columnTitle']}>{FOOTER_CONTENT.contactColumnTitle}</p>
+            <p className={styles['contactNote']}>{FOOTER_CONTENT.contactNote}</p>
           </div>
         </div>
 
         <div className={styles['bottom']}>
-          <span>© {new Date().getFullYear()} VuumBora. Todos os direitos reservados.</span>
-          <span>Projeto em desenvolvimento.</span>
+          <span>
+            © {new Date().getFullYear()} VuumBora. {FOOTER_CONTENT.bottomLeft}
+          </span>
+          <a href={FOOTER_CONTENT.backToTop.href}>{FOOTER_CONTENT.backToTop.label}</a>
         </div>
       </Container>
     </footer>

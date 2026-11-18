@@ -53,6 +53,7 @@
     color: var(--color-text-secondary);
     text-decoration: none;
     padding-block: var(--spacing-2);
+    transition: color 0.15s ease;
   }
 
   .desktopNav a:hover {

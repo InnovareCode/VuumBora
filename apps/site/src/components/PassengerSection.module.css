@@ -1,0 +1,10 @@
+.journeyHeading {
+  margin-top: var(--spacing-9);
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.ctaRow {
+  margin-top: var(--spacing-8);
+}

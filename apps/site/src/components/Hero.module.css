@@ -1,15 +1,43 @@
 .hero {
   position: relative;
-  min-height: clamp(520px, 92vh, 820px);
+  min-height: clamp(560px, 94vh, 860px);
   display: flex;
   align-items: flex-end;
   overflow: hidden;
 }
 
-.photo {
-  object-fit: cover;
-  object-position: 50% 35%;
+.photoWrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
   z-index: 0;
+}
+
+.photo {
+  position: absolute;
+  inset: -4% -4%;
+  width: 108%;
+  height: 108%;
+  object-fit: cover;
+  object-position: 50% 32%;
+}
+
+/* Ken Burns: zoom lento e contínuo, só decoração — nunca a única forma de
+   entender a cena (a foto já é legível parada). Desligado sob movimento
+   reduzido (docs/movimento.md). */
+@media (prefers-reduced-motion: no-preference) {
+  .photo {
+    animation: kenburns 22s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes kenburns {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.09);
+  }
 }
 
 /* Direção de arte (docs/direcao-de-arte.md §9 item 9): scrim OBRIGATÓRIO atrás
@@ -22,10 +50,17 @@
   z-index: 1;
 }
 
-.content {
+.layout {
   position: relative;
   z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--spacing-7);
   padding-block: clamp(48px, 10vh, 96px) clamp(40px, 8vh, 72px);
+}
+
+.content {
   max-width: 640px;
 }
 
@@ -54,6 +89,35 @@
   line-height: 1.6;
 }
 
+.honesty {
+  margin-top: var(--spacing-4);
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  max-width: 52ch;
+}
+
 .actions {
   margin-top: var(--spacing-7);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-4);
+}
+
+.stores {
+  margin-top: var(--spacing-6);
+}
+
+/* O celular flutuante só entra em telas largas o bastante para não brigar
+   com o texto nem empurrar o CTA para fora da dobra (320–1023px: hero fica
+   só texto + foto, como já era). */
+.showcase {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .showcase {
+    display: block;
+    flex-shrink: 0;
+    filter: drop-shadow(0 24px 48px rgba(0, 0, 0, 0.45));
+  }
 }
