@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VuumBora — Boas-vindas, acabamento proposto (maquete de direção de arte)</title>
+<!-- MAQUETE, não é o app. Tela ainda não existe no código; serve para mostrar o fundo noturno e o CTA com brilho. -->
+<style>
+@font-face{font-family:J;font-weight:400;src:url(../../node_modules/@expo-google-fonts/plus-jakarta-sans/400Regular/PlusJakartaSans_400Regular.ttf)}
+@font-face{font-family:J;font-weight:600;src:url(../../node_modules/@expo-google-fonts/plus-jakarta-sans/600SemiBold/PlusJakartaSans_600SemiBold.ttf)}
+@font-face{font-family:J;font-weight:700;src:url(../../node_modules/@expo-google-fonts/plus-jakarta-sans/700Bold/PlusJakartaSans_700Bold.ttf)}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:#070D18}
+body{font-family:J,sans-serif;color:#fff;-webkit-font-smoothing:antialiased}
+.s{height:100vh;display:flex;flex-direction:column;padding:0 24px 24px;
+  background:url(../../packages/ui/assets/backgrounds/onboarding-noturno.jpg) center 30%/cover #070D18} /* image.onboardingBackground */
+.logo{margin:9vh auto 0;width:min(62vw,260px)}
+.logo img{width:100%;display:block;filter:drop-shadow(0 8px 24px rgba(0,0,0,.6))}
+.sp{flex:1}
+.bottom{position:relative}
+.bottom:before{content:"";position:absolute;left:-24px;right:-24px;top:-96px;bottom:-24px;z-index:-1;background:linear-gradient(180deg,rgba(7,13,24,0) 0,rgba(7,13,24,.92) 96px,#070D18 100%)} /* gradient.photoScrim: obrigatorio sob texto em imagem */
+.s{isolation:isolate}
+h1{font-size:28px;line-height:34px;font-weight:700;text-align:center;letter-spacing:-.3px}
+h1 span{color:#FFCC00}
+p.l{color:#B9C4D2;text-align:center;font-size:16px;line-height:22px;margin:10px auto 0;max-width:300px}
+.b{height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px}
+.p{margin-top:24px;color:#0C111B;background:linear-gradient(180deg,#FED202 0%,#FFCC00 45%,#FDB601 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -1px 0 rgba(255,236,120,.7),0 4px 12px rgba(0,0,0,.45)}
+.o{margin-top:12px;border:1.5px solid rgba(255,255,255,.7);background:rgba(7,13,24,.4)}
+.t{color:#8D9AAC;font-size:12px;line-height:16px;text-align:center;margin-top:14px}
+.t b{color:#B9C4D2;font-weight:600}
+@media (max-height:640px){ .logo{margin-top:5vh;width:min(52vw,200px)} h1{font-size:24px;line-height:30px} p.l{font-size:15px;line-height:20px} .p{margin-top:16px} .b{height:52px} }
+@media (max-width:359px){ .s{padding:0 16px 16px} }
+</style></head><body>
+<div class="s">
+  <div class="logo"><img src="../../packages/ui/assets/brand/vuumbora-lockup@3x.png" alt="VuumBora — Mobilidade urbana"></div>
+  <div class="sp"></div>
+  <div class="bottom">
+  <h1 id="h">Bem-vindo ao <span>VuumBora!</span></h1>
+  <p class="l" id="l">Sua mobilidade urbana com mais praticidade, segurança e economia.</p>
+  <div class="b p">Entrar</div>
+  <div class="b o">Cadastrar</div>
+  <p class="t">Ao continuar, você concorda com nossos <b>Termos de Uso</b> e <b>Política de Privacidade</b>.</p>
+  </div>
+</div></body></html>

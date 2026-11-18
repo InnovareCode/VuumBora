@@ -14,8 +14,9 @@
  * props tipadas, estados loading/disabled/error, rótulo de acessibilidade e teste de interação.
  *
  * Estado atual: catálogo base implementado (ver apps/passenger/app/catalogo.tsx). Avatar,
- * MockBadge e BottomTabBar entraram na P03 (18/11/2026) — ainda faltam no catálogo visual.
- * Faltam: Toast, Modal, BottomSheet, StarRating e o adaptador de mapa
+ * MockBadge, BottomTabBar e StarRating entraram depois da Etapa A inicial — ainda
+ * faltam no catálogo visual (apps/passenger/app/catalogo.tsx).
+ * Faltam: Toast, Modal, BottomSheet e o adaptador de mapa
  * (MapView/RouteOverlay/LocationMarker) — fora deste escopo.
  */
 export { theme, tokens } from '@vuumbora/tokens';
@@ -80,3 +81,6 @@ export type { MockBadgeProps } from './MockBadge';
 
 export { BottomTabBar } from './BottomTabBar';
 export type { BottomTabBarProps, BottomTabBarItem } from './BottomTabBar';
+
+export { StarRating } from './StarRating';
+export type { StarRatingProps } from './StarRating';

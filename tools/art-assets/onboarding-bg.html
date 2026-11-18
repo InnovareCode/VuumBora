@@ -1,0 +1,98 @@
+<!doctype html><html><body style="margin:0;background:#000">
+<canvas id="c" width="1080" height="2340"></canvas>
+<script>
+// VuumBora — fundo noturno urbano procedural (onboarding). Semente fixa = reprodutivel.
+let s = 20261118; const R = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+const c = document.getElementById('c'), g = c.getContext('2d'); const W = 1080, H = 2340;
+const HZ = 1060; // linha do horizonte
+
+// 1. Ceu: navy da marca (matiz ~216) clareando no horizonte, com poluicao luminosa ambar baixa
+let sky = g.createLinearGradient(0, 0, 0, HZ);
+sky.addColorStop(0, '#02050C'); sky.addColorStop(0.45, '#071226'); sky.addColorStop(0.85, '#0E2140'); sky.addColorStop(1, '#1A2A44');
+g.fillStyle = sky; g.fillRect(0, 0, W, HZ + 20);
+let amb = g.createRadialGradient(540, HZ, 0, 540, HZ, 700);
+amb.addColorStop(0, 'rgba(254,161,1,0.34)'); amb.addColorStop(0.5, 'rgba(254,161,1,0.06)'); amb.addColorStop(1, 'rgba(254,161,1,0)');
+g.fillStyle = amb; g.fillRect(0, 0, W, HZ + 20);
+// estrelas muito discretas
+for (let i = 0; i < 90; i++) { g.fillStyle = `rgba(220,230,255,${0.08 + R() * 0.25})`; g.fillRect(R() * W, R() * 700, 1.6, 1.6); }
+
+function building(x, w, h, base, col, winP, warm) {
+  g.fillStyle = col; g.fillRect(x, base - h, w, h);
+  // aresta de luz (rim light) no topo
+  g.fillStyle = 'rgba(120,150,200,0.10)'; g.fillRect(x, base - h, w, 2);
+  const cw = 7, ch = 9, gx = 6, gy = 9;
+  for (let yy = base - h + 16; yy < base - 12; yy += ch + gy) for (let xx = x + 8; xx < x + w - 10; xx += cw + gx) {
+    if (R() < winP) { const t = R(); g.fillStyle = t < warm ? `rgba(255,${190 + R() * 40 | 0},${70 + R() * 50 | 0},${0.35 + R() * 0.5})` : `rgba(200,220,255,${0.18 + R() * 0.35})`; g.fillRect(xx, yy, cw, ch); }
+  }
+}
+// 2. Skyline ao fundo (baixo contraste) e frente (laterais, deixando o centro livre para a marca)
+for (let x = -20; x < W; ) { const w = 50 + R() * 90, h = 120 + R() * 260; building(x, w, h, HZ, '#0A1528', 0.18, 0.6); x += w + 4; }
+for (let x = 160; x < 920; ) { const w = 40 + R() * 70, h = 60 + R() * 170; building(x, w, h, HZ + 4, '#081123', 0.22, 0.65); x += w + 10 + R()*30; }
+const front = [[-30, 170, 760], [130, 120, 560], [250, 90, 420], [770, 110, 470], [870, 140, 640], [1000, 120, 880]];
+for (const [x, w, h] of front) building(x, w, h, HZ + 10, '#050B17', 0.32, 0.55);
+
+// 3. Bokeh no horizonte
+g.globalCompositeOperation = 'lighter';
+for (let i = 0; i < 46; i++) {
+  const x = R() * W, y = HZ - 60 + R() * 140, r = 10 + R() * 34, warm = R() < 0.7;
+  const rg = g.createRadialGradient(x, y, 0, x, y, r);
+  const col = warm ? '255,190,40' : '190,215,255', a = 0.12 + R() * 0.28;
+  rg.addColorStop(0, `rgba(${col},${a})`); rg.addColorStop(0.7, `rgba(${col},${a * 0.5})`); rg.addColorStop(1, `rgba(${col},0)`);
+  g.fillStyle = rg; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+}
+g.globalCompositeOperation = 'source-over';
+
+// 4. Asfalto molhado em perspectiva
+let road = g.createLinearGradient(0, HZ, 0, H);
+road.addColorStop(0, '#0A1322'); road.addColorStop(0.3, '#060C17'); road.addColorStop(1, '#04080F');
+g.fillStyle = road; g.fillRect(0, HZ + 10, W, H - HZ);
+// reflexos verticais das luzes no asfalto
+g.globalCompositeOperation = 'lighter';
+for (let i = 0; i < 28; i++) {
+  const x = R() * W, warm = R() < 0.7, len = 120 + R() * 360;
+  const lg = g.createLinearGradient(0, HZ + 20, 0, HZ + 20 + len);
+  const col = warm ? '255,180,30' : '170,200,255';
+  lg.addColorStop(0, `rgba(${col},${0.10 + R() * 0.12})`); lg.addColorStop(1, `rgba(${col},0)`);
+  g.fillStyle = lg; g.fillRect(x, HZ + 20, 3 + R() * 6, len);
+}
+// 4b. horizonte suave e bordas da pista em perspectiva
+let hs = g.createLinearGradient(0, HZ-30, 0, HZ+60); hs.addColorStop(0,'rgba(26,42,68,0)'); hs.addColorStop(0.5,'rgba(60,80,115,0.35)'); hs.addColorStop(1,'rgba(26,42,68,0)');
+g.fillStyle = hs; g.fillRect(0, HZ-30, W, 90);
+g.strokeStyle = 'rgba(150,170,210,0.10)'; g.lineWidth = 2;
+for (const xb of [-500, 140, 940, 1580]) { g.beginPath(); g.moveTo(540, HZ+12); g.lineTo(xb, H); g.stroke(); }
+g.setLineDash([26, 40]); g.strokeStyle = 'rgba(255,204,0,0.16)'; g.lineWidth = 3; g.beginPath(); g.moveTo(540, HZ+12); g.lineTo(540, H*0.75); g.stroke(); g.setLineDash([]);
+// 5. Rastros de luz (assinatura da marca: o swoosh do logo vira trafego)
+function trail(x0, y0, cx, cy, x1, y1, w, col, blur, a) {
+  g.save(); g.strokeStyle = `rgba(${col},${a})`; g.lineWidth = w; g.lineCap = 'round'; g.shadowColor = `rgba(${col},0.9)`; g.shadowBlur = blur;
+  g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(cx, cy, x1, y1); g.stroke();
+  g.strokeStyle = `rgba(${col},${a*0.18})`; g.lineWidth = w*7; g.shadowBlur = blur*2; g.stroke(); g.restore();
+}
+trail(560, HZ + 14, 700, HZ + 160, 1180, HZ + 300, 5, '255,204,0', 30, 0.85);
+trail(560, HZ + 18, 760, HZ + 200, 1200, HZ + 380, 9, '254,161,1', 40, 0.75);
+trail(560, HZ + 22, 820, HZ + 240, 1240, HZ + 460, 3, '255,230,140', 20, 0.9);
+trail(520, HZ + 14, 360, HZ + 170, -120, HZ + 330, 3, '255,70,70', 22, 0.55); // lanternas no sentido oposto
+trail(520, HZ + 18, 300, HZ + 220, -140, HZ + 420, 2, '255,90,80', 16, 0.45);
+g.globalCompositeOperation = 'source-over';
+
+// 6. Neblina baixa
+let fog = g.createLinearGradient(0, HZ - 120, 0, HZ + 160);
+fog.addColorStop(0, 'rgba(40,60,95,0)'); fog.addColorStop(0.5, 'rgba(40,60,95,0.18)'); fog.addColorStop(1, 'rgba(40,60,95,0)');
+g.fillStyle = fog; g.fillRect(0, HZ - 120, W, 280);
+
+// 7. Zona de texto: funde para background.base (#070D18) a partir de 62% da altura
+let fade = g.createLinearGradient(0, H * 0.54, 0, H * 0.72);
+fade.addColorStop(0, 'rgba(7,13,24,0)'); fade.addColorStop(1, 'rgba(7,13,24,1)');
+g.fillStyle = fade; g.fillRect(0, H * 0.54, W, H * 0.46);
+g.fillStyle = '#070D18'; g.fillRect(0, H * 0.72, W, H * 0.28 + 2);
+// topo escurecido para a status bar
+let tp = g.createLinearGradient(0, 0, 0, 260); tp.addColorStop(0, 'rgba(2,5,12,0.85)'); tp.addColorStop(1, 'rgba(2,5,12,0)');
+g.fillStyle = tp; g.fillRect(0, 0, W, 260);
+// vinheta lateral
+let vg = g.createRadialGradient(540, 980, 300, 540, 1100, 1300);
+vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+g.fillStyle = vg; g.fillRect(0, 0, W, H);
+// grao fino (evita banding do gradiente em telas de 8 bits)
+const id = g.getImageData(0, 0, W, H), d = id.data;
+for (let i = 0; i < d.length; i += 4) { const n = (R() - 0.5) * 5; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+g.putImageData(id, 0, 0);
+</script></body></html>

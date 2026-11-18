@@ -1,0 +1,37 @@
+<!doctype html><html><body style="margin:0;background:#000">
+<canvas id="c" width="1170" height="1560"></canvas>
+<script>
+// VuumBora — mapa escuro estilizado (placeholder da porta de mapa estatica). Cores = tokens map.* propostos.
+let s = 7031; const R = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+const c = document.getElementById('c'), g = c.getContext('2d'); const W = 1170, H = 1560;
+const LAND = '#0F2240', BLOCK = '#11264A', MINOR = '#1A3560', MAJOR = '#24477A', WATER = '#081A33', PARK = '#0F2A3A';
+g.fillStyle = LAND; g.fillRect(0, 0, W, H);
+// quadras levemente mais claras que o solo (textura urbana sem ruido)
+g.save(); g.translate(W / 2, H / 2); g.rotate(-0.21); g.translate(-W, -H);
+const step = 118;
+for (let x = 0; x < W * 2; x += step) for (let y = 0; y < H * 2; y += step * 0.78) {
+  g.fillStyle = R() < 0.06 ? PARK : BLOCK; g.fillRect(x + 9, y + 9, step - 18, step * 0.78 - 18);
+}
+// ruas secundarias
+g.strokeStyle = MINOR; g.lineWidth = 9;
+for (let x = 0; x < W * 2; x += step) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H * 2); g.stroke(); }
+for (let y = 0; y < H * 2; y += step * 0.78) { g.beginPath(); g.moveTo(0, y); g.lineTo(W * 2, y); g.stroke(); }
+g.restore();
+// avenidas (curvas organicas)
+g.strokeStyle = MAJOR; g.lineCap = 'round';
+function av(pts, w) { g.lineWidth = w; g.beginPath(); g.moveTo(pts[0], pts[1]); g.bezierCurveTo(pts[2], pts[3], pts[4], pts[5], pts[6], pts[7]); g.stroke(); }
+av([-40, 420, 380, 300, 700, 520, 1210, 360], 16);
+av([180, -40, 260, 520, 120, 980, 300, 1600], 16);
+av([-40, 1180, 420, 1080, 760, 1240, 1210, 1120], 14);
+av([640, -40, 600, 600, 720, 900, 660, 1600], 12);
+// mar a leste (Natal: orla), com borda suave
+g.fillStyle = WATER; g.beginPath(); g.moveTo(W, 0); g.lineTo(980, 0); g.bezierCurveTo(900, 420, 1060, 760, 930, 1100); g.bezierCurveTo(860, 1300, 960, 1460, 900, H); g.lineTo(W, H); g.closePath(); g.fill(); g.save(); g.clip();
+let sh = g.createLinearGradient(900, 0, W, 0); sh.addColorStop(0, 'rgba(110,168,255,0.05)'); sh.addColorStop(1, 'rgba(110,168,255,0)');
+g.fillStyle = sh; g.fillRect(860, 0, W - 860, H); g.restore();
+// orla: linha de costa com leve brilho
+g.strokeStyle='rgba(110,168,255,0.18)'; g.lineWidth=3; g.beginPath(); g.moveTo(980,0); g.bezierCurveTo(900,420,1060,760,930,1100); g.bezierCurveTo(860,1300,960,1460,900,H); g.stroke();
+// vinheta: bordas escurecem para o mapa "assentar" no card e sob overlays de vidro
+let vg = g.createRadialGradient(W / 2, H / 2, 300, W / 2, H / 2, 1000);
+vg.addColorStop(0, 'rgba(4,8,15,0)'); vg.addColorStop(1, 'rgba(4,8,15,0.45)');
+g.fillStyle = vg; g.fillRect(0, 0, W, H);
+</script></body></html>

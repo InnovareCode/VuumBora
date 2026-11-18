@@ -22,11 +22,25 @@ export default function SearchingDriverScreen() {
   const cancelSearch = useRideRequestStore((state) => state.cancelSearch);
 
   useEffect(() => {
-    // Acesso direto à rota (deep link, atualização de página) sem um pedido em
-    // andamento: não há o que buscar, volta para a Home em vez de mostrar um estado inválido.
-    if (phase !== 'searching_driver') {
-      router.replace('/');
+    if (phase === 'searching_driver') return;
+    // O simulador (src/sim/rideSimulator.ts) continua avançando a fase em segundo plano
+    // enquanto esta tela está montada — ao sair de 'searching_driver', segue pra tela
+    // certa da fase atual em vez de mostrar um estado de busca já ultrapassado.
+    if (phase === 'driver_assigned' || phase === 'driver_en_route' || phase === 'driver_arrived') {
+      router.replace('/a-caminho');
+      return;
     }
+    if (phase === 'in_progress') {
+      router.replace('/em-andamento');
+      return;
+    }
+    if (phase === 'completed') {
+      router.replace('/concluida');
+      return;
+    }
+    // draft/quoted/requested/cancelled/failed: acesso direto à rota (deep link,
+    // atualização de página) sem um pedido em andamento — volta para a Home.
+    router.replace('/');
   }, [phase]);
 
   function handleCancel() {

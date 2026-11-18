@@ -1,0 +1,60 @@
+<!doctype html><html><head><style>
+body{margin:0;background:transparent}
+.car{width:600px;height:260px;display:block}
+</style></head><body>
+<!--
+  VuumBora — silhuetas de veiculo por categoria, estilo "rim light" (contorno iluminado pela marca).
+  Nao e fotografia nem modelo real: perfil generico, sem marca de montadora (sem risco de trade dress).
+  Ordem: economico (hatch), comfort (sedan), plus (SUV).
+-->
+<svg id="car" class="car" viewBox="0 0 600 260" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A3A52"/><stop offset="0.45" stop-color="#16233A"/><stop offset="1" stop-color="#0A1220"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FEA101" stop-opacity="0.15"/><stop offset="0.55" stop-color="#FFCC00" stop-opacity="0.85"/><stop offset="1" stop-color="#FED202"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3B5070"/><stop offset="0.5" stop-color="#0B1424"/><stop offset="1" stop-color="#060B15"/>
+    </linearGradient>
+    <radialGradient id="head" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#FFF6D0"/><stop offset="0.35" stop-color="#FFCC00" stop-opacity="0.8"/><stop offset="1" stop-color="#FFCC00" stop-opacity="0"/></radialGradient>
+    <radialGradient id="tail" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#FF8A8F"/><stop offset="0.4" stop-color="#D02A38" stop-opacity="0.7"/><stop offset="1" stop-color="#D02A38" stop-opacity="0"/></radialGradient>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#000" stop-opacity="0.75"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+    <radialGradient id="wheel" cx="0.5" cy="0.5" r="0.5"><stop offset="0.55" stop-color="#1B2638"/><stop offset="0.8" stop-color="#05080F"/><stop offset="1" stop-color="#05080F"/></radialGradient>
+    <linearGradient id="fadeV" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="200"><stop offset="0.25" stop-color="#fff"/><stop offset="0.72" stop-color="#fff" stop-opacity="0.35"/><stop offset="0.9" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <mask id="topOnly" maskUnits="userSpaceOnUse" x="0" y="0" width="600" height="260"><rect width="600" height="260" fill="url(#fadeV)"/></mask>
+    <filter id="blur6"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="blur2"><feGaussianBlur stdDeviation="2"/></filter>
+  </defs>
+  <ellipse cx="300" cy="214" rx="270" ry="18" fill="url(#shadow)"/>
+  <g id="shape"></g>
+</svg>
+<script>
+const SHAPES = {
+  // corpo, janela, eixo traseiro, eixo dianteiro, farol [x,y], lanterna [x,y]
+  economico: { body: 'M70,184 L66,150 Q66,124 92,118 L132,112 Q170,66 220,58 L330,56 Q372,58 410,98 L478,110 Q520,118 528,146 L530,176 Q528,186 516,186 L488,186 A44,44 0 0 0 400,186 L218,186 A44,44 0 0 0 130,186 L84,186 Q70,186 70,184 Z',
+    glass: 'M150,110 Q182,72 224,66 L322,64 Q356,66 388,104 Z', rear: 174, front: 444, head: [520, 128], tail: [72, 128], pillar: 266 },
+  comfort: { body: 'M40,180 L38,146 Q40,124 70,118 L150,110 Q204,68 252,60 L360,58 Q404,62 444,100 L520,110 Q562,118 566,144 L568,174 Q566,186 552,186 L506,186 A46,46 0 0 0 414,186 L196,186 A46,46 0 0 0 104,186 L54,186 Q40,186 40,180 Z',
+    glass: 'M168,108 Q212,72 256,66 L356,64 Q392,68 424,102 Z', rear: 150, front: 460, head: [558, 124], tail: [42, 126], pillar: 300 },
+  plus: { body: 'M44,184 L42,128 Q44,108 70,102 L118,96 Q150,52 196,46 L392,44 Q430,48 458,90 L524,100 Q562,108 566,136 L568,176 Q566,190 552,190 L512,190 A50,50 0 0 0 412,190 L196,190 A50,50 0 0 0 96,190 L58,190 Q44,190 44,184 Z',
+    glass: 'M132,94 Q160,58 200,54 L386,52 Q414,56 436,92 Z', rear: 146, front: 462, head: [556, 116], tail: [46, 112], pillar: 290 },
+};
+const k = new URLSearchParams(location.search).get('k') || 'comfort';
+const S = SHAPES[k], r = k === 'plus' ? 48 : k === 'economico' ? 42 : 44, gy = k === 'plus' ? 190 : 186;
+document.getElementById('shape').innerHTML = `
+  <path d="${S.body}" fill="url(#body)"/>
+  <path d="${S.glass}" fill="url(#glass)"/>
+  <line x1="${S.pillar}" y1="56" x2="${S.pillar}" y2="${k==='plus'?92:104}" stroke="#0A1220" stroke-width="6"/>
+  <path d="${S.body}" fill="none" stroke="url(#rim)" stroke-width="7" filter="url(#blur6)" opacity="0.7" mask="url(#topOnly)"/>
+  <path d="${S.body}" fill="none" stroke="url(#rim)" stroke-width="2" mask="url(#topOnly)"/>
+  <line x1="${S.tail[0]+30}" y1="${gy-46}" x2="${S.head[0]-30}" y2="${gy-50}" stroke="#46566C" stroke-opacity="0.45" stroke-width="1.5"/>
+  ${[S.rear, S.front].map(x => `<circle cx="${x}" cy="${gy}" r="${r}" fill="url(#wheel)"/>
+    <circle cx="${x}" cy="${gy}" r="${r*0.52}" fill="none" stroke="#66768E" stroke-width="3"/>
+    <circle cx="${x}" cy="${gy}" r="${r*0.14}" fill="#8D9AAC"/>
+    <path d="M${x-r*0.8},${gy-r*0.55} A${r},${r} 0 0 1 ${x+r*0.8},${gy-r*0.55}" fill="none" stroke="#FFCC00" stroke-opacity="0.35" stroke-width="2"/>`).join('')}
+  <ellipse cx="${S.head[0]}" cy="${S.head[1]}" rx="34" ry="14" fill="url(#head)"/>
+  <ellipse cx="${S.head[0]+6}" cy="${S.head[1]+4}" rx="26" ry="9" fill="url(#head)" opacity="0.6" filter="url(#blur6)"/>
+  <ellipse cx="${S.tail[0]+4}" cy="${S.tail[1]}" rx="16" ry="10" fill="url(#tail)"/>`;
+</script>
+</body></html>

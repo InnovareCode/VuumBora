@@ -2,10 +2,12 @@
  * @vuumbora/domain/passenger — regras e fases do PASSAGEIRO.
  * Nunca importar a partir de apps/driver.
  */
-import type { Money, Place, TripStatus } from '../index';
+import type { Money, Place } from '../index';
+import { canTransitionRide, isRideCancellable, transitionRide } from './rideStateMachine';
+import type { PassengerTripPhase, RideState, RideTransitionResult } from './rideStateMachine';
 
-/** Fases de UI do passageiro (DESIGN_SYSTEM_MESTRE §8). `draft`/`quoted` são locais; o resto vem do servidor. */
-export type PassengerTripPhase = 'draft' | 'quoted' | TripStatus;
+export type { PassengerTripPhase, RideState, RideTransitionResult };
+export { canTransitionRide, isRideCancellable, transitionRide };
 
 export interface RideDraft {
   readonly origin?: Place;

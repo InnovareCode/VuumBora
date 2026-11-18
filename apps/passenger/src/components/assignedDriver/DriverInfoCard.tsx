@@ -1,0 +1,66 @@
+import { memo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { Car } from 'lucide-react-native';
+import { Avatar, StarRating, theme, textStyle, tabularNums } from '@vuumbora/ui';
+import type { AssignedDriverInfo } from '../../data/mockDriverAssignment';
+
+export interface DriverInfoCardProps {
+  readonly driver: AssignedDriverInfo;
+  /** `compact` é a versão reduzida usada na corrida em andamento (P09). */
+  readonly variant?: 'full' | 'compact';
+  readonly testID?: string;
+}
+
+/** Dados do motorista atribuído — reutilizado por P08 (completo) e P09 (compacto). */
+export const DriverInfoCard = memo(function DriverInfoCard({ driver, variant = 'full', testID }: DriverInfoCardProps) {
+  const compact = variant === 'compact';
+  return (
+    <View style={[styles.card, compact && styles.cardCompact]} testID={testID}>
+      <Avatar name={driver.name} size={compact ? 'sm' : 'md'} {...(driver.photoUri !== undefined ? { imageUri: driver.photoUri } : {})} />
+      <View style={styles.textBlock}>
+        <Text style={styles.name} numberOfLines={1}>
+          {driver.name}
+        </Text>
+        <View style={styles.ratingRow}>
+          <StarRating value={driver.rating} size={compact ? 12 : 16} {...(testID !== undefined ? { testID: `${testID}-rating` } : {})} />
+          <Text style={styles.ratingValue}>{driver.rating.toFixed(1)}</Text>
+        </View>
+        {!compact ? (
+          // numberOfLines={2} (não 1): medido (Playwright, 320px) que "Chevrolet Onix •
+          // Branco" não cabe numa linha só no card mais estreito — truncava o modelo.
+          <Text style={styles.vehicle} numberOfLines={2}>
+            {driver.vehicleModel} • {driver.vehicleColor}
+          </Text>
+        ) : null}
+      </View>
+      <View style={styles.plateBlock}>
+        <Car size={compact ? 16 : 20} color={theme.role.textSecondary} strokeWidth={1.75} />
+        <Text style={styles.plate} numberOfLines={1}>
+          {driver.plate}
+        </Text>
+      </View>
+    </View>
+  );
+});
+
+const styles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing['3'],
+    backgroundColor: theme.role.surface,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: theme.role.border,
+    padding: theme.spacing['3'],
+  },
+  cardCompact: { paddingVertical: theme.spacing['2'] },
+  textBlock: { flex: 1, gap: 2 },
+  name: { color: theme.role.textPrimary, ...textStyle('semibold', 'body') },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['1'] },
+  ratingValue: { color: theme.role.textSecondary, ...textStyle('medium', 'caption'), ...tabularNums },
+  vehicle: { color: theme.role.textMuted, ...textStyle('regular', 'small') },
+  plateBlock: { alignItems: 'center', gap: 2, maxWidth: 72 },
+  // Placa: tabularNums obrigatório (regra do projeto) — dígitos não "dançam" de largura.
+  plate: { color: theme.role.textPrimary, ...textStyle('bold', 'small'), ...tabularNums, letterSpacing: 1 },
+});
