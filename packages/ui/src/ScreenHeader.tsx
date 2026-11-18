@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from '@vuumbora/tokens';
+import { glyphStyle, textStyle } from './typography';
 
 export interface ScreenHeaderProps {
   readonly title: string;
@@ -44,13 +45,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backGlyph: {
-    color: theme.role.textPrimary,
-    fontSize: theme.typography.size.heading,
-    fontWeight: theme.typography.weight.semibold,
-  },
+  // Glifo decorativo (‹): fica na fonte do sistema de propósito, não na da marca
+  // (Plus Jakarta Sans não garante cobrir símbolo fora do latim — ver typography.ts).
+  backGlyph: { color: theme.role.textPrimary, ...glyphStyle(theme.typography.weight.semibold, 'heading') },
   titleBlock: { flex: 1 },
-  title: { color: theme.role.textPrimary, fontSize: theme.typography.size.title, fontWeight: theme.typography.weight.bold },
-  subtitle: { color: theme.role.textSecondary, fontSize: theme.typography.size.small, marginTop: theme.spacing['1'] },
+  title: { color: theme.role.textPrimary, ...textStyle('bold', 'title') },
+  subtitle: { color: theme.role.textSecondary, ...textStyle('regular', 'small'), marginTop: theme.spacing['1'] },
   rightSlot: { minWidth: theme.layout.touchTarget, alignItems: 'flex-end' },
 });

@@ -48,4 +48,11 @@ Expo Router) + pacotes (`packages/tokens`, `packages/ui`, `packages/api-client`,
   no print; não confundir com os componentes de produto.
 - `AppShell` usa `SafeAreaView` de `react-native-safe-area-context` → precisa de
   `SafeAreaProvider` no `_layout.tsx` raiz de cada app (adicionado no passenger em
-  18/11/2026; conferir se o driver também tem antes de usar `AppShell` lá).
+  18/11/2026; o driver AINDA NÃO TEM — conferir antes de usar `AppShell` lá).
+- **Tipografia:** Plus Jakarta Sans (`@expo-google-fonts/plus-jakarta-sans`,
+  instalado em 18/11/2026 nos dois apps). Carregamento via `useFonts` +
+  `expo-splash-screen` em cada `_layout.tsx`. Nunca combine `fontSize`/`fontWeight`
+  à mão num componente — use `textStyle`/`textStyleForSize`/`tabularNums` de
+  `packages/ui/src/typography.ts` (exportados de `@vuumbora/ui`). Detalhe completo,
+  incluindo por que glifo/símbolo decorativo fica fora da fonte da marca, em
+  [[licoes-tipografia-plus-jakarta-sans]].

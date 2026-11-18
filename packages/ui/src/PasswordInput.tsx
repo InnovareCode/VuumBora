@@ -2,6 +2,7 @@ import { memo, useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { theme } from '@vuumbora/tokens';
 import { InputCore, type InputCoreProps } from './InputCore';
+import { textStyle } from './typography';
 
 export type PasswordInputProps = Omit<
   InputCoreProps,
@@ -44,10 +45,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toggle: {
-    color: theme.role.ctaBackground,
-    fontSize: theme.typography.size.small,
-    fontWeight: theme.typography.weight.semibold,
-  },
+  toggle: { color: theme.role.ctaBackground, ...textStyle('semibold', 'small') },
   toggleDisabled: { color: theme.role.textMuted },
 });

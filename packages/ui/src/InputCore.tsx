@@ -19,6 +19,7 @@ import {
   type TextInputProps as RNTextInputProps,
 } from 'react-native';
 import { theme } from '@vuumbora/tokens';
+import { glyphStyle, textStyle } from './typography';
 
 export interface InputCoreProps {
   readonly label: string;
@@ -125,8 +126,7 @@ const styles = StyleSheet.create({
   wrapper: { width: '100%' },
   label: {
     color: theme.role.textSecondary,
-    fontSize: theme.typography.size.small,
-    fontWeight: theme.typography.weight.semibold,
+    ...textStyle('semibold', 'small'),
     marginBottom: theme.spacing['1'],
   },
   field: {
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: theme.typography.size.body,
+    ...textStyle('regular', 'body'),
     paddingVertical: theme.spacing['2'],
   },
   leftAccessory: { marginRight: theme.spacing['2'] },
@@ -149,11 +149,8 @@ const styles = StyleSheet.create({
     gap: theme.spacing['1'],
     marginTop: theme.spacing['1'],
   },
-  errorGlyph: {
-    color: theme.role.danger,
-    fontSize: theme.typography.size.small,
-    fontWeight: theme.typography.weight.bold,
-  },
-  errorText: { color: theme.role.danger, fontSize: theme.typography.size.small, flexShrink: 1 },
-  helperText: { color: theme.role.textMuted, fontSize: theme.typography.size.small, marginTop: theme.spacing['1'] },
+  // Glifo (✕): fonte do sistema de propósito — ver nota em typography.ts.
+  errorGlyph: { color: theme.role.danger, ...glyphStyle(theme.typography.weight.bold, 'small') },
+  errorText: { color: theme.role.danger, ...textStyle('regular', 'small'), flexShrink: 1 },
+  helperText: { color: theme.role.textMuted, ...textStyle('regular', 'small'), marginTop: theme.spacing['1'] },
 });

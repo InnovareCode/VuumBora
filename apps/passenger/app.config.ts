@@ -20,7 +20,7 @@ const config: ExpoConfig = {
     // PENDENTE: idem, conta Google Play.
     package: 'com.vuumbora.passenger',
   },
-  plugins: ['expo-router', 'expo-status-bar'],
+  plugins: ['expo-router', 'expo-status-bar', 'expo-font', 'expo-splash-screen'],
   experiments: { typedRoutes: true },
   // Alvo web habilitado só para preview/screenshot em desenvolvimento (pedido do dono) — entrega continua Android/iOS.
   web: {

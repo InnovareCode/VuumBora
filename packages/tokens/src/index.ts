@@ -65,7 +65,9 @@ export const tokens = {
   spacing: dimensions(raw.spacing, 'spacing'),
   radius: dimensions(raw.radius, 'radius'),
   typography: {
-    family: raw.typography.family.$value,
+    // Grupo, não string única: fonte estática (RN/Android) exige um fontFamily por
+    // peso — não dá pra variar peso dentro de uma família só. Ver docs/tipografia.md.
+    family: colors(raw.typography.family),
     size: dimensions(raw.typography.size, 'typography.size'),
     weight: fontWeights(raw.typography.weight),
   },

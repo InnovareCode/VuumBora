@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { theme } from '@vuumbora/ui';
+import { textStyle, theme } from '@vuumbora/ui';
 
 export interface FocusedFieldPreviewProps {
   readonly label: string;
@@ -25,8 +25,7 @@ export function FocusedFieldPreview({ label, value }: FocusedFieldPreviewProps) 
 const styles = StyleSheet.create({
   label: {
     color: theme.role.textSecondary,
-    fontSize: theme.typography.size.small,
-    fontWeight: theme.typography.weight.semibold,
+    ...textStyle('semibold', 'small'),
     marginBottom: theme.spacing['1'],
   },
   field: {
@@ -38,5 +37,5 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: theme.role.ctaBackground,
   },
-  value: { color: theme.role.textPrimary, fontSize: theme.typography.size.body },
+  value: { color: theme.role.textPrimary, ...textStyle('regular', 'body') },
 });

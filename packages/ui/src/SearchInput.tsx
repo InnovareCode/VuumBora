@@ -2,6 +2,7 @@ import { memo, useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from '@vuumbora/tokens';
 import { InputCore, type InputCoreProps } from './InputCore';
+import { glyphStyle } from './typography';
 
 export type SearchInputProps = Omit<InputCoreProps, 'secureTextEntry' | 'leftAccessory' | 'rightAccessory'>;
 
@@ -39,7 +40,7 @@ function MagnifierGlyph() {
 }
 
 const styles = StyleSheet.create({
-  magnifier: { width: 16, height: 16 },
+  magnifier: { width: 18, height: 18 },
   magnifierLens: {
     width: 11,
     height: 11,
@@ -50,13 +51,17 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
   },
+  // Cabo ancorado no ponto exato da borda do círculo (45° a partir do centro, raio 5.5)
+  // e girado em torno desse mesmo ponto (transformOrigin no topo da barra) — por isso
+  // encosta de verdade no círculo em vez de "flutuar" perto dele (medido no navegador).
   magnifierHandle: {
-    width: 1.5,
+    width: 2,
     height: 6,
     backgroundColor: theme.role.textMuted,
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    left: 8.4,
+    top: 9.4,
+    transformOrigin: ['50%', '0%', 0],
     transform: [{ rotate: '45deg' }],
   },
   // Alvo de toque >= 44px mesmo com o glifo pequeno (medido no navegador).
@@ -66,5 +71,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  clear: { color: theme.role.textMuted, fontSize: theme.typography.size.body },
+  // Glifo (✕): fonte do sistema de propósito — ver nota em typography.ts.
+  clear: { color: theme.role.textMuted, ...glyphStyle(theme.typography.weight.regular, 'body') },
 });

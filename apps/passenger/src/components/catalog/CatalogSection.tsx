@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { theme } from '@vuumbora/ui';
+import { textStyle, theme } from '@vuumbora/ui';
 
 export interface CatalogSectionProps {
   readonly title: string;
@@ -26,15 +26,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.role.border,
   },
+  // `width: '100%'` + `flexShrink: 1` travam a caixa no tamanho do pai de propósito —
+  // não dependem de `alignItems: 'stretch'` herdado nem da métrica da fonte do sistema
+  // pra decidir quando quebrar linha (pedido do Atlas, 18/11/2026).
   title: {
+    width: '100%',
+    flexShrink: 1,
     color: theme.role.textPrimary,
-    fontSize: theme.typography.size.title,
-    fontWeight: theme.typography.weight.bold,
+    ...textStyle('bold', 'title'),
     marginBottom: theme.spacing['1'],
   },
   description: {
+    width: '100%',
+    flexShrink: 1,
     color: theme.role.textSecondary,
-    fontSize: theme.typography.size.small,
+    ...textStyle('regular', 'small'),
     marginBottom: theme.spacing['4'],
   },
   body: { gap: theme.spacing['5'] },

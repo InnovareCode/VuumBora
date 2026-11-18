@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { theme } from '@vuumbora/tokens';
+import { textStyleForSize, textStyle } from './typography';
 
 export type BrandLogoSize = 'sm' | 'md' | 'lg';
 
@@ -26,10 +27,10 @@ export const BrandLogo = memo(function BrandLogo({ size = 'md', withWordmark = t
   return (
     <View style={styles.row} testID={testID} accessibilityRole="image" accessibilityLabel="VuumBora">
       <View style={[styles.badge, { width: badge, height: badge, borderRadius: theme.radius.md }]}>
-        <Text style={[styles.badgeGlyph, { fontSize: badge * 0.55 }]}>V</Text>
+        <Text style={[styles.badgeGlyph, textStyleForSize('bold', badge * 0.55)]}>V</Text>
       </View>
       {withWordmark ? (
-        <Text style={[styles.wordmark, { fontSize: theme.typography.size[WORDMARK_SIZE[size]] }]}>
+        <Text style={[styles.wordmark, textStyle('bold', WORDMARK_SIZE[size])]}>
           Vuum<Text style={styles.wordmarkAccent}>Bora</Text>
         </Text>
       ) : null}
@@ -40,7 +41,7 @@ export const BrandLogo = memo(function BrandLogo({ size = 'md', withWordmark = t
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['2'] },
   badge: { backgroundColor: theme.role.ctaBackground, alignItems: 'center', justifyContent: 'center' },
-  badgeGlyph: { color: theme.role.ctaText, fontWeight: theme.typography.weight.bold },
-  wordmark: { color: theme.role.textPrimary, fontWeight: theme.typography.weight.bold },
+  badgeGlyph: { color: theme.role.ctaText },
+  wordmark: { color: theme.role.textPrimary },
   wordmarkAccent: { color: theme.role.ctaBackground },
 });

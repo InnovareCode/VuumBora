@@ -1,9 +1,9 @@
 {
   "$schema": "https://design-tokens.github.io/community-group/format/",
   "name": "VuumBora Design Tokens",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "status": "approved-measured-from-logo",
-  "notes": "Paleta medida pixel a pixel na logomarca (System.Drawing + CIEDE2000) e validada em WCAG AA; aprovada pelo dono em 18/11/2026. Origem de cada cor e tabela de contraste em docs/identidade-visual.md. Fonte unica: packages/tokens deriva deste arquivo. Nao duplicar HEX em outro lugar.",
+  "notes": "Paleta medida pixel a pixel na logomarca (System.Drawing + CIEDE2000) e validada em WCAG AA; aprovada pelo dono em 18/11/2026. Origem de cada cor e tabela de contraste em docs/identidade-visual.md. Fonte unica: packages/tokens deriva deste arquivo. Nao duplicar HEX em outro lugar. Tipografia: Plus Jakarta Sans (decisao do dono, 18/11/2026, analise completa em docs/tipografia.md) substitui Inter. typography.family e um grupo de 4 fontFamily (um por peso: regular/medium/semibold/bold) porque fonte estatica no Android nao mapeia peso por fontWeight dentro de uma familia so.",
   "color": {
     "brand": {
       "yellow": {
@@ -192,8 +192,22 @@
   },
   "typography": {
     "family": {
-      "$type": "fontFamily",
-      "$value": "Inter"
+      "regular": {
+        "$type": "fontFamily",
+        "$value": "PlusJakartaSans_400Regular"
+      },
+      "medium": {
+        "$type": "fontFamily",
+        "$value": "PlusJakartaSans_500Medium"
+      },
+      "semibold": {
+        "$type": "fontFamily",
+        "$value": "PlusJakartaSans_600SemiBold"
+      },
+      "bold": {
+        "$type": "fontFamily",
+        "$value": "PlusJakartaSans_700Bold"
+      }
     },
     "size": {
       "caption": {

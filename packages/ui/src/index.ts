@@ -20,6 +20,9 @@
 export { theme, tokens } from '@vuumbora/tokens';
 export type { Theme, Tokens } from '@vuumbora/tokens';
 
+export { textStyle, textStyleForSize, tabularNums, glyphStyle } from './typography';
+export type { TextWeightKey, TextSizeKey } from './typography';
+
 export { AppShell } from './AppShell';
 export type { AppShellProps } from './AppShell';
 

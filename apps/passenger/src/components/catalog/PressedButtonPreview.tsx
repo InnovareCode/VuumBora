@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { theme } from '@vuumbora/ui';
+import { textStyle, theme } from '@vuumbora/ui';
 
 export type PressedButtonVariant = 'primary' | 'secondary' | 'danger';
 
@@ -48,5 +48,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: theme.spacing['6'],
   },
-  label: { fontSize: theme.typography.size.body, fontWeight: theme.typography.weight.semibold },
+  label: textStyle('semibold', 'body'),
 });

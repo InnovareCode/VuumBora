@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { theme } from '@vuumbora/tokens';
+import { glyphStyle, textStyle } from './typography';
 
 export interface EmptyStateProps {
   readonly title: string;
@@ -34,13 +35,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: theme.spacing['2'],
   },
-  glyph: { color: theme.role.textMuted, fontSize: theme.typography.size.title },
+  // Glifo (○): fonte do sistema de propósito — ver nota em typography.ts.
+  glyph: { color: theme.role.textMuted, ...glyphStyle(theme.typography.weight.regular, 'title') },
   title: {
     color: theme.role.textPrimary,
-    fontSize: theme.typography.size.subtitle,
-    fontWeight: theme.typography.weight.semibold,
+    ...textStyle('semibold', 'subtitle'),
     textAlign: 'center',
   },
-  description: { color: theme.role.textSecondary, fontSize: theme.typography.size.small, textAlign: 'center' },
+  description: { color: theme.role.textSecondary, ...textStyle('regular', 'small'), textAlign: 'center' },
   action: { marginTop: theme.spacing['3'], width: '100%' },
 });

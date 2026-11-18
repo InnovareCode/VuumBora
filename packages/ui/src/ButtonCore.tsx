@@ -15,6 +15,7 @@ import {
   type GestureResponderEvent,
 } from 'react-native';
 import { theme } from '@vuumbora/tokens';
+import { glyphStyle, textStyle } from './typography';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger';
 
@@ -144,20 +145,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: theme.spacing['6'],
   },
-  label: {
-    fontSize: theme.typography.size.body,
-    fontWeight: theme.typography.weight.semibold,
-  },
+  label: textStyle('semibold', 'body'),
   errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing['1'],
     marginTop: theme.spacing['1'],
   },
-  errorGlyph: {
-    color: theme.role.danger,
-    fontSize: theme.typography.size.small,
-    fontWeight: theme.typography.weight.bold,
-  },
-  errorText: { color: theme.role.danger, fontSize: theme.typography.size.small },
+  // Glifo (✕): fonte do sistema de propósito — ver nota em typography.ts.
+  errorGlyph: { color: theme.role.danger, ...glyphStyle(theme.typography.weight.bold, 'small') },
+  errorText: { color: theme.role.danger, ...textStyle('regular', 'small') },
 });

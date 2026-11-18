@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from '@vuumbora/tokens';
+import { textStyle } from './typography';
 
 export interface InfoCardProps {
   readonly title: string;
@@ -77,7 +78,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   textBlock: { flex: 1 },
-  title: { color: theme.role.textPrimary, fontSize: theme.typography.size.body, fontWeight: theme.typography.weight.semibold },
-  description: { color: theme.role.textSecondary, fontSize: theme.typography.size.small, marginTop: theme.spacing['1'] },
+  title: { color: theme.role.textPrimary, ...textStyle('semibold', 'body') },
+  description: { color: theme.role.textSecondary, ...textStyle('regular', 'small'), marginTop: theme.spacing['1'] },
   trailing: { marginLeft: theme.spacing['2'] },
 });

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { theme } from '@vuumbora/ui';
+import { textStyle, theme } from '@vuumbora/ui';
 
 export interface CatalogRowProps {
   readonly label: string;
@@ -20,16 +20,19 @@ export function CatalogRow({ label, children, stacked = false }: CatalogRowProps
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['4'], flexWrap: 'wrap' },
-  stackedRow: { gap: theme.spacing['2'] },
+  row: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: theme.spacing['4'], flexWrap: 'wrap' },
+  stackedRow: { width: '100%', gap: theme.spacing['2'] },
   label: {
     color: theme.role.textMuted,
-    fontSize: theme.typography.size.caption,
-    fontWeight: theme.typography.weight.semibold,
+    ...textStyle('semibold', 'caption'),
     width: 110,
+    flexShrink: 0,
   },
   // `flex: 1` é o que faz o `flexWrap` valer: sem largura definida, o conteúdo só
   // cresce e é cortado pelo ScrollView em vez de quebrar linha (medido no navegador).
-  content: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: theme.spacing['3'], flexWrap: 'wrap' },
-  stackedContent: { width: '100%', maxWidth: 360 },
+  // `minWidth: 0` é o reforço contra o item de flex nunca encolher abaixo do seu
+  // próprio "min-content" (tamanho natural do conteúdo) — guarda de verdade contra
+  // depender da métrica de fonte do sistema (pedido do Atlas, 18/11/2026).
+  content: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: theme.spacing['3'], flexWrap: 'wrap' },
+  stackedContent: { width: '100%', maxWidth: 360, flexShrink: 1, minWidth: 0 },
 });

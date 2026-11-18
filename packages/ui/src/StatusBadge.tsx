@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { theme } from '@vuumbora/tokens';
+import { glyphStyle, textStyle } from './typography';
 
 export type StatusBadgeVariant = 'success' | 'danger' | 'warning' | 'info' | 'neutral';
 
@@ -50,6 +51,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.pill,
     alignSelf: 'flex-start',
   },
-  glyph: { fontSize: theme.typography.size.small, fontWeight: theme.typography.weight.bold },
-  label: { fontSize: theme.typography.size.small, fontWeight: theme.typography.weight.semibold },
+  // Glifo (✓ ✕ ! i •): fonte do sistema de propósito — ver nota em typography.ts.
+  glyph: glyphStyle(theme.typography.weight.bold, 'small'),
+  label: textStyle('semibold', 'small'),
 });

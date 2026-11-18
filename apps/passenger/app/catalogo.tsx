@@ -17,6 +17,7 @@ import {
   SecondaryButton,
   StatusBadge,
   TextInput,
+  textStyle,
   theme,
 } from '@vuumbora/ui';
 import { CatalogRow } from '../src/components/catalog/CatalogRow';
@@ -308,7 +309,7 @@ const styles = StyleSheet.create({
   demoRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['4'] },
   footer: {
     color: theme.role.textMuted,
-    fontSize: theme.typography.size.caption,
+    ...textStyle('regular', 'caption'),
     textAlign: 'center',
     marginTop: theme.spacing['4'],
     marginBottom: theme.spacing['8'],
