@@ -262,3 +262,27 @@ tudo que já existe.
 ⚠️ Nada aqui substitui a opinião de um contador e de um advogado nos itens de
 dinheiro (3, 4, 5, 6) e de dados pessoais (9). Eu aponto o que costuma ser
 exigido; quem valida o seu caso são eles.
+
+---
+
+## Decisões tomadas em 18/11/2026 (tarde)
+
+| # | Decisão | O que foi decidido |
+|---|---|---|
+| 1 | **SDK de mapa** | ✅ **Mapbox**. Conta criada pelo dono, token público no `.env` local |
+| — | Tipografia | ✅ Plus Jakarta Sans confirmada |
+| — | Repositório | ✅ `github.com/InnovareCode/VuumBora`, branch `main` |
+| — | Domínio | ✅ **www.vuumbora.com.br** |
+| — | Site | ✅ Next.js com exportação estática, em `apps/site` |
+
+### Pendências que nasceram destas decisões
+
+1. **Restringir o token do Mapbox** no painel, por URL e por identificador de
+   app. Token público é visível por desenho; sem restrição, terceiros podem
+   consumir a cota do dono.
+2. **Onde hospedar o site.** O domínio existe, mas falta escolher o serviço e
+   apontar o DNS no Registro.br. Opções usuais: Vercel (natural para Next.js),
+   Cloudflare Pages ou Netlify. Todas atendem site estático, com plano gratuito
+   suficiente para começar.
+3. **Certificado HTTPS** — os três serviços acima emitem automaticamente, mas
+   só depois do DNS apontado.
