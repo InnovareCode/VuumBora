@@ -1,0 +1,4 @@
+- [Projeto Vuumbora — visão geral](project_vuumbora_overview.md) — monorepo, tokens, @vuumbora/ui, onde fica cada coisa.
+- [RN Web: flexWrap sem flex:1 corta em vez de quebrar linha](bug_rn_web_flexwrap_sem_flex1.md) — causa raiz + correção.
+- [RN Web: hitSlop sozinho não garante alvo de toque 44px](bug_touch_target_hitslop_insuficiente.md) — causa raiz + correção.
+- [Medir catálogo Expo Router web com Playwright](feedback_medir_expo_web_playwright.md) — onde servir, como tirar print completo.
