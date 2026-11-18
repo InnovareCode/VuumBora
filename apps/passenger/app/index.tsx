@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Briefcase, Calendar, Car, Home as HomeIcon, MessageCircle, Star, User } from 'lucide-react-native';
 import { AppShell, BottomTabBar, type BottomTabBarItem, MockBadge, PrimaryButton, theme, textStyle } from '@vuumbora/ui';
@@ -9,15 +9,8 @@ import { DestinationSearchBar } from '../src/components/home/DestinationSearchBa
 import { QuickAccessGrid, type QuickAccessItem } from '../src/components/home/QuickAccessGrid';
 import { RideCategoryCard } from '../src/components/home/RideCategoryCard';
 import { SafetyPromoBanner } from '../src/components/home/SafetyPromoBanner';
-
-type CategoryKey = 'economico' | 'comfort' | 'plus';
-
-/** Preço e ETA são DEMONSTRAÇÃO (especificacoes/PASSAGEIRO.md): sem motor de preço/roteirização real ainda. */
-const RIDE_CATEGORIES: ReadonlyArray<{ readonly key: CategoryKey; readonly name: string; readonly etaLabel: string; readonly priceLabel: string }> = [
-  { key: 'economico', name: 'Vuum Econômico', etaLabel: '4–6 min', priceLabel: 'R$ 23,90' },
-  { key: 'comfort', name: 'Vuum Comfort', etaLabel: '3–5 min', priceLabel: 'R$ 29,90' },
-  { key: 'plus', name: 'Vuum Plus', etaLabel: '3–5 min', priceLabel: 'R$ 37,90' },
-];
+import { MOCK_RIDE_CATEGORIES } from '../src/data/mockRideCategories';
+import { useRideRequestStore } from '../src/store/useRideRequestStore';
 
 const QUICK_ACCESS_ITEMS: readonly QuickAccessItem[] = [
   { key: 'casa', label: 'Casa', subtitle: 'Ponta Negra', icon: <HomeIcon size={20} color={theme.role.ctaBackground} strokeWidth={1.75} /> },
@@ -33,7 +26,16 @@ const QUICK_ACCESS_ITEMS: readonly QuickAccessItem[] = [
  * chama uma API real ainda — não existe contrato/endpoint definido (pendência para Vega).
  */
 export default function PassengerHomeScreen() {
-  const [selectedCategory, setSelectedCategory] = useState<CategoryKey>('economico');
+  const destination = useRideRequestStore((state) => state.destination);
+  const categoryId = useRideRequestStore((state) => state.categoryId);
+  const setCategory = useRideRequestStore((state) => state.setCategory);
+
+  const canProceed = Boolean(destination);
+
+  function handleRequestRide() {
+    if (!canProceed) return;
+    router.push('/confirmacao');
+  }
 
   const tabs: readonly BottomTabBarItem[] = [
     { key: 'inicio', label: 'Início', icon: ({ color, active }) => <HomeIcon size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
@@ -54,7 +56,7 @@ export default function PassengerHomeScreen() {
         <HomeHeader notificationCount={3} />
         <GreetingRow passengerName="Juliana" />
         <HomeMapPreview cityLabel="Natal - RN" currentAddress="Ponta Negra, Natal - RN" landmarkLabel="Morro do Careca" />
-        <DestinationSearchBar />
+        <DestinationSearchBar onPress={() => router.push('/destino')} destinationAddress={destination?.address} />
         <QuickAccessGrid items={QUICK_ACCESS_ITEMS} />
 
         <View style={styles.categorySection}>
@@ -63,14 +65,14 @@ export default function PassengerHomeScreen() {
             <MockBadge label="preço e tempo estimados" />
           </View>
           <View style={styles.categoryRow}>
-            {RIDE_CATEGORIES.map((category) => (
+            {MOCK_RIDE_CATEGORIES.map((category) => (
               <RideCategoryCard
                 key={category.key}
                 name={category.name}
                 etaLabel={category.etaLabel}
                 priceLabel={category.priceLabel}
-                selected={selectedCategory === category.key}
-                onPress={() => setSelectedCategory(category.key)}
+                selected={categoryId === category.key}
+                onPress={() => setCategory(category.key)}
               />
             ))}
           </View>
@@ -81,10 +83,16 @@ export default function PassengerHomeScreen() {
         <PrimaryButton
           label="Solicitar corrida"
           icon={<Car size={20} color={theme.role.ctaText} strokeWidth={2.25} />}
-          onPress={() => {}}
+          onPress={handleRequestRide}
+          disabled={!canProceed}
           accessibilityLabel="Solicitar corrida"
           testID="request-ride-button"
         />
+        {!canProceed ? (
+          <Text style={styles.helperText} accessibilityRole="alert">
+            Defina seu destino para continuar.
+          </Text>
+        ) : null}
       </View>
     </AppShell>
   );
@@ -96,4 +104,5 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing['2'] },
   sectionTitle: { color: theme.role.textPrimary, ...textStyle('bold', 'body') },
   categoryRow: { flexDirection: 'row', gap: theme.spacing['2'] },
+  helperText: { color: theme.role.textSecondary, ...textStyle('regular', 'small'), textAlign: 'center' },
 });

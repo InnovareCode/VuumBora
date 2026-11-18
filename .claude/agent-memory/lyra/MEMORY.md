@@ -1,7 +1,7 @@
 - [Projeto Vuumbora — visão geral](project_vuumbora_overview.md) — monorepo, tokens, @vuumbora/ui, onde fica cada coisa.
 - [RN Web: flexWrap sem flex:1 corta em vez de quebrar linha](bug_rn_web_flexwrap_sem_flex1.md) — causa raiz + correção.
 - [RN Web: hitSlop sozinho não garante alvo de toque 44px](bug_touch_target_hitslop_insuficiente.md) — causa raiz + correção.
-- [Medir catálogo Expo Router web com Playwright](feedback_medir_expo_web_playwright.md) — onde servir, como tirar print completo.
+- [Medir Expo Router web com Playwright](feedback_medir_expo_web_playwright.md) — onde servir, print completo, seletor `:visible` com telas empilhadas, `exactOptionalPropertyTypes`.
 - [Desenhar ícone composto (lupa) com Views e transform](bug_icone_view_transform_sem_transformorigin.md) — rotacionar sem transformOrigin desconecta as peças.
 - [Checar overflow por elemento, não só pelo documento](feedback_checar_overflow_por_elemento.md) — por que `scrollWidth`/`getBoundingClientRect` do documento não bastam.
 - [Tipografia Plus Jakarta Sans no RN/Expo](licoes-tipografia-plus-jakarta-sans.md) — fontFamily por peso, tabular-nums, símbolos fora da marca.

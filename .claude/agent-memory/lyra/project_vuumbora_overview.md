@@ -74,6 +74,25 @@ Expo Router) + pacotes (`packages/tokens`, `packages/ui`, `packages/api-client`,
   (`Imagens/LogoMarca.png`). O Apolo vai gerar os recortes antes de qualquer
   integração — **não mexer em `BrandLogo` por conta própria** até o Atlas passar
   os assets prontos (combinado em 18/11/2026).
+- **Fluxo de pedido de corrida (P04 destino, P06 confirmação, P07 busca) implementado em
+  18/11/2026**, saindo da Home (`apps/passenger/app/{destino,confirmacao,buscando}.tsx`).
+  Sem mockup de referência — derivadas do design system. Estado do pedido (origem,
+  destino, categoria, forma de pagamento, fase) vive em
+  `apps/passenger/src/store/useRideRequestStore.ts` (Zustand — primeira vez que a lib
+  entra no projeto, só em `apps/passenger`; `docs/decisions.md` previa isso: "entra
+  quando a primeira tela precisar"). `RideDraft`/`canRequestRide` continuam vindo de
+  `@vuumbora/domain/passenger` (regra de negócio já existia, só não tinha consumidor).
+  Dados mock específicos da store ficam em `apps/passenger/src/data/` (`mockPlaces.ts`,
+  `mockPaymentMethods.ts`, `mockRideCategories.ts` — este último também é a fonte única
+  de categoria/preço/ETA que a Home (P03) já usava antes espalhado inline).
+  **Navegação:** `router.push` para telas pré-corrida (Destino, Confirmação — permitem
+  voltar); `router.replace('/buscando')` ao solicitar, para que a tela de Confirmação
+  saia da pilha (regra de domínio "em corrida ativa não volta pra escolha de destino");
+  P07 não tem botão de voltar no cabeçalho. Cancelar a busca (`cancelSearch()`) só reseta
+  `phase` para `'draft'` — mantém origem/destino/categoria/pagamento já escolhidos.
+  **`InputCore` ganhou `onFocus?`/`onBlur?`** (opcionais, repassados do `RNTextInput`
+  interno) para a P04 saber qual campo (origem/destino) está ativo e aplicar o resultado
+  do autocomplete nele — primeiro caso de extensão da base de input desde que ela existe.
 - **Tipografia:** Plus Jakarta Sans (`@expo-google-fonts/plus-jakarta-sans`,
   instalado em 18/11/2026 nos dois apps). Carregamento via `useFonts` +
   `expo-splash-screen` em cada `_layout.tsx`. Nunca combine `fontSize`/`fontWeight`

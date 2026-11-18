@@ -32,6 +32,37 @@ pegar a tela inteira:
 2. Recriar a página com `viewport: { width, height: essaAltura }` (sem scroll
    necessário) e tirar um screenshot normal (sem `fullPage`).
 
+**Expo Router (web) mantém a tela anterior da pilha MONTADA ao navegar** (`router.push`),
+e `router.replace` troca só a entrada do topo — depois de um fluxo com várias telas
+(ex.: Home → Destino → volta → Confirmação → `replace` para Busca → cancelar
+`replace('/')`), pode haver **duas instâncias da Home montadas ao mesmo tempo** no DOM.
+Consequência prática ao medir/testar com Playwright:
+- `page.click('text=Algo')` ou `page.locator('[aria-label="X"]')` pode resolver para
+  o elemento da tela ERRADA (ainda montada, só visualmente oculta) — causa tanto falso
+  positivo (texto "encontrado" mas a navegação não tinha acontecido de verdade) quanto
+  erro de "strict mode violation: resolved to N elements" quando duas telas reaproveitam
+  o mesmo rótulo (ex.: botão "Solicitar corrida" existe em Home e em Confirmação ao
+  mesmo tempo).
+- **Correção:** usar seletor de atributo exato (`[aria-label="..."]`) em vez de
+  `text=` (que faz substring match e pode casar o texto de uma tela escondida), e
+  **anexar `:visible`** (`'[aria-label="Solicitar corrida"]:visible'`) em qualquer
+  seletor cujo rótulo se repete entre telas da mesma pilha. Para rotinas de
+  `overflow`/truncamento/alvo de toque que já filtram por `getComputedStyle().display`/
+  `offsetParent !== null`, isso já é tratado — o cuidado extra é só nos seletores de
+  clique/leitura de atributo feitos direto por `page.locator`/`page.getAttribute`.
+
+**`exactOptionalPropertyTypes: true` (ligado neste projeto) rejeita repassar uma prop
+opcional cujo valor pode ser `undefined` por uma variável, mesmo quando a prop em si é
+opcional** — `{ testID: maybeUndefined }` não é o mesmo que omitir a chave `testID`.
+Isso aparece toda vez que um componente de app encaminha um valor lido de store/estado
+(tipo `T | undefined`) para uma prop `foo?: T` de `@vuumbora/ui` ou de outro componente
+próprio. Correção no ponto de encaminhamento (não editar o tipo da prop no pacote
+compartilhado só por isso): `{...(valor !== undefined ? { foo: valor } : {})}` no JSX,
+ou extrair um helper puro que monta o objeto só com as chaves definidas (ex.:
+`toRideDraft` em `apps/passenger/src/store/useRideRequestStore.ts`). Quando a prop é a
+MINHA própria (de um componente que acabei de criar/vou manter), widenar o tipo para
+`foo?: T | undefined` explícito também resolve e é mais simples.
+
 Ver também os dois bugs encontrados assim: [[bug_rn_web_flexwrap_sem_flex1]] e
 [[bug_touch_target_hitslop_insuficiente]]. Contraste e cor também devem ser lidos do
 DOM real (`getComputedStyle`), nunca assumidos do token — um seletor de texto

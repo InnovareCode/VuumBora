@@ -40,6 +40,9 @@ export interface InputCoreProps {
   readonly testID?: string;
   readonly leftAccessory?: ReactNode;
   readonly rightAccessory?: ReactNode;
+  /** Avisa o pai quando o campo ganha/perde foco (ex.: destacar qual campo está ativo numa busca com vários campos). */
+  readonly onFocus?: () => void;
+  readonly onBlur?: () => void;
 }
 
 export const InputCore = memo(function InputCore({
@@ -61,6 +64,8 @@ export const InputCore = memo(function InputCore({
   testID,
   leftAccessory,
   rightAccessory,
+  onFocus,
+  onBlur,
 }: InputCoreProps) {
   const [focused, setFocused] = useState(false);
   const editable = !disabled && !loading;
@@ -96,8 +101,14 @@ export const InputCore = memo(function InputCore({
           autoCapitalize={autoCapitalize}
           autoComplete={autoComplete}
           maxLength={maxLength}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onFocus={() => {
+            setFocused(true);
+            onFocus?.();
+          }}
+          onBlur={() => {
+            setFocused(false);
+            onBlur?.();
+          }}
           style={[styles.input, { color: disabled ? theme.role.textMuted : theme.role.textPrimary }]}
           accessibilityLabel={accessibilityLabel ?? label}
           accessibilityState={{ disabled: !editable }}

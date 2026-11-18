@@ -5,19 +5,22 @@ import { theme, textStyle } from '@vuumbora/ui';
 
 export interface DestinationSearchBarProps {
   readonly onPress?: () => void;
+  /** Endereço de destino já escolhido (P04) — quando presente, substitui o convite padrão. */
+  readonly destinationAddress?: string | undefined;
 }
 
 /**
- * Entrada de destino em destaque (amarelo) — ponto de partida do fluxo de busca (P04, ainda
- * não implementado). Por isso é um botão de navegação, não um campo de texto: não existe
- * tela de destino pra abrir ainda (pendência registrada no handoff).
+ * Entrada de destino em destaque (amarelo) — ponto de partida do fluxo de busca (P04).
+ * Botão de navegação (não campo de texto): a edição de verdade acontece na tela de destino.
  */
-export const DestinationSearchBar = memo(function DestinationSearchBar({ onPress }: DestinationSearchBarProps) {
+export const DestinationSearchBar = memo(function DestinationSearchBar({ onPress, destinationAddress }: DestinationSearchBarProps) {
+  const hasDestination = Boolean(destinationAddress);
+
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="Para onde vamos? Informe seu destino"
+      accessibilityLabel={hasDestination ? `Destino: ${destinationAddress}. Tocar para alterar` : 'Para onde vamos? Informe seu destino'}
       style={({ pressed }) => [styles.bar, pressed && styles.barPressed]}
     >
       <View style={styles.iconCircle}>
@@ -25,10 +28,10 @@ export const DestinationSearchBar = memo(function DestinationSearchBar({ onPress
       </View>
       <View style={styles.textBlock}>
         <Text style={styles.title} numberOfLines={1}>
-          Para onde vamos?
+          {hasDestination ? destinationAddress : 'Para onde vamos?'}
         </Text>
         <Text style={styles.subtitle} numberOfLines={1}>
-          Informe seu destino
+          {hasDestination ? 'Tocar para alterar o destino' : 'Informe seu destino'}
         </Text>
       </View>
       <ChevronRight size={22} color={theme.role.ctaText} strokeWidth={2.25} />
