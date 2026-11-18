@@ -1,0 +1,40 @@
+# Contexto de build = raiz do monorepo (ver apps/site/Dockerfile).
+# Só entra no contexto o que o build do site realmente usa — o resto (apps
+# Expo, imagens de trabalho do dono, histórico do design system) infla o
+# contexto sem servir pro Dockerfile, que já faz COPY seletivo por caminho.
+
+node_modules
+**/node_modules
+.git
+.expo
+**/.expo
+dist
+build
+out
+**/out
+.next
+**/.next
+*.log
+.env
+.env.local
+.env.example
+
+# Apps/pacotes que o site não usa (evita copiar peso e vazar código não
+# relacionado para a imagem — o Dockerfile faz COPY explícito do que precisa)
+apps/passenger
+apps/driver
+packages/ui
+packages/domain
+packages/api-client
+
+# Material de trabalho pesado, não usado em build nenhum
+Imagens
+docs/prints
+
+# Resto do design system que não é a fonte de tokens (só
+# VuumBora_Claude_Design_System/tokens/ é usado pelo build)
+VuumBora_Claude_Design_System/codigo
+VuumBora_Claude_Design_System/especificacoes
+VuumBora_Claude_Design_System/prompts
+VuumBora_Claude_Design_System/referencias
+VuumBora_Claude_Design_System/*.md

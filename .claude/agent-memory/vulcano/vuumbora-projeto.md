@@ -39,8 +39,9 @@ desde 18/11/2026), `packages/{tokens,ui,domain,api-client}`.
   `docs/decisions.md` D-11 ficou desatualizado (ainda diz "Em aberto") — fora
   da minha fronteira, sinalizado para Nova/Atlas atualizar.
 - `apps/site` (Next.js) apareceu no workspace durante a sessão de 18/11/2026,
-  criado por outra missão em paralelo — não é meu. Tinha `tsconfig.json` com
-  `baseUrl` deprecated (TS5101) quebrando o `npm run check` do monorepo
-  inteiro (os workspaces que eu toquei passam limpo isolados). Não tentei
-  corrigir (fora da minha fronteira); confirmar se segue quebrado antes de
-  assumir que "`npm run check` = 0" vale para o repo inteiro.
+  criado por outra missão em paralelo — não é meu. Na sessão 18/11/2026 (deploy
+  Easypanel) o `tsconfig.json` dele **não** quebrava mais o `npm run check` da
+  raiz (rodado limpo, 0 erros, todos os workspaces incluindo `@vuumbora/site`)
+  — o problema antigo de `baseUrl` deprecated (TS5101) já não existe ou foi
+  corrigido por outra missão. Ver [[vuumbora-deploy-easypanel]] para
+  empacotamento/deploy do site.
