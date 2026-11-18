@@ -286,3 +286,30 @@ exigido; quem valida o seu caso são eles.
    suficiente para começar.
 3. **Certificado HTTPS** — os três serviços acima emitem automaticamente, mas
    só depois do DNS apontado.
+
+### Hospedagem: Easypanel no servidor do dono (18/11/2026)
+
+O dono vai hospedar no **Easypanel**, painel que roda no servidor dele e
+publica aplicações em contêiner, com certificado HTTPS automático.
+
+**O que isso muda, comparado a uma hospedagem gerenciada:**
+
+| | Easypanel no servidor próprio | Nuvem gerenciada |
+|---|---|---|
+| Custo | o do servidor, fixo | plano gratuito costuma bastar para site estático |
+| Controle | total: site, API e banco no mesmo lugar | limitado ao que o serviço oferece |
+| Responsabilidade | atualização, backup e segurança do servidor são do dono | do fornecedor |
+| Vantagem real aqui | **o backend da Fase 5 vai precisar de servidor de qualquer jeito** | exigiria um segundo fornecedor |
+
+A escolha faz sentido: o VuumBora vai precisar de API, banco e tempo real, e
+ter tudo num lugar só simplifica. O preço é que manutenção do servidor passa
+a ser responsabilidade do dono.
+
+**O que o Vulcano precisa preparar:** empacotamento da aplicação em contêiner,
+a configuração de build, as variáveis de ambiente (incluindo o token do
+Mapbox, que entra pelo painel do Easypanel e **não** pelo repositório), e o
+apontamento de domínio.
+
+**O que depende do dono:** o endereço do servidor, o acesso ao painel, e
+apontar `www.vuumbora.com.br` no Registro.br para o IP do servidor. O
+certificado HTTPS é emitido sozinho depois que o DNS propagar.
