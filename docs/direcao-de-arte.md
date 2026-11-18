@@ -379,3 +379,17 @@ node render.js onboarding-premium.html out.png 320 568 2
 ```
 
 O "antes" da amostra é o app real: `npx expo start --web` em `apps/passenger`, capturado em 320 e 390 pt com viewport alta para o `ScrollView` caber inteiro.
+
+---
+
+## 11. Decisões do dono registradas em 18/11/2026 (tarde)
+
+1. **Padrão premium vale para TODAS as telas**, não só as da referência. Telas
+   construídas antes do acabamento (fluxo de corrida, autenticação, dashboard do
+   motorista) precisam ser auditadas e trazidas ao mesmo nível.
+2. **Fundo dos renders de veículo:** o dono aceita o fundo preto por ora. A
+   remoção para fundo transparente fica para uma ferramenta dedicada, depois —
+   não é motivo para segurar a entrega nem para gastar crédito tentando
+   contornar o limite do plano gratuito.
+3. **Tipografia:** Plus Jakarta Sans confirmada. A diretriz que pedia Inter foi
+   revista pelo próprio dono.
