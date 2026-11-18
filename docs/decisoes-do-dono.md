@@ -313,3 +313,32 @@ apontamento de domínio.
 **O que depende do dono:** o endereço do servidor, o acesso ao painel, e
 apontar `www.vuumbora.com.br` no Registro.br para o IP do servidor. O
 certificado HTTPS é emitido sozinho depois que o DNS propagar.
+
+---
+
+## Compromisso público assumido em 18/11/2026
+
+O dono se comprometeu, para publicação no site:
+
+> **As regras de taxa da plataforma e de repasse ao motorista serão
+> publicadas ANTES de o cadastro de motoristas ser aberto.**
+
+O que isso significa na prática, e por que vira obrigação da equipe:
+
+1. A frase vai ao ar no site, na seção do motorista. A partir do momento em
+   que estiver publicada, ela é uma promessa feita a quem lê.
+2. **O cadastro de motoristas não pode ser aberto antes disso.** Se a
+   funcionalidade ficar pronta e as regras não estiverem publicadas, a
+   funcionalidade espera — não o contrário.
+3. A decisão 7 de `docs/decisoes-do-dono.md` (tarifa, taxa da plataforma e
+   repasse) passa a ter uma consequência externa, não só interna: ela
+   destrava o cadastro de motoristas.
+
+Esse compromisso é o que sustenta a estratégia do site inteiro, que troca
+prova social inventada por franqueza verificável. Quebrá-lo custaria mais
+credibilidade do que nunca tê-lo feito.
+
+**Ainda pendentes do mesmo conjunto:** as duas frases marcadas `[confirmar]`
+(se o motorista vê o destino antes de aceitar e se o motorista avalia o
+passageiro), os dados da empresa para o bloco institucional, e a decisão
+sobre abrir lista de espera.
