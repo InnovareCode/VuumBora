@@ -434,3 +434,26 @@ terceiro entre o VuumBora e o dado das pessoas logo no primeiro contato.
   e, no máximo, se a pessoa é passageiro ou motorista. **Não pedir CPF,
   telefone, endereço nem documento.**
 - Prometer prazo de lançamento.
+
+## Identificação da empresa (18/11/2026)
+
+- **Empresa:** Innovare Code
+- **CNPJ:** 09.813.446/0001-00 — dígito verificador validado localmente,
+  sem consultar nenhum serviço externo
+- **Cidade:** a confirmar
+
+Com nome e CNPJ, duas coisas ficam liberadas:
+
+1. **O aviso de privacidade** da lista de espera pode identificar quem
+   controla os dados, que é o requisito que bloqueava o formulário.
+2. **O bloco institucional do site** pode sair do limbo.
+
+**A confirmar, e nenhuma bloqueia:**
+- se "Innovare Code" é o nome completo que deve constar no aviso legal, ou
+  se a razão social tem complemento (LTDA, ME, EIRELI). Em documento legal
+  o correto é a razão social como está no cartão CNPJ;
+- a cidade, para o bloco institucional. Não é exigência de LGPD, mas pesa na
+  credibilidade: motorista desconfia de aplicativo que não diz de onde é;
+- um endereço de contato para pedidos de exclusão de dados. A LGPD dá esse
+  direito, e o aviso precisa dizer para onde escrever. Hoje o projeto não
+  tem nenhum canal de contato definido (ver decisão 11).
