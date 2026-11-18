@@ -5,9 +5,13 @@ metadata:
   type: project
 ---
 
-Monorepo em `C:\Projetos\Web\Vuumbora`. Dois apps (`apps/passenger`, `apps/driver`,
-Expo Router) + pacotes (`packages/tokens`, `packages/ui`, `packages/api-client`,
-`packages/domain`).
+Monorepo em `C:\Projetos\Web\Vuumbora`. Dois apps mobile (`apps/passenger`, `apps/driver`,
+Expo Router) + um app web (`apps/site`, Next.js App Router, `output:'export'` —
+site público institucional, criado em 18/11/2026, ver [[project_site_nextjs_static_export]])
++ pacotes (`packages/tokens`, `packages/ui`, `packages/api-client`,
+`packages/domain`). `apps/site` NÃO depende de `packages/ui` (é React Native
+Web-only) — só de `@vuumbora/tokens` (puro TS/JSON, sem RN), mais seu próprio
+gerador de CSS a partir do mesmo `vuumbora.tokens.json`.
 
 - **Fonte única de cor/dimensão:** `VuumBora_Claude_Design_System/tokens/vuumbora.tokens.json`
   (W3C DTCG). `packages/tokens/src/index.ts` só espelha/converte — nunca escrever HEX
@@ -259,6 +263,41 @@ Expo Router) + pacotes (`packages/tokens`, `packages/ui`, `packages/api-client`,
   [[bug_referencia_linha_unica_nao_cabe_breakpoint]]). Scanner de overflow
   precisa checar `scrollHeight` além de `scrollWidth` — ver
   [[feedback_medir_expo_web_playwright]].
+- **Frente passageiro do fluxo de corrida (buscando/a-caminho/em-andamento/concluída),
+  acabamento premium aplicado (18/11/2026)** — itens 6/7/11/12/17 da auditoria Apolo
+  (`docs/auditoria-premium.md`), restrito a `apps/passenger/app/` e seus componentes
+  locais (telas do design system em `packages/ui` ficaram de fora por coordenação).
+  `DriverInfoCard.tsx` (usado por a-caminho E em-andamento) e o `etaCard` inline de
+  `a-caminho.tsx` viraram `SurfaceRaised` + `edgeTop`/`edgeBottom` (eram `theme.role.surface`
+  chapado com `border` nos 4 lados). Mesmo tratamento nos 3 cards de `concluida.tsx`
+  (`fareCard`/`receiptCard`/`ratingCard`) + `divider` em `edgeBottom`. `SearchingPulse.tsx`
+  (P07): o disco amarelo CHEIO de 133/76pt virou só TRAÇO (borda 2pt), núcleo em
+  `SurfaceRaised` com ícone de carro amarelo — amarelo deixou de ser decoração/bloco.
+  `buscando.tsx` ganhou um card novo (`SurfaceRaised`) com destino + categoria/preço no
+  lugar da metade de tela vazia atrás do pulso. `TripProgressBar.tsx` (em-andamento): a
+  barra passou a usar o gradiente `theme.gradient.cta` (via `LinearGradient` direto,
+  mesmo padrão de `DestinationSearchBar.tsx`) em vez de amarelo chapado, e o ETA virou
+  28 Bold tabular em bloco próprio (era 16 Bold disputando peso com o endereço).
+  `concluida.tsx` ganhou `StatusBadge variant="success"` ("Corrida concluída") — antes
+  era a única tela do fluxo sem nenhuma marca de status. `glow` ligado no `AppShell` de
+  `buscando`/`a-caminho`/`em-andamento`/`concluida` (nenhuma tinha).
+  **Consolidação de selos de mock** (item A6 da auditoria): a-caminho tinha 3 `MockBadge`
+  empilhados (status, ETA, `SafetyActionsRow`) — virou 1 selo só no topo de cada tela
+  ("corrida simulada: progresso, ETA e contato" / em-andamento: "trajeto e contato
+  simulados"); `SafetyActionsRow.tsx` (compartilhado entre as duas telas) perdeu o
+  `MockBadge` próprio.
+  **Ficou de fora (componente compartilhado, fora da minha coordenação — avisei o
+  Atlas em vez de editar):** `StatusBadge` ainda preenchido (`#6EA8FF` cheio no
+  "Motorista encontrado", não tingido); `ButtonCore` variante `danger` ainda
+  `dangerFill` cheio ("Cancelar corrida"/"Cancelar busca" continuam vermelho sólido,
+  não contorno); `ScreenHeader` ainda reserva a caixa de 44pt mesmo sem `onBack`
+  (título de a-caminho/em-andamento/concluida desalinhado em x72); `StarRating` ainda
+  no glifo `★/☆` do sistema. Mapa como protagonista de a-caminho/em-andamento (item 13
+  da auditoria, esforço alto) também não entrou — é frente separada.
+- **`HighDemandBanner.tsx` (motorista) — selo de mock sobre fundo claro corrigido
+  (18/11/2026, pedido direto do Atlas, fora do escopo original da frente passageiro):**
+  ver [[feedback_mockbadge_sem_variante_fundo_claro]] — não editei o `MockBadge`
+  compartilhado, criei `MockNoticeOnLight` local no mesmo arquivo.
 - **Tipografia:** Plus Jakarta Sans (`@expo-google-fonts/plus-jakarta-sans`,
   instalado em 18/11/2026 nos dois apps). Carregamento via `useFonts` +
   `expo-splash-screen` em cada `_layout.tsx`. Nunca combine `fontSize`/`fontWeight`

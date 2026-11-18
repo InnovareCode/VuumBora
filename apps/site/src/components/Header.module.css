@@ -25,6 +25,23 @@
   display: none;
 }
 
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--layout-touch-target);
+  height: var(--layout-touch-target);
+  background: transparent;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+}
+
+/* Bug já cometido aqui uma vez: declarar esta media query ANTES da regra
+   base `.toggle` (mesma especificidade) fazia a base "ganhar" por vir depois
+   no arquivo, e o botão de menu nunca sumia no desktop. A regra geral virou
+   lição: toda regra responsiva de override entra DEPOIS da regra base que
+   ela sobrescreve, nunca antes — não importa a especificidade. */
 @media (min-width: 900px) {
   .desktopNav {
     display: flex;
@@ -45,18 +62,6 @@
   .toggle {
     display: none;
   }
-}
-
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--layout-touch-target);
-  height: var(--layout-touch-target);
-  background: transparent;
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-text-primary);
 }
 
 .mobileNav {

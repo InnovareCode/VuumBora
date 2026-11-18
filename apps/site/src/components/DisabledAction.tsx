@@ -14,10 +14,10 @@ interface DisabledActionProps {
  */
 export function DisabledAction({ caption, label, showIcon = true }: DisabledActionProps) {
   return (
-    <button type="button" disabled aria-disabled="true" className={styles.badge}>
+    <button type="button" disabled aria-disabled="true" className={styles['badge']}>
       {showIcon ? (
         <svg
-          className={styles.icon}
+          className={styles['icon']}
           width="24"
           height="24"
           viewBox="0 0 24 24"
@@ -29,9 +29,9 @@ export function DisabledAction({ caption, label, showIcon = true }: DisabledActi
           <path d="M8 12h8M12 8v8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
       ) : null}
-      <span className={styles.labels}>
-        <span className={styles.caption}>{caption}</span>
-        <span className={styles.label}>{label}</span>
+      <span className={styles['labels']}>
+        <span className={styles['caption']}>{caption}</span>
+        <span className={styles['label']}>{label}</span>
       </span>
     </button>
   );

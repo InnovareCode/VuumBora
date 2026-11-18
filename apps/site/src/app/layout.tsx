@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
+import { tokens } from '@vuumbora/tokens';
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/site';
 import '@/styles/globals.css';
 
@@ -32,7 +33,7 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: [
       {
-        url: '/og-image.png',
+        url: '/og-image.jpg',
         width: 1200,
         height: 630,
         alt: 'Logomarca VuumBora sobre uma cidade à noite',
@@ -43,7 +44,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'VuumBora — Mobilidade urbana (em breve)',
     description: SITE_DESCRIPTION,
-    images: ['/og-image.png'],
+    images: ['/og-image.jpg'],
   },
   robots: {
     index: true,
@@ -52,7 +53,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#070D18',
+  // Cor vem do token, nunca escrita à mão (scripts/check-boundaries.mjs, raiz).
+  themeColor: tokens.color.background.base,
   colorScheme: 'dark',
 };
 

@@ -34,13 +34,13 @@ export function FaqSection() {
   return (
     <Section id="faq" headingId="faq-titulo" tone="elevated">
       <SectionHeading id="faq-titulo" eyebrow="Dúvidas" title="Perguntas frequentes" />
-      <div className={styles.list}>
+      <div className={styles['list']}>
         {QUESTIONS.map((item) => (
-          <details key={item.question} className={styles.item}>
-            <summary className={styles.question}>
+          <details key={item.question} className={styles['item']}>
+            <summary className={styles['question']}>
               <span>{item.question}</span>
               <svg
-                className={styles.chevron}
+                className={styles['chevron']}
                 width="20"
                 height="20"
                 viewBox="0 0 20 20"
@@ -51,7 +51,7 @@ export function FaqSection() {
                 <path d="M5 7.5l5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </summary>
-            <p className={styles.answer}>{item.answer}</p>
+            <p className={styles['answer']}>{item.answer}</p>
           </details>
         ))}
       </div>

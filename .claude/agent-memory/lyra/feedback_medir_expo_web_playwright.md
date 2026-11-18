@@ -124,3 +124,23 @@ do placeholder for mais largo que o campo (comum em telas de 320px com
 "seu@email.com ou (00) 00000-0000" virou "seu@email.com ou (00) 0000" em 320px na
 tela de Login). Só aparece numa screenshot real no menor breakpoint — não dá pra
 prever pelo tamanho da string. Correção: placeholder mais curto, não CSS.
+
+**Para medir o fluxo de corrida do passageiro de ponta a ponta (buscando → a-caminho →
+em-andamento → concluída), a origem já vem PREENCHIDA por padrão**
+(`useRideRequestStore`: `origin: MOCK_CURRENT_LOCATION`, não `undefined`) — não precisa
+clicar no campo de origem nem escolher "Casa" lá; só escolher o DESTINO em
+`/destino` (`[data-testid="saved-place-<Label>"]`, ex. `saved-place-Trabalho`) e
+confirmar. Clicar no campo de origem muda `activeField` e troca a lista de "lugares
+salvos" por "resultados de busca" (porque a query da origem já tem texto) — foi
+assim que um script de automação tomou timeout esperando `saved-place-Casa`
+reaparecer depois desse clique.
+
+**O simulador da corrida (`apps/passenger/src/sim/rideSimulator.ts`) tem timing
+fixo e documentado**, útil para cronometrar `waitForURL`/`waitForTimeout` num
+script de Playwright em vez de advinhar: `searching_driver → driver_assigned` em
+2,6s, `→ driver_en_route` +2,6s, `→ driver_arrived` +2,6s, `→ in_progress` +2,2s,
+depois ticks de 10% a cada 500ms até 100% (`→ completed`). Do clique em
+"Solicitar" até `/concluida` são ~15,8s. Cada tela própria já tem o `useEffect`
+que redireciona sozinha (`router.replace`) quando a fase muda — não precisa
+navegar manualmente entre `/buscando`/`/a-caminho`/`/em-andamento`/`/concluida`,
+só esperar `page.waitForURL('**/a-caminho')` etc. na sequência.

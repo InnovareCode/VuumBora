@@ -14,7 +14,7 @@ export function MobileNavToggle({ navId }: { navId: string }) {
     <>
       <button
         type="button"
-        className={styles.toggle}
+        className={styles['toggle']}
         aria-expanded={open}
         aria-controls={navId}
         onClick={() => setOpen((v) => !v)}
@@ -41,7 +41,7 @@ export function MobileNavToggle({ navId }: { navId: string }) {
       <div
         id={navId}
         data-open={open}
-        className={styles.mobileNav}
+        className={styles['mobileNav']}
         onClick={(event) => {
           if ((event.target as HTMLElement).tagName === 'A') setOpen(false);
         }}

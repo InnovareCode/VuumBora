@@ -13,7 +13,11 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const SCAN = ['apps', 'packages'];
-const SKIP_DIRS = new Set(['node_modules', '.expo', 'dist', 'build', 'ios', 'android']);
+// '.next'/'out': saída de build do Next.js (apps/site) — contém bundle já
+// compilado (inclusive o CSS/HEX gerado a partir dos tokens) e o boilerplate
+// interno do próprio Next (ex. cores do 404 padrão), nunca código-fonte.
+// Mesmo papel que '.expo'/'dist'/'build' já tinham para os apps Expo.
+const SKIP_DIRS = new Set(['node_modules', '.expo', '.next', 'out', 'dist', 'build', 'ios', 'android']);
 const CODE = /\.(ts|tsx|js|jsx|mjs|cjs|json)$/;
 const HEX = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g;
 const IMPORT = /(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"]([^'"]+)['"]/g;

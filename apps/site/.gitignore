@@ -6,3 +6,4 @@ out
 src/styles/tokens.generated.css
 next-env.d.ts
 .eslintcache
+*.tsbuildinfo

@@ -1,0 +1,78 @@
+.footer {
+  border-top: 1px solid var(--color-border-subtle);
+  padding-block: var(--spacing-8);
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-7);
+  justify-content: space-between;
+}
+
+.brandColumn {
+  max-width: 320px;
+}
+
+.tagline {
+  margin-top: var(--spacing-3);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+}
+
+.columnTitle {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: var(--spacing-3);
+}
+
+.navList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.navList a {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.navList a:hover {
+  color: var(--color-text-primary);
+}
+
+.legalItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  color: var(--color-text-muted);
+}
+
+.legalName {
+  color: var(--color-text-secondary);
+}
+
+.legalNote {
+  font-size: var(--font-size-caption);
+}
+
+.contactNote {
+  color: var(--color-text-secondary);
+  max-width: 320px;
+  line-height: 1.6;
+}
+
+.bottom {
+  margin-top: var(--spacing-8);
+  padding-top: var(--spacing-5);
+  border-top: 1px solid var(--color-border-subtle);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-3);
+  justify-content: space-between;
+}

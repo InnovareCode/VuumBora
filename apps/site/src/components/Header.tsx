@@ -12,10 +12,10 @@ const NAV_LINKS = [
 
 export function Header() {
   return (
-    <header className={styles.header}>
+    <header className={styles['header']}>
       <Container>
-        <div className={styles.bar}>
-          <a href="#topo" className={styles.logoLink} aria-label="VuumBora, início da página">
+        <div className={styles['bar']}>
+          <a href="#topo" className={styles['logoLink']} aria-label="VuumBora, início da página">
             <Image
               src="/brand/vuumbora-horizontal.png"
               alt="VuumBora"
@@ -24,7 +24,7 @@ export function Header() {
               priority
             />
           </a>
-          <nav className={styles.desktopNav} aria-label="Principal">
+          <nav className={styles['desktopNav']} aria-label="Principal">
             {NAV_LINKS.map((link) => (
               <a key={link.href} href={link.href}>
                 {link.label}

@@ -28,7 +28,7 @@ export function SafetySection() {
         description="O VuumBora ainda não está em operação. Os pontos abaixo são princípios que estamos usando para desenhar o produto — não recursos já disponíveis."
       />
       <FeatureGrid items={PRINCIPLES} columns={3} />
-      <p className={styles.description} style={{ marginTop: 'var(--spacing-6)' }}>
+      <p className={styles['description']} style={{ marginTop: 'var(--spacing-6)' }}>
         Assim que o app estiver disponível, atualizamos esta página com o que realmente
         funciona — sem prometer nada antes da hora.
       </p>

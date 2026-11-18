@@ -16,7 +16,7 @@ export function Section({ id, headingId, children, tone = 'base' }: SectionProps
     <section
       id={id}
       aria-labelledby={headingId}
-      className={styles.section}
+      className={styles['section']}
       style={tone === 'elevated' ? { background: 'var(--color-background-surface)' } : undefined}
     >
       <Container>{children}</Container>
