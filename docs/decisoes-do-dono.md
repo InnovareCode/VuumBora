@@ -387,3 +387,50 @@ Alternativas usuais, quando e se isso virar problema:
 **Não é decisão para agora.** Fica registrado porque, quando houver
 operação real, é um dos primeiros atritos a aparecer — e porque o site não
 pode sugerir avaliação mútua enquanto ela não existir.
+
+---
+
+## Lista de espera: aprovada em 18/11/2026, com condições
+
+O dono quer abrir lista de espera no site. Isso transforma o site de
+vitrine em **coletor de dado pessoal**, e três coisas passam a ser
+obrigatórias antes de a primeira pessoa se cadastrar.
+
+### 1. Identificação de quem controla os dados (bloqueia)
+
+A LGPD exige que a pessoa saiba **para quem** está entregando o e-mail. Sem
+nome da empresa e CNPJ, o aviso de privacidade fica incompleto — e é
+justamente o dado que ainda não temos.
+
+**Isto bloqueia a publicação do formulário**, não o desenvolvimento dele.
+
+### 2. Aviso de privacidade no próprio formulário (mínimo viável)
+
+Não precisa da política completa para começar, mas precisa, ao lado do
+campo, de forma curta e legível:
+- qual a finalidade (avisar quando o app lançar — e só isso);
+- quem é o controlador (item 1);
+- que o e-mail não será vendido nem repassado;
+- como pedir a exclusão, e para onde escrever.
+
+### 3. Onde os dados ficam
+
+O site é estático e não tem servidor próprio. Duas saídas:
+
+| Opção | A favor | Contra |
+|---|---|---|
+| **Servidor do próprio dono** (os serviços `vuumbora-backend` e `vuumbora-banco` já existem no Easypanel) | o dado nunca sai do controle dele; nada de terceiro no meio; aproveita infra já criada | exige construir um endpoint mínimo, que hoje não existe |
+| Serviço de formulário de terceiro | pronto em minutos | o e-mail das pessoas passa a ficar na base de outra empresa, e isso precisa constar no aviso |
+
+**Recomendação:** servidor próprio. É pouco trabalho — um endpoint que
+recebe e-mail e grava —, aproveita o que já está de pé e evita colocar um
+terceiro entre o VuumBora e o dado das pessoas logo no primeiro contato.
+
+É também a primeira peça real da Fase 5, então não é trabalho jogado fora.
+
+### O que NÃO fazer
+
+- Pedir mais do que o necessário. Para avisar do lançamento basta o e-mail
+  e, no máximo, se a pessoa é passageiro ou motorista. **Não pedir CPF,
+  telefone, endereço nem documento.**
+- Prometer prazo de lançamento.
