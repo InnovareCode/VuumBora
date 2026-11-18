@@ -59,7 +59,14 @@ export default function DriverHomeScreen() {
     { key: 'inicio', label: 'Início', icon: ({ color, active }) => <HomeIcon size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
     { key: 'corridas', label: 'Corridas', icon: ({ color, active }) => <Car size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
     { key: 'ganhos', label: 'Ganhos', icon: ({ color, active }) => <Wallet size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
-    { key: 'desempenho', label: 'Desempenho', icon: ({ color, active }) => <BarChart3 size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
+    {
+      key: 'desempenho',
+      // "Desempenho" (79px) estoura os 72px de cada uma das 5 abas a 360px (medido) —
+      // "Métricas" (51px) cabe com folga e descreve o mesmo conteúdo (avaliação/taxa de aceitação).
+      label: 'Métricas',
+      icon: ({ color, active }) => <BarChart3 size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />,
+      onPress: () => {},
+    },
     { key: 'perfil', label: 'Perfil', icon: ({ color, active }) => <User size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
   ];
 

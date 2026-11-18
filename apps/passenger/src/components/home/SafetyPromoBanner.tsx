@@ -17,8 +17,11 @@ export const SafetyPromoBanner = memo(function SafetyPromoBanner() {
       <View style={styles.row}>
         <View style={styles.column}>
           <ShieldCheck size={22} color={theme.role.ctaBackground} strokeWidth={1.75} />
+          {/* Encurtado: "Segurança e confiança em todas as viagens" precisava de 3
+              linhas nos 134,5px da coluna a 360px (medido) — numberOfLines={2} cortava
+              a 3ª. Esta versão cabe em 2 linhas sem truncar. */}
           <Text style={styles.title} numberOfLines={2}>
-            Segurança e confiança em todas as viagens
+            Segurança em todas as viagens
           </Text>
           <Text style={styles.subtitle} numberOfLines={2}>
             Motoristas verificados e suporte 24h.

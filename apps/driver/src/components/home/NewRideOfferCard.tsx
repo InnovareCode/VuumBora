@@ -48,17 +48,14 @@ export const NewRideOfferCard = memo(function NewRideOfferCard({
         <View style={styles.offerPill}>
           <Text style={styles.offerPillText}>Nova corrida</Text>
         </View>
-        <View style={styles.countdownRow}>
-          <Clock size={14} color={theme.role.textSecondary} strokeWidth={2} />
-          <Text style={styles.countdownText}>{Math.max(secondsRemaining, 0)}s</Text>
+        <View style={styles.countdownBlock}>
+          <View style={styles.countdownRow}>
+            <Clock size={14} color={theme.role.textSecondary} strokeWidth={2} />
+            <Text style={styles.countdownText}>{Math.max(secondsRemaining, 0)}s</Text>
+          </View>
+          {/* Selo junto do que ele qualifica (o contador), não empilhado no topo do card. */}
+          <MockBadge label="contador local" />
         </View>
-      </View>
-      <View style={styles.countdownMockRow}>
-        <MockBadge label="contador local" />
-      </View>
-
-      <View style={styles.bodyMockRow}>
-        <MockBadge label="dados de exemplo" />
       </View>
 
       <View style={styles.routeBlock}>
@@ -85,6 +82,9 @@ export const NewRideOfferCard = memo(function NewRideOfferCard({
             Destino: {destinationLabel}
           </Text>
         </View>
+        {/* Selo cobrindo o bloco de dados da oferta (nome/endereços/distância/valor/dinâmica)
+            logo abaixo do que ele qualifica — não mais numa linha própria no topo do card. */}
+        <MockBadge label="dados de exemplo" />
       </View>
 
       <View style={styles.priceRow}>
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing['3'],
     gap: theme.spacing['3'],
   },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing['2'] },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: theme.spacing['2'] },
   offerPill: {
     backgroundColor: theme.role.ctaBackground,
     borderRadius: theme.radius.pill,
@@ -129,10 +129,9 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing['1'],
   },
   offerPillText: { color: theme.role.ctaText, ...textStyle('bold', 'small') },
+  countdownBlock: { alignItems: 'flex-end', gap: 4 },
   countdownRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   countdownText: { color: theme.role.textPrimary, ...textStyle('bold', 'small'), ...tabularNums },
-  countdownMockRow: { alignItems: 'flex-end' },
-  bodyMockRow: { alignSelf: 'flex-start' },
   routeBlock: { gap: theme.spacing['2'] },
   routeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing['2'] },
   dot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },

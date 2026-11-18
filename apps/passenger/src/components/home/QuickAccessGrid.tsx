@@ -39,7 +39,10 @@ function QuickAccessButton({ label, subtitle, icon, onPress, mock }: Omit<QuickA
       <Text style={styles.label} numberOfLines={1}>
         {label}
       </Text>
-      <Text style={styles.subtitle} numberOfLines={1}>
+      {/* 2 linhas (não 1): medido (Playwright, fonte real) que "Centro, Natal"/"Ponta
+          Negra"/"Meus destinos"/"Escolha data e hora" todos precisam de 2 linhas nos
+          66px de conteúdo do card a 360px — 1 linha cortava todos eles. */}
+      <Text style={styles.subtitle} numberOfLines={2}>
         {subtitle}
       </Text>
       {mock ? (
