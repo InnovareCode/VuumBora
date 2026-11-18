@@ -2,3 +2,4 @@
 - [Tipografia VuumBora proposta](project_tipografia_vuumbora.md) — Jakarta recomendada, aguardando dono; armadilhas de tnum e RN
 - [Recortes da marca e ícones](project_recortes_marca.md) — como os PNGs da marca/ícones foram gerados; armadilhas do bitmap original
 - [Medição visual no Expo Web](project_medicao_visual_expo_web.md) — fluxo de corrida, telas ocultas no DOM, Metro em CI congela bundle
+- [Texto do site](project_copy_site.md) — estratégia de franqueza, marcadores [confirmar]/[compromisso], recursos que só são mock
