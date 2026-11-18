@@ -10,3 +10,5 @@
 - [Marcar dado mock visivelmente (MockBadge)](feedback_marcar_dado_mock_visivelmente.md) — padrão da P03; visual virou chip neutro tracejado em 18/11/2026 (direção de arte item 1).
 - [Flex fixo espreme texto flex:1 vizinho](bug_flex_fixo_espreme_texto_flex1_vizinho.md) — badge de largura fixa cortou "Agendar" para "A." na grade 2×2.
 - [boxShadow no RN 0.88: o que foi provado sobre Android](boxshadow_rn088_android_evidencia.md) — evidência de código-fonte forte, sem confirmação em device real.
+- [ScreenHeader: título fixo trunca a 320pt](bug_screenheader_title_fixo_trunca_320.md) — orçamento real de largura, títulos curtos sempre.
+- [Reaproveitar componente com numberOfLines fixo trunca em caso novo](bug_componente_reaproveitado_numberoflines_fixo.md) — RouteSummaryRow→TripDetailRow, por que duplicar em vez de generalizar.

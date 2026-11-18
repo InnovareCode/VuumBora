@@ -195,6 +195,36 @@ Expo Router) + pacotes (`packages/tokens`, `packages/ui`, `packages/api-client`,
   (`*.jpg`, além do `*.png` que já existia) — mesma mecânica de visibilidade
   transitiva via triple-slash já documentada ali (qualquer arquivo do
   programa que importe algo de `BrandLogo` já puxa o `.d.ts` inteiro).
+- **Histórico/Perfil/Configurações do passageiro (P11/P13/P13b, 18/11/2026):**
+  `apps/passenger/app/{historico,historico-detalhe,perfil,configuracoes}.tsx`.
+  `historico-detalhe` lê `id` por `useLocalSearchParams` (igual ao `simulated` de
+  `index.tsx`), não é rota dinâmica de arquivo. Mock 100% fabricado em
+  `src/data/mockTripHistory.ts` (reaproveita `TripReceipt`/`TripReceiptLine` de
+  `mockTripReceipt.ts` e `formatMoneyBRL`/`ReceiptBreakdownRow` já criados pela P10) e
+  `src/data/mockPassengerProfile.ts`. Todas as 5 viagens mock caem em `currentMonth`
+  de propósito — "Anteriores" fica vazio e isso É o teste real do estado vazio (não
+  precisei inventar viagem fora da referência pra exercitar `EmptyState`).
+  **Componentes novos candidatos a subir pra `@vuumbora/ui`** (avisar Atlas, não subi
+  sozinha): `ListMenuRow` e `ToggleSwitch` em `apps/passenger/src/components/shared/`
+  — linha de lista ícone+rótulo+(valor|interruptor|chevron), usada por Perfil E
+  Configurações. `ToggleSwitch` é só visual (sem `Pressable` próprio) — quem embute
+  decide o alvo de toque (ver [[bug_touch_target_hitslop_insuficiente]]). Específicos
+  de uma tela só (ficam no app): `EditableAvatar` (profile/), `TripFilterChip`/
+  `TripHistoryCard`/`TripDetailRow` (history/). `TripDetailRow` existe só porque
+  `RouteSummaryRow` (confirmation/) tem `numberOfLines={2}` fixo e truncava endereço
+  completo — ver [[bug_componente_reaproveitado_numberoflines_fixo]].
+  **Navegação pendente (avisei o Atlas, não editei):** `index.tsx` tem as abas
+  "Viagens"/"Perfil" do `BottomTabBar` com `onPress: () => {}` — precisam apontar pra
+  `/historico`/`/perfil` quando alguém mexer em `index.tsx` (fora do meu escopo,
+  arquivo "em uso"). Nenhuma das 3 telas novas usa `BottomTabBar`: a referência de
+  design não mostra tab bar nelas (só cabeçalho com seta de voltar), então são telas
+  empilhadas (`router.push`/`router.back()`), não destinos de aba. Decisão MINHA (sem
+  referência que confirme): `Perfil` ganhou um ícone de engrenagem no `rightSlot` do
+  `ScreenHeader` pra abrir `/configuracoes` — avaliar no inventário visual (1.7).
+  "Sair da conta" usa `DangerButton` (preenchido) em vez do contorno vermelho da
+  referência — reuso do componente já existente em vez de criar variante nova só
+  pra isso; `router.replace('/boas-vindas')` simula o logout (sem sessão real, 1.6
+  ainda não implementada).
 - **Tipografia:** Plus Jakarta Sans (`@expo-google-fonts/plus-jakarta-sans`,
   instalado em 18/11/2026 nos dois apps). Carregamento via `useFonts` +
   `expo-splash-screen` em cada `_layout.tsx`. Nunca combine `fontSize`/`fontWeight`
