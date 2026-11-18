@@ -1,6 +1,6 @@
 import { memo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Car, Star } from 'lucide-react-native';
+import { StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import { ShipWheel, Star } from 'lucide-react-native';
 import { Avatar, MockBadge, theme, textStyle } from '@vuumbora/ui';
 
 export interface DriverProfileRowProps {
@@ -8,23 +8,33 @@ export interface DriverProfileRowProps {
   readonly driverName: string;
   /** Cadastro/documentação aprovados (MOTORISTA.md M04). Controla o selo abaixo. */
   readonly approved: boolean;
+  /** Foto remota (sessão real, futuro). */
   readonly avatarUri?: string;
+  /** Foto local já resolvida pelo bundler (ex.: `driverDemoAvatarSource` de `@vuumbora/ui`). */
+  readonly avatarSource?: ImageSourcePropType;
 }
 
 /**
- * Avatar + nome + selo de motorista. O selo (ícone de carro sobre círculo amarelo,
- * sobreposto ao avatar) só aparece quando `approved` é `true` — reflete a regra de
- * domínio ("não permitir online antes de cadastro e documentação aprovados"), não é
- * só decoração do mockup.
+ * Avatar + nome + selo de motorista. O selo (volante sobre círculo amarelo,
+ * sobreposto ao avatar — referência motorista-home-alvo.webp item 4) só aparece
+ * quando `approved` é `true` — reflete a regra de domínio ("não permitir online
+ * antes de cadastro e documentação aprovados"), não é só decoração do mockup.
+ * `lucide-react-native` não tem ícone de volante de carro — `ShipWheel` (roda de
+ * leme) é o substituto de traço mais próximo do selo da referência.
  */
-export const DriverProfileRow = memo(function DriverProfileRow({ driverName, approved, avatarUri }: DriverProfileRowProps) {
+export const DriverProfileRow = memo(function DriverProfileRow({ driverName, approved, avatarUri, avatarSource }: DriverProfileRowProps) {
   return (
     <View style={styles.row}>
       <View style={styles.avatarSlot}>
-        {avatarUri ? <Avatar name={driverName} imageUri={avatarUri} size="md" /> : <Avatar name={driverName} size="md" />}
+        <Avatar
+          name={driverName}
+          size="md"
+          {...(avatarSource !== undefined ? { imageSource: avatarSource } : {})}
+          {...(avatarUri !== undefined ? { imageUri: avatarUri } : {})}
+        />
         {approved ? (
           <View style={styles.verifiedBadge} accessibilityRole="image" accessibilityLabel="Cadastro de motorista aprovado">
-            <Car size={13} color={theme.role.ctaText} strokeWidth={2.25} />
+            <ShipWheel size={13} color={theme.role.ctaText} strokeWidth={2.25} />
           </View>
         ) : null}
       </View>
@@ -33,7 +43,7 @@ export const DriverProfileRow = memo(function DriverProfileRow({ driverName, app
           <Text style={styles.name} numberOfLines={1}>
             {driverName}
           </Text>
-          <MockBadge label="nome de exemplo" />
+          <MockBadge label="nome e foto de exemplo" />
         </View>
         <View style={styles.roleRow}>
           <Star size={14} color={theme.role.ctaBackground} strokeWidth={2} />

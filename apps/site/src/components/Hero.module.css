@@ -1,0 +1,59 @@
+.hero {
+  position: relative;
+  min-height: clamp(520px, 92vh, 820px);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.photo {
+  object-fit: cover;
+  object-position: 50% 35%;
+  z-index: 0;
+}
+
+/* Direção de arte (docs/direcao-de-arte.md §9 item 9): scrim OBRIGATÓRIO atrás
+   de texto sobre foto. gradient.photoScrim é o mesmo recurso usado nas telas
+   do app (boas-vindas) atrás do bloco de título/CTA. */
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--gradient-photo-scrim);
+  z-index: 1;
+}
+
+.content {
+  position: relative;
+  z-index: 2;
+  padding-block: clamp(48px, 10vh, 96px) clamp(40px, 8vh, 72px);
+  max-width: 640px;
+}
+
+.eyebrow {
+  display: inline-block;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-brand-yellow);
+  margin-bottom: var(--spacing-4);
+}
+
+.title {
+  font-size: clamp(30px, 6vw, 52px);
+  line-height: 1.12;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  margin-top: var(--spacing-5);
+  font-size: var(--font-size-subtitle);
+  color: var(--color-text-secondary);
+  max-width: 52ch;
+  line-height: 1.6;
+}
+
+.actions {
+  margin-top: var(--spacing-7);
+}

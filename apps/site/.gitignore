@@ -1,0 +1,8 @@
+node_modules
+.next
+out
+# Gerado por scripts/generate-tokens-css.mjs a partir da fonte única de tokens
+# (VuumBora_Claude_Design_System/tokens/vuumbora.tokens.json) — nunca editar à mão.
+src/styles/tokens.generated.css
+next-env.d.ts
+.eslintcache

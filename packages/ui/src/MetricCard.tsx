@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { theme } from '@vuumbora/tokens';
 import { LoadingSkeleton } from './LoadingSkeleton';
@@ -11,6 +11,10 @@ export interface MetricCardProps {
   readonly value: string;
   readonly helperText?: string;
   readonly trend?: MetricTrend;
+  /** Ícone já resolvido pelo app (lib de ícone é decisão do app, não da `ui` — mesmo padrão de `ButtonCore.icon`). */
+  readonly icon?: ReactNode;
+  /** Padding/fonte reduzidos para grades apertadas (ex.: 4 cards numa linha a 360pt). */
+  readonly compact?: boolean;
   readonly loading?: boolean;
   readonly testID?: string;
 }
@@ -22,12 +26,32 @@ const TREND_STYLE: Record<MetricTrend, { glyph: string; color: string; word: str
   neutral: { glyph: '●', color: theme.role.textMuted, word: 'estável' },
 };
 
-export const MetricCard = memo(function MetricCard({ label, value, helperText, trend, loading = false, testID }: MetricCardProps) {
+export const MetricCard = memo(function MetricCard({
+  label,
+  value,
+  helperText,
+  trend,
+  icon,
+  compact = false,
+  loading = false,
+  testID,
+}: MetricCardProps) {
   return (
-    <View style={styles.card} testID={testID} accessibilityLabel={`${label}: ${loading ? 'carregando' : value}`}>
-      <Text style={styles.label}>{label}</Text>
+    <View
+      style={[styles.card, compact && styles.cardCompact]}
+      testID={testID}
+      accessibilityLabel={`${label}: ${loading ? 'carregando' : value}`}
+    >
+      {icon ? <View style={styles.iconSlot}>{icon}</View> : null}
+      {/* numberOfLines=2 (sem risco de truncar rótulo normal) evita que "Taxa de
+          aceitação" force o card a crescer na grade de 4 colunas (~66pt a 360px).
+          Compact usa fonte 'caption' (12px, não 'small' 14px): medido que "Taxa de
+          aceitação" em 14px quebrava em 3 linhas a 360px e cortava a 3ª com "…". */}
+      <Text style={[styles.label, compact && styles.labelCompact]} numberOfLines={compact ? 2 : 3}>
+        {label}
+      </Text>
       {loading ? (
-        <LoadingSkeleton variant="line" width={96} height={24} />
+        <LoadingSkeleton variant="line" width={compact ? 56 : 96} height={compact ? 18 : 24} />
       ) : (
         <>
           {/* tabular-nums obrigatório: preço/métrica não pode "dançar" de largura (docs/tipografia.md).
@@ -36,7 +60,7 @@ export const MetricCard = memo(function MetricCard({ label, value, helperText, t
               card mais apertado do app (grade 2x2 do motorista a 360px) — a tendência mora numa linha
               PRÓPRIA abaixo (não mais ao lado do valor) porque nem o valor nem a tendência cabiam
               dividindo a mesma linha nesse card estreito. */}
-          <Text style={styles.value} numberOfLines={1}>
+          <Text style={[styles.value, compact && styles.valueCompact]} numberOfLines={1}>
             {value}
           </Text>
           {trend ? (
@@ -61,8 +85,16 @@ const styles = StyleSheet.create({
     padding: theme.spacing['4'],
     gap: theme.spacing['1'],
   },
+  // Padding mínimo (spacing[1]=4, não spacing[2]=8): medido (Playwright) que
+  // "R$ 247,90" em 'body' (16px) estourava os ~58-76px de conteúdo da grade de 4
+  // colunas em 360-430px mesmo com padding[2] — 'caption' (12px) + padding[1]
+  // sobra margem confirmada em todos os 4 breakpoints pedidos.
+  cardCompact: { padding: theme.spacing['1'], borderRadius: theme.radius.md },
+  iconSlot: { width: 20, height: 20, alignItems: 'flex-start', justifyContent: 'center' },
   label: { color: theme.role.textSecondary, ...textStyle('regular', 'small') },
+  labelCompact: { ...textStyle('regular', 'caption') },
   value: { color: theme.role.textPrimary, ...textStyle('bold', 'subtitle'), ...tabularNums },
+  valueCompact: { ...textStyle('bold', 'caption'), ...tabularNums },
   trendRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   trend: { ...textStyle('semibold', 'caption') },
   // Glifo (▲▼●): fonte do sistema de propósito — ver nota em typography.ts.

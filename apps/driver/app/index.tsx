@@ -10,7 +10,7 @@ import {
   User,
   Wallet,
 } from 'lucide-react-native';
-import { AppShell, BottomTabBar, theme, type BottomTabBarItem } from '@vuumbora/ui';
+import { AppShell, BottomTabBar, driverDemoAvatarSource, theme, type BottomTabBarItem } from '@vuumbora/ui';
 import { DriverHeader } from '../src/components/home/DriverHeader';
 import { DriverProfileRow } from '../src/components/home/DriverProfileRow';
 import { OnlineToggle } from '../src/components/home/OnlineToggle';
@@ -74,7 +74,7 @@ export default function DriverHomeScreen() {
     <AppShell scroll footer={<BottomTabBar items={tabs} activeKey="inicio" testID="driver-tab-bar" />}>
       <View style={styles.content}>
         <DriverHeader notificationCount={3} />
-        <DriverProfileRow driverName="Carlos Santos" approved={registrationApproved} />
+        <DriverProfileRow driverName="Carlos Santos" approved={registrationApproved} avatarSource={driverDemoAvatarSource} />
         <OnlineToggle online={online} approved={registrationApproved} onToggle={setOnline} />
         <DriverMapPreview cityLabel="São Paulo - SP" />
         <HighDemandBanner />

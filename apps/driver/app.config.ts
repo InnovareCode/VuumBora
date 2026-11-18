@@ -43,6 +43,12 @@ const config: ExpoConfig = {
         backgroundColor: tokens.color.brand.navy.$value,
       },
     ],
+    // Mapbox (docs/decisoes-do-dono.md, item 1). Token público lido em runtime via
+    // process.env.EXPO_PUBLIC_MAPBOX_TOKEN — nenhum token escrito aqui. O plugin só
+    // configura o build nativo (baixa o SDK do Mapbox); desde que a Mapbox removeu a
+    // exigência de auth no download, não precisa de token secreto para funcionar.
+    // Detalhes: docs/mapbox.md.
+    '@rnmapbox/maps',
   ],
   experiments: { typedRoutes: true },
   // Alvo web habilitado só para preview/screenshot em desenvolvimento (pedido do dono) — entrega continua Android/iOS.

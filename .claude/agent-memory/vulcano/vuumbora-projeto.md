@@ -32,3 +32,15 @@ desde 18/11/2026), `packages/{tokens,ui,domain,api-client}`.
   `docs/identidade-visual.md` (são do domínio de Nova/Apolo).
 - Ainda não existe `eas.json` nem CI configurado (sem GitHub Actions/pipeline
   neste momento) — fase 1 do `PROGRESSO.md` cobriu só instalação e boot local.
+- Mapbox instalado e provado (18/11/2026) nos dois apps — infraestrutura em
+  `docs/mapbox.md`. Ver [[expo-monorepo-env-raiz]] e [[rnmapbox-maps-sem-web]]
+  para as duas armadilhas reais que apareceram (token vazio por causa do
+  monorepo, e `@rnmapbox/maps` sem web de verdade apesar da peer dependency).
+  `docs/decisions.md` D-11 ficou desatualizado (ainda diz "Em aberto") — fora
+  da minha fronteira, sinalizado para Nova/Atlas atualizar.
+- `apps/site` (Next.js) apareceu no workspace durante a sessão de 18/11/2026,
+  criado por outra missão em paralelo — não é meu. Tinha `tsconfig.json` com
+  `baseUrl` deprecated (TS5101) quebrando o `npm run check` do monorepo
+  inteiro (os workspaces que eu toquei passam limpo isolados). Não tentei
+  corrigir (fora da minha fronteira); confirmar se segue quebrado antes de
+  assumir que "`npm run check` = 0" vale para o repo inteiro.

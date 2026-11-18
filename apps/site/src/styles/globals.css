@@ -1,0 +1,125 @@
+/* Fonte única de cor/dimensão: VuumBora_Claude_Design_System/tokens/vuumbora.tokens.json.
+   Este arquivo é GERADO (scripts/generate-tokens-css.mjs) — nunca editar à mão. */
+@import './tokens.generated.css';
+
+/* ---- valores só do site (não existem no design system do app, que só
+   cobre telas de telefone). Documentado aqui em vez de inventar token no
+   JSON compartilhado, que é mantido pela direção de arte do produto. ---- */
+:root {
+  --site-container-max: 1180px;
+  --site-gutter: var(--layout-screen-padding-compact); /* 16px, <375px */
+  --site-section-gap: clamp(56px, 9vw, 112px);
+}
+
+@media (min-width: 375px) {
+  :root {
+    --site-gutter: var(--layout-screen-padding); /* 20px */
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --site-gutter: 32px;
+  }
+}
+
+@media (min-width: 1200px) {
+  :root {
+    --site-gutter: 48px;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-background-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-jakarta), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: var(--font-size-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+figure {
+  margin: 0;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+a {
+  color: inherit;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* Foco visível real (não "básico"): anel amarelo de alto contraste, sempre
+   que o foco vier do teclado. `:focus-visible` evita o anel aparecer em
+   clique de mouse, mas nunca remove o foco do teclado. */
+:focus-visible {
+  outline: 3px solid var(--color-brand-yellow);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.container {
+  max-width: var(--site-container-max);
+  margin-inline: auto;
+  padding-inline: var(--site-gutter);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--site-gutter);
+  top: -100px;
+  z-index: 100;
+  background: var(--color-brand-yellow);
+  color: var(--color-text-on-yellow);
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+  top: 16px;
+}

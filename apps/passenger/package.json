@@ -12,6 +12,7 @@
   "dependencies": {
     "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@hookform/resolvers": "^7.0.7",
+    "@rnmapbox/maps": "^10.3.18",
     "@vuumbora/api-client": "*",
     "@vuumbora/domain": "*",
     "@vuumbora/tokens": "*",
@@ -26,6 +27,7 @@
     "expo-splash-screen": "~58.0.14",
     "expo-status-bar": "~58.0.5",
     "lucide-react-native": "^1.75.0",
+    "mapbox-gl": "^2.9.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-hook-form": "^7.92.0",
@@ -38,6 +40,8 @@
     "zustand": "^5.1.0"
   },
   "devDependencies": {
+    "@expo/env": "^2.6.0",
+    "@types/mapbox-gl": "^2.7.0",
     "@types/react": "~19.3.0",
     "typescript": "~6.0.3"
   }

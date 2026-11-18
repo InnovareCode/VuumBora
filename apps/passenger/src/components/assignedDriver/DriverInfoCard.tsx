@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Car } from 'lucide-react-native';
-import { Avatar, StarRating, theme, textStyle, tabularNums } from '@vuumbora/ui';
+import { Avatar, StarRating, SurfaceRaised, theme, textStyle, tabularNums } from '@vuumbora/ui';
 import type { AssignedDriverInfo } from '../../data/mockDriverAssignment';
 
 export interface DriverInfoCardProps {
@@ -15,7 +15,7 @@ export interface DriverInfoCardProps {
 export const DriverInfoCard = memo(function DriverInfoCard({ driver, variant = 'full', testID }: DriverInfoCardProps) {
   const compact = variant === 'compact';
   return (
-    <View style={[styles.card, compact && styles.cardCompact]} testID={testID}>
+    <SurfaceRaised style={[styles.card, compact && styles.cardCompact]} testID={testID}>
       <Avatar name={driver.name} size={compact ? 'sm' : 'md'} {...(driver.photoUri !== undefined ? { imageUri: driver.photoUri } : {})} />
       <View style={styles.textBlock}>
         <Text style={styles.name} numberOfLines={1}>
@@ -39,7 +39,7 @@ export const DriverInfoCard = memo(function DriverInfoCard({ driver, variant = '
           {driver.plate}
         </Text>
       </View>
-    </View>
+    </SurfaceRaised>
   );
 });
 
@@ -48,11 +48,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing['3'],
-    backgroundColor: theme.role.surface,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: theme.role.border,
-    padding: theme.spacing['3'],
+    // Borda iluminada de cima (direção de arte §4/§9 item 2). Fundo: item 6
+    // (`gradient.surface.raised`, ver SurfaceRaised) — era `theme.role.surface` chapado
+    // com `theme.role.border` nos 4 lados (auditoria Apolo, item A1/E2).
+    borderTopColor: theme.role.edgeTop,
+    borderColor: theme.role.edgeBottom,
+    padding: theme.spacing['4'],
   },
   cardCompact: { paddingVertical: theme.spacing['2'] },
   textBlock: { flex: 1, gap: 2 },

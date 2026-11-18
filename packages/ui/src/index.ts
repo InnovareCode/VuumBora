@@ -94,7 +94,9 @@ export { VehicleIllustration } from './VehicleIllustration';
 export type { VehicleIllustrationProps, VehicleIllustrationVariant } from './VehicleIllustration';
 
 export { MapPreviewBackground } from './MapPreviewBackground';
-export type { MapPreviewBackgroundProps } from './MapPreviewBackground';
+export type { MapPreviewBackgroundProps, MapPreviewVariant } from './MapPreviewBackground';
+
+export { driverDemoAvatarSource } from './demoAssets';
 
 export { OnboardingBackground } from './OnboardingBackground';
 export type { OnboardingBackgroundProps } from './OnboardingBackground';

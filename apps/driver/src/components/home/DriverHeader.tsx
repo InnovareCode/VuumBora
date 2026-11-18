@@ -8,11 +8,19 @@ export interface DriverHeaderProps {
   readonly onPressNotifications?: () => void;
 }
 
-/** Cabeçalho da Home do motorista: marca + sino de notificações (contagem é UI de navegação, não dado de negócio). */
+/**
+ * Cabeçalho da Home do motorista: marca CENTRALIZADA no topo + sino de notificações
+ * à direita (referência motorista-home-alvo.webp item 3 — antes a marca ficava
+ * alinhada à esquerda). O sino fica numa `View` ABSOLUTA à direita (não mais
+ * irmão em `justify-content: space-between`) para a logo centralizar de verdade em
+ * relação à largura da tela, não à metade do espaço que sobra do sino.
+ */
 export const DriverHeader = memo(function DriverHeader({ notificationCount = 0, onPressNotifications }: DriverHeaderProps) {
   return (
     <View style={styles.row}>
-      <BrandLogo variant="horizontal" size="sm" />
+      <View style={styles.logoSlot} pointerEvents="none">
+        <BrandLogo variant="horizontal" size="sm" />
+      </View>
       <Pressable
         onPress={onPressNotifications}
         accessibilityRole="button"
@@ -32,7 +40,8 @@ export const DriverHeader = memo(function DriverHeader({ notificationCount = 0, 
 });
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', minHeight: theme.layout.touchTarget },
+  logoSlot: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   bellTarget: {
     width: theme.layout.touchTarget,
     height: theme.layout.touchTarget,

@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { AppShell, DangerButton, MockBadge, theme, textStyle } from '@vuumbora/ui';
+import { Car, MapPin } from 'lucide-react-native';
+import { AppShell, DangerButton, MockBadge, SurfaceRaised, theme, textStyle, tabularNums } from '@vuumbora/ui';
 import { SearchingPulse } from '../src/components/search/SearchingPulse';
+import { findMockRideCategory } from '../src/data/mockRideCategories';
 import { useRideRequestStore } from '../src/store/useRideRequestStore';
 
 /**
@@ -19,7 +21,9 @@ import { useRideRequestStore } from '../src/store/useRideRequestStore';
 export default function SearchingDriverScreen() {
   const phase = useRideRequestStore((state) => state.phase);
   const destination = useRideRequestStore((state) => state.destination);
+  const categoryId = useRideRequestStore((state) => state.categoryId);
   const cancelSearch = useRideRequestStore((state) => state.cancelSearch);
+  const category = findMockRideCategory(categoryId);
 
   useEffect(() => {
     if (phase === 'searching_driver') return;
@@ -53,7 +57,7 @@ export default function SearchingDriverScreen() {
   }
 
   return (
-    <AppShell>
+    <AppShell glow>
       <View style={styles.content}>
         <View style={styles.mockTag}>
           <MockBadge label="busca de motorista simulada" />
@@ -62,12 +66,32 @@ export default function SearchingDriverScreen() {
         <View style={styles.center}>
           <SearchingPulse />
           <Text style={styles.title}>Procurando o motorista mais próximo...</Text>
-          {destination ? (
-            <Text style={styles.subtitle} numberOfLines={2}>
-              Destino: {destination.address}
-            </Text>
-          ) : null}
         </View>
+
+        {/* Card com destino/categoria (auditoria Apolo S3): no lugar da tela quase vazia
+            atrás do pulso, algo que o passageiro pode conferir enquanto espera. */}
+        <SurfaceRaised style={styles.infoCard} testID="searching-info-card">
+          {destination ? (
+            <View style={styles.infoRow}>
+              <MapPin size={14} color={theme.role.warning} strokeWidth={2} fill={theme.role.warning} />
+              <Text style={styles.infoText} numberOfLines={2}>
+                {destination.address}
+              </Text>
+            </View>
+          ) : null}
+          {destination && category ? <View style={styles.infoDivider} /> : null}
+          {category ? (
+            <View style={styles.infoRow}>
+              <Car size={18} color={theme.role.textSecondary} strokeWidth={2} />
+              <Text style={styles.infoText} numberOfLines={1}>
+                {category.name}
+              </Text>
+              <Text style={styles.infoPrice} numberOfLines={1}>
+                {category.priceLabel}
+              </Text>
+            </View>
+          ) : null}
+        </SurfaceRaised>
 
         <DangerButton
           label="Cancelar corrida"
@@ -85,5 +109,18 @@ const styles = StyleSheet.create({
   mockTag: { alignItems: 'flex-end' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: theme.spacing['4'] },
   title: { color: theme.role.textPrimary, ...textStyle('bold', 'title'), textAlign: 'center' },
-  subtitle: { color: theme.role.textSecondary, ...textStyle('regular', 'body'), textAlign: 'center' },
+  // Borda iluminada de cima + gradiente de superfície (direção de arte §4/§9 itens 2/6)
+  // — auditoria Apolo item S3: card novo, não existia antes (a tela só tinha decoração).
+  infoCard: {
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderTopColor: theme.role.edgeTop,
+    borderColor: theme.role.edgeBottom,
+    padding: theme.spacing['4'],
+    gap: theme.spacing['2'],
+  },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['2'] },
+  infoText: { flex: 1, color: theme.role.textSecondary, ...textStyle('regular', 'small') },
+  infoPrice: { color: theme.role.textPrimary, ...textStyle('bold', 'body'), ...tabularNums },
+  infoDivider: { height: 1, backgroundColor: theme.role.edgeBottom },
 });

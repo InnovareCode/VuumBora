@@ -42,14 +42,17 @@ export default function TripInProgressScreen() {
   }
 
   return (
-    <AppShell scroll>
+    <AppShell scroll glow>
       <View style={styles.content}>
         {/* Título curto ("Em andamento", não "Corrida em andamento"): medido (Playwright,
             320/360px) que a versão longa não cabia numa linha só no título do
             ScreenHeader (numberOfLines={1} fixo no componente). */}
         <ScreenHeader title="Em andamento" testID="trip-in-progress-header" />
         <View style={styles.mockTag}>
-          <MockBadge label="trajeto simulado" />
+          {/* Selo único pra tela inteira (trajeto + contato) — auditoria Apolo item A6:
+              não repetir "simulado" em cada card; o de contato saiu do
+              `SafetyActionsRow` (antes repetia o aviso). */}
+          <MockBadge label="trajeto e contato simulados" />
         </View>
 
         <TripProgressBar

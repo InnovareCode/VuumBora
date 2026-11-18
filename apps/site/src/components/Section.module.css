@@ -1,0 +1,33 @@
+.section {
+  padding-block: var(--site-section-gap);
+}
+
+.eyebrow {
+  display: inline-block;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-brand-yellow);
+  margin-bottom: var(--spacing-3);
+}
+
+.heading {
+  font-size: clamp(26px, 4vw, var(--font-size-display));
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  max-width: 44ch;
+}
+
+.description {
+  margin-top: var(--spacing-4);
+  font-size: var(--font-size-subtitle);
+  color: var(--color-text-secondary);
+  max-width: 60ch;
+  line-height: 1.6;
+}
+
+.centered {
+  text-align: center;
+  margin-inline: auto;
+}

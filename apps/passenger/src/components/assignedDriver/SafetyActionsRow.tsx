@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { MessageCircle, Phone, Shield } from 'lucide-react-native';
-import { MockBadge, SecondaryButton, theme } from '@vuumbora/ui';
+import { SecondaryButton, theme } from '@vuumbora/ui';
 
 export interface SafetyActionsRowProps {
   readonly driverName: string;
@@ -13,15 +13,14 @@ export interface SafetyActionsRowProps {
  * verdade — não existe canal de telefonia/chat real (`ChatPort`/discagem) implementado
  * ainda (pendência da Vega). Por isso `onPress` fica vazio (nunca chama
  * `Linking.openURL('tel:...')` nem abre um chat real) e o `accessibilityLabel` de cada
- * botão, mais o `MockBadge` da seção, deixam explícito que é demonstração — pra não
- * parecer uma ligação/mensagem/SOS de verdade.
+ * botão deixa explícito que é demonstração — pra não parecer uma ligação/mensagem/SOS
+ * de verdade. O aviso de "simulado" já aparece uma vez no topo da tela que usa este
+ * componente (auditoria Apolo, item A6: 3 selos de mock empilhados numa tela só —
+ * consolidados em um único selo por tela em vez de repetir aqui).
  */
 export const SafetyActionsRow = memo(function SafetyActionsRow({ driverName, testID }: SafetyActionsRowProps) {
   return (
     <View style={styles.section} testID={testID}>
-      <View style={styles.header}>
-        <MockBadge label="contato e SOS simulados" />
-      </View>
       <View style={styles.row}>
         <View style={styles.button}>
           <SecondaryButton
@@ -55,7 +54,6 @@ export const SafetyActionsRow = memo(function SafetyActionsRow({ driverName, tes
 
 const styles = StyleSheet.create({
   section: { gap: theme.spacing['2'] },
-  header: { alignItems: 'flex-end' },
   row: { flexDirection: 'row', gap: theme.spacing['2'] },
   button: { flex: 1 },
 });

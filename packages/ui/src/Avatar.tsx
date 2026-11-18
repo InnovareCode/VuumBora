@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import { theme } from '@vuumbora/tokens';
 import { textStyleForSize } from './typography';
 
@@ -8,9 +8,17 @@ export type AvatarSize = 'sm' | 'md' | 'lg';
 const SIZE: Record<AvatarSize, number> = { sm: 32, md: 44, lg: 64 };
 
 export interface AvatarProps {
-  /** Nome usado para gerar as iniciais quando não há `imageUri`. */
+  /** Nome usado para gerar as iniciais quando não há `imageUri`/`imageSource`. */
   readonly name: string;
+  /** Foto remota (backend real). */
   readonly imageUri?: string;
+  /**
+   * Foto já resolvida pelo bundler (`require`/import de asset local — ex.: foto de
+   * DEMONSTRAÇÃO embutida no pacote). Tem prioridade sobre `imageUri` quando os dois
+   * vierem definidos. Nunca usar `Image.resolveAssetSource` para converter isso numa
+   * `string` de URI — essa API não existe no `react-native-web`.
+   */
+  readonly imageSource?: ImageSourcePropType;
   readonly size?: AvatarSize;
   readonly testID?: string;
 }
@@ -27,19 +35,14 @@ function initialsOf(name: string): string {
  * anel amarelo (direção de arte §4/§9 item 1: disco cheio de amarelo era um foco de
  * amarelo competindo com o CTA; o anel mantém o destaque de marca sem virar fundo).
  */
-export const Avatar = memo(function Avatar({ name, imageUri, size = 'md', testID }: AvatarProps) {
+export const Avatar = memo(function Avatar({ name, imageUri, imageSource, size = 'md', testID }: AvatarProps) {
   const dimension = SIZE[size];
   const style = [styles.circle, { width: dimension, height: dimension, borderRadius: dimension / 2 }];
+  const source = imageSource ?? (imageUri ? { uri: imageUri } : undefined);
 
-  if (imageUri) {
+  if (source) {
     return (
-      <Image
-        source={{ uri: imageUri }}
-        style={style}
-        accessibilityIgnoresInvertColors
-        accessibilityLabel={`Foto de perfil de ${name}`}
-        testID={testID}
-      />
+      <Image source={source} style={style} accessibilityIgnoresInvertColors accessibilityLabel={`Foto de perfil de ${name}`} testID={testID} />
     );
   }
 

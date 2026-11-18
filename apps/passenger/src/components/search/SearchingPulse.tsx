@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
 import { Car } from 'lucide-react-native';
-import { theme } from '@vuumbora/ui';
+import { SurfaceRaised, theme } from '@vuumbora/ui';
 
 /**
  * Animação de "procurando motorista" (P07) — dois anéis pulsando ao redor do ícone do
@@ -51,9 +51,9 @@ export const SearchingPulse = memo(function SearchingPulse() {
     <View style={styles.root} accessibilityRole="progressbar" accessibilityLabel="Procurando motorista">
       <Animated.View style={[styles.ring, ringStyle(ring1)]} />
       <Animated.View style={[styles.ring, ringStyle(ring2)]} />
-      <View style={styles.core}>
-        <Car size={32} color={theme.role.ctaText} strokeWidth={2} />
-      </View>
+      <SurfaceRaised style={styles.core}>
+        <Car size={32} color={theme.role.ctaBackground} strokeWidth={2} />
+      </SurfaceRaised>
     </View>
   );
 });
@@ -62,18 +62,24 @@ const CORE_SIZE = 76;
 
 const styles = StyleSheet.create({
   root: { width: 180, height: 180, alignItems: 'center', justifyContent: 'center' },
+  // Auditoria Apolo (S1): o amarelo era um disco CHEIO de 133/76pt — o maior bloco de
+  // cor da tela, decoração pura. Agora é só TRAÇO (borda 2pt, sem preenchimento); o
+  // núcleo vira superfície premium (`SurfaceRaised`) com borda 2pt amarela, não mais
+  // amarelo cheio.
   ring: {
     position: 'absolute',
     width: CORE_SIZE,
     height: CORE_SIZE,
     borderRadius: CORE_SIZE / 2,
-    backgroundColor: theme.role.ctaBackground,
+    borderWidth: 2,
+    borderColor: theme.role.ctaBackground,
   },
   core: {
     width: CORE_SIZE,
     height: CORE_SIZE,
     borderRadius: CORE_SIZE / 2,
-    backgroundColor: theme.role.ctaBackground,
+    borderWidth: 2,
+    borderColor: theme.role.ctaBackground,
     alignItems: 'center',
     justifyContent: 'center',
   },
