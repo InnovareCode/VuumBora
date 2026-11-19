@@ -69,83 +69,97 @@
             </noscript>
 
             <form id="application-form" novalidate>
-              <div class="form-row">
-                <div class="field">
-                  <label for="field-name">Nome completo</label>
-                  <input type="text" id="field-name" name="name" autocomplete="name" required>
-                </div>
+              <div class="field">
+                <label for="field-name">Nome completo</label>
+                <input type="text" id="field-name" name="name" autocomplete="name" placeholder="Maria da Silva" required>
+              </div>
 
+              <div class="form-row">
                 <div class="field">
                   <label for="field-phone">Telefone (WhatsApp)</label>
-                  <input type="tel" id="field-phone" name="phone" autocomplete="tel" required>
+                  <input type="tel" id="field-phone" name="phone" autocomplete="tel" inputmode="tel" placeholder="(84) 90000-0000" required>
                 </div>
-              </div>
-
-              <div class="form-row">
                 <div class="field">
                   <label for="field-email">E-mail</label>
-                  <input type="email" id="field-email" name="email" autocomplete="email" required>
+                  <input type="email" id="field-email" name="email" autocomplete="email" inputmode="email" placeholder="voce@email.com" required>
                 </div>
+              </div>
 
+              <div class="form-row form-row--city">
                 <div class="field">
                   <label for="field-city">Cidade onde dirige</label>
-                  <input type="text" id="field-city" name="city" autocomplete="address-level2" required>
+                  <input type="text" id="field-city" name="city" autocomplete="address-level2" placeholder="Natal" required>
+                </div>
+                <div class="field">
+                  <label for="field-state">UF</label>
+                  <select id="field-state" name="state" autocomplete="address-level1" required>
+                    <option value="" disabled selected>Selecione</option>
+                    <option value="AC">AC</option>
+                    <option value="AL">AL</option>
+                    <option value="AP">AP</option>
+                    <option value="AM">AM</option>
+                    <option value="BA">BA</option>
+                    <option value="CE">CE</option>
+                    <option value="DF">DF</option>
+                    <option value="ES">ES</option>
+                    <option value="GO">GO</option>
+                    <option value="MA">MA</option>
+                    <option value="MT">MT</option>
+                    <option value="MS">MS</option>
+                    <option value="MG">MG</option>
+                    <option value="PA">PA</option>
+                    <option value="PB">PB</option>
+                    <option value="PR">PR</option>
+                    <option value="PE">PE</option>
+                    <option value="PI">PI</option>
+                    <option value="RJ">RJ</option>
+                    <option value="RN">RN</option>
+                    <option value="RS">RS</option>
+                    <option value="RO">RO</option>
+                    <option value="RR">RR</option>
+                    <option value="SC">SC</option>
+                    <option value="SP">SP</option>
+                    <option value="SE">SE</option>
+                    <option value="TO">TO</option>
+                  </select>
                 </div>
               </div>
 
-              <div class="field">
-                <label for="field-state">UF</label>
-                <select id="field-state" name="state" autocomplete="address-level1" required>
-                  <option value="" disabled selected>Selecione</option>
-                  <option value="AC">AC</option>
-                  <option value="AL">AL</option>
-                  <option value="AP">AP</option>
-                  <option value="AM">AM</option>
-                  <option value="BA">BA</option>
-                  <option value="CE">CE</option>
-                  <option value="DF">DF</option>
-                  <option value="ES">ES</option>
-                  <option value="GO">GO</option>
-                  <option value="MA">MA</option>
-                  <option value="MT">MT</option>
-                  <option value="MS">MS</option>
-                  <option value="MG">MG</option>
-                  <option value="PA">PA</option>
-                  <option value="PB">PB</option>
-                  <option value="PR">PR</option>
-                  <option value="PE">PE</option>
-                  <option value="PI">PI</option>
-                  <option value="RJ">RJ</option>
-                  <option value="RN">RN</option>
-                  <option value="RS">RS</option>
-                  <option value="RO">RO</option>
-                  <option value="RR">RR</option>
-                  <option value="SC">SC</option>
-                  <option value="SP">SP</option>
-                  <option value="SE">SE</option>
-                  <option value="TO">TO</option>
-                </select>
-              </div>
-
-              <div class="form-row">
+              <div class="form-choices">
                 <fieldset class="field field--choice">
-                  <legend>Já dirige por aplicativo?</legend>
-                  <label><input type="radio" name="alreadyDrivesForApp" value="true"> Sim</label>
-                  <label><input type="radio" name="alreadyDrivesForApp" value="false"> Não</label>
+                  <legend class="visually-hidden">Já dirige por aplicativo? (opcional)</legend>
+                  <div class="choice__row">
+                    <span class="choice__label" aria-hidden="true">Já dirige por aplicativo? <span class="optional">(opcional)</span></span>
+                    <div class="seg">
+                      <label class="seg__opt"><input type="radio" name="alreadyDrivesForApp" value="true"><span>Sim</span></label>
+                      <label class="seg__opt"><input type="radio" name="alreadyDrivesForApp" value="false"><span>Não</span></label>
+                    </div>
+                  </div>
                 </fieldset>
 
                 <fieldset class="field field--choice">
-                  <legend>Tem veículo próprio?</legend>
-                  <label><input type="radio" name="hasOwnVehicle" value="true"> Sim</label>
-                  <label><input type="radio" name="hasOwnVehicle" value="false"> Não</label>
+                  <legend class="visually-hidden">Tem veículo próprio? (opcional)</legend>
+                  <div class="choice__row">
+                    <span class="choice__label" aria-hidden="true">Tem veículo próprio? <span class="optional">(opcional)</span></span>
+                    <div class="seg">
+                      <label class="seg__opt"><input type="radio" name="hasOwnVehicle" value="true"><span>Sim</span></label>
+                      <label class="seg__opt"><input type="radio" name="hasOwnVehicle" value="false"><span>Não</span></label>
+                    </div>
+                  </div>
                 </fieldset>
               </div>
 
-              <div class="form-status" id="form-status" role="status" aria-live="polite"></div>
+              <div class="form-status" id="form-status" role="status" aria-live="polite" tabindex="-1"></div>
 
-              <button type="submit" class="button button--primary">Enviar candidatura</button>
+              <button type="submit" class="button button--primary button--submit">
+                <span class="button__spinner" aria-hidden="true"></span>
+                <span class="button__label">Enviar candidatura</span>
+              </button>
 
-              <p class="legal-notice">Usamos nome, telefone, e-mail, cidade e UF só para avaliar sua candidatura e avisar o resultado. Controlado por Innovare Code (CNPJ 09.813.446/0001-00). Não vendemos nem repassamos seus dados a ninguém. Para remover seus dados, escreva para <a href="mailto:contato@vuumbora.com.br">contato@vuumbora.com.br</a>.</p>
+              <details class="legal-notice">
+                <summary>Usamos seus dados só para avaliar a candidatura e avisar o resultado. Não vendemos nem repassamos. <span class="legal-notice__link">Como tratamos seus dados</span></summary>
+                <p>Usamos nome, telefone, e-mail, cidade e UF só para avaliar sua candidatura e avisar o resultado. Controlado por Innovare Code (CNPJ 09.813.446/0001-00). Não vendemos nem repassamos seus dados a ninguém. Para remover seus dados, escreva para <a href="mailto:contato@vuumbora.com.br">contato@vuumbora.com.br</a>.</p>
+              </details>
             </form>
           </section>
         </div>
@@ -188,7 +202,10 @@
 
     <section class="reasons reveal">
       <div class="container">
-        <h2 class="visually-hidden">Motivos para se candidatar</h2>
+        <div class="section-head">
+          <span class="eyebrow">MOTIVOS</span>
+          <h2>Motivos para se candidatar</h2>
+        </div>
         <ul class="reasons__grid">
           <li class="reason-card">
             <span class="reason-card__label">TAXA</span>
@@ -310,14 +327,19 @@
 
     <div class="container"><div class="divider" role="presentation"></div></div>
 
-    <section>
+    <section class="commitment-section">
       <div class="container">
         <aside class="commitment reveal" aria-label="Compromisso público">
-          <svg class="commitment__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 2L4 5v6c0 5 3.4 8.7 8 11 4.6-2.3 8-6 8-11V5l-8-3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-            <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <p>As regras de taxa da plataforma e de repasse ao motorista serão publicadas antes de o cadastro de motoristas ser aberto.</p>
+          <span class="commitment__icon-wrap">
+            <svg class="commitment__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 2L4 5v6c0 5 3.4 8.7 8 11 4.6-2.3 8-6 8-11V5l-8-3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <div>
+            <span class="eyebrow">COMPROMISSO PÚBLICO</span>
+            <p>As regras de taxa da plataforma e de repasse ao motorista serão publicadas antes de o cadastro de motoristas ser aberto.</p>
+          </div>
         </aside>
       </div>
     </section>
@@ -325,8 +347,12 @@
     <div class="container"><div class="divider" role="presentation"></div></div>
 
     <section class="faq reveal" aria-labelledby="faq-title">
-      <div class="container">
-        <h2 id="faq-title" class="section-heading">Perguntas frequentes</h2>
+      <div class="container faq__layout">
+        <div class="faq__intro">
+          <span class="eyebrow">DÚVIDAS</span>
+          <h2 id="faq-title">Perguntas frequentes</h2>
+          <p>Não achou sua dúvida? Fale pelo WhatsApp <a href="https://wa.me/558431132584">(84) 3113-2584</a>.</p>
+        </div>
         <div class="faq__list">
           <details class="faq__item">
             <summary>Quando começa?</summary>
@@ -356,27 +382,36 @@
 
     <section class="rate-sim reveal" aria-labelledby="rate-sim-title">
       <div class="container">
-        <h2 id="rate-sim-title" class="section-heading">Simule a taxa</h2>
-        <p class="rate-sim__intro">Arraste a barra para ver quanto sobraria de uma corrida de exemplo.</p>
-        <div class="rate-sim__control">
-          <label for="rate-range">Taxa de exemplo: <span class="rate-sim__value" id="rate-range-value">20%</span></label>
-          <input type="range" id="rate-range" min="0" max="40" value="20" step="1" aria-describedby="rate-sim-disclaimer">
+        <div class="rate-sim__panel">
+          <div class="section-head">
+            <span class="eyebrow">A CONTA</span>
+            <h2 id="rate-sim-title">Simule a taxa</h2>
+            <p class="rate-sim__intro">Arraste a barra para ver quanto sobraria de uma corrida de exemplo.</p>
+          </div>
+          <div class="rate-sim__grid">
+            <div class="rate-sim__control">
+              <label for="rate-range">Taxa de exemplo</label>
+              <span class="rate-sim__value" id="rate-range-value" aria-hidden="true">20%</span>
+              <input type="range" id="rate-range" min="0" max="40" value="20" step="1" aria-describedby="rate-sim-disclaimer">
+              <div class="rate-sim__scale" aria-hidden="true"><span>0%</span><span>40%</span></div>
+            </div>
+            <dl class="rate-sim__breakdown" id="rate-breakdown">
+              <div>
+                <dt>Corrida de exemplo</dt>
+                <dd>R$ 100,00</dd>
+              </div>
+              <div>
+                <dt>Taxa</dt>
+                <dd id="rate-fee">- R$ 20,00</dd>
+              </div>
+              <div>
+                <dt>Fica com você</dt>
+                <dd id="rate-net">R$ 80,00</dd>
+              </div>
+            </dl>
+          </div>
+          <p class="rate-sim__disclaimer" id="rate-sim-disclaimer">A taxa real da VuumBora será publicada antes de o cadastro de motoristas ser aberto. Este valor da simulação é só um exemplo para mostrar a conta.</p>
         </div>
-        <dl class="rate-sim__breakdown" id="rate-breakdown">
-          <div>
-            <dt>Corrida de exemplo</dt>
-            <dd>R$ 100,00</dd>
-          </div>
-          <div>
-            <dt>Taxa</dt>
-            <dd id="rate-fee">R$ 20,00</dd>
-          </div>
-          <div>
-            <dt>Fica com você</dt>
-            <dd id="rate-net">R$ 80,00</dd>
-          </div>
-        </dl>
-        <p class="rate-sim__disclaimer" id="rate-sim-disclaimer">A taxa real da VuumBora será publicada antes de o cadastro de motoristas ser aberto. Este valor da simulação é só um exemplo para mostrar a conta.</p>
       </div>
     </section>
 
@@ -385,11 +420,40 @@
 
 <footer class="site-footer">
   <div class="container">
-    <img class="site-footer__logo" src="assets/img/logo-vuumbora.png" alt="VuumBora" width="480" height="118" loading="lazy">
-    <p>VuumBora, mobilidade urbana.</p>
-    <p>Desenvolvido por Innovare Code, CNPJ 09.813.446/0001-00.</p>
-    <p>Contato <a href="mailto:contato@vuumbora.com.br">contato@vuumbora.com.br</a>. WhatsApp <a href="https://wa.me/558431132584">(84) 3113-2584</a> e Instagram <a href="https://www.instagram.com/vuumbora.oficial">@vuumbora.oficial</a>.</p>
-    <p>A marca é real, então não existe aviso de marca fictícia. As fotos são geradas por computador e serão trocadas por fotos reais depois, decisão do dono em 19/11/2026.</p>
+    <div class="site-footer__grid">
+      <div class="site-footer__brand">
+        <img class="site-footer__logo" src="assets/img/logo-vuumbora.png" alt="VuumBora" width="480" height="118" loading="lazy">
+        <p>VuumBora, mobilidade urbana.</p>
+      </div>
+      <div>
+        <h3>Contato</h3>
+        <ul>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M4 6l8 7 8-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <a href="mailto:contato@vuumbora.com.br">contato@vuumbora.com.br</a>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h3l2 5-2.5 1.5a11 11 0 0 0 5 5L16 12l5 2v3a2 2 0 0 1-2 2C11.5 19 5 12.5 5 5a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            <a href="https://wa.me/558431132584">WhatsApp (84) 3113-2584</a>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor"/></svg>
+            <a href="https://www.instagram.com/vuumbora.oficial">@vuumbora.oficial</a>
+          </li>
+        </ul>
+      </div>
+      <div>
+        <h3>Empresa</h3>
+        <ul>
+          <li>Desenvolvido por Innovare Code</li>
+          <li>CNPJ 09.813.446/0001-00</li>
+        </ul>
+      </div>
+    </div>
+    <div class="site-footer__bottom">
+      <span>© 2026 VuumBora</span>
+      <span>As imagens são ilustrativas.</span>
+    </div>
   </div>
 </footer>
 

@@ -8,9 +8,24 @@
     return reduceMotionQuery.matches;
   }
 
+  // O cartão de candidatura vive dentro do palco fixo da jornada (altura
+  // da tela, overflow:hidden). Se o cartão não couber — em notebook baixo,
+  // ou depois de um erro que o faz crescer —, o modo cinematográfico tem
+  // que ficar DESLIGADO, senão o topo do cartão sai para y negativo e
+  // rolar não traz de volta (rede de segurança da seção 1.7).
   function cinematicAllowed() {
-    return cinematicQuery.matches && !prefersReducedMotion();
+    if (!cinematicQuery.matches || prefersReducedMotion()) return false;
+    var card = document.getElementById('candidatura');
+    if (card && window.innerHeight < card.offsetHeight + 76 + 32 + 16) {
+      return false;
+    }
+    return true;
   }
+
+  // Ponte entre initJourney (dono do modo cinematográfico) e
+  // initApplicationForm: o formulário muda de altura ao mostrar/limpar
+  // erro e ao chegar no sucesso, e isso precisa reavaliar o modo na hora.
+  var syncJourneyMode = function () {};
 
   /* =========================================================
      JORNADA: troca de faixa (imagem + texto) amarrada ao scroll.
@@ -151,6 +166,7 @@
         disableCinematic();
       }
     }
+    syncJourneyMode = syncMode;
 
     window.addEventListener('scroll', requestTick, { passive: true });
     window.addEventListener('resize', function () {
@@ -161,6 +177,53 @@
     reduceMotionQuery.addEventListener('change', syncMode);
 
     syncMode();
+  }
+
+  /* =========================================================
+     Cabeçalho sólido ao rolar e CTA do hero.
+     Fecham F12 (CTA que não fazia nada no desktop) e F13 (logo por
+     cima do título do cartão no celular).
+     ========================================================= */
+  function initHeaderScroll() {
+    var header = document.querySelector('.site-header');
+    var journey = document.querySelector('[data-journey]');
+    if (!header) return;
+
+    var ticking = false;
+    function update() {
+      ticking = false;
+      var cinematic = journey && journey.classList.contains('is-cinematic');
+      var scrolled = cinematic
+        ? window.scrollY > journey.offsetHeight - 76
+        : window.scrollY > 8;
+      header.classList.toggle('is-scrolled', scrolled);
+    }
+    function requestTick() {
+      if (!ticking) {
+        ticking = true;
+        window.requestAnimationFrame(update);
+      }
+    }
+    window.addEventListener('scroll', requestTick, { passive: true });
+    window.addEventListener('resize', requestTick);
+    requestTick();
+  }
+
+  function initHeroCta() {
+    var cta = document.querySelector('.hero-grid .faixa-text .button--primary');
+    var nameField = document.getElementById('field-name');
+    if (!cta || !nameField) return;
+
+    // A partir de 900px o cartão já está ao lado do texto: clicar no CTA
+    // não precisa rolar, só leva o foco ao primeiro campo (o próprio
+    // anel de foco amarelo já é a resposta visível ao clique). Abaixo
+    // de 900px a âncora continua levando até a candidatura normalmente.
+    cta.addEventListener('click', function (event) {
+      if (cinematicQuery.matches) {
+        event.preventDefault();
+        nameField.focus({ preventScroll: true });
+      }
+    });
   }
 
   /* =========================================================
@@ -422,9 +485,10 @@
       var fee = (EXAMPLE_FARE * pct) / 100;
       var net = EXAMPLE_FARE - fee;
       valueOut.textContent = pct + '%';
-      feeOut.textContent = formatBRL(fee);
+      feeOut.textContent = '- ' + formatBRL(fee);
       netOut.textContent = formatBRL(net);
       range.setAttribute('aria-valuetext', pct + ' por cento de taxa de exemplo');
+      range.style.setProperty('--pct', (pct / Number(range.max)) * 100 + '%');
     }
 
     range.addEventListener('input', render);
@@ -443,14 +507,27 @@
     var section = document.getElementById('candidatura');
     var status = document.getElementById('form-status');
     var submitButton = form.querySelector('button[type="submit"]');
+    var submitLabel = submitButton.querySelector('.button__label');
     var config = window.VUUMBORA_CONFIG || { apiBaseUrl: '' };
 
+    function errorIconSVG() {
+      return '<svg class="field-error__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M12 7.5v6M12 16.75h.01" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>';
+    }
+
+    function clearFieldError(field) {
+      if (!field) return;
+      field.removeAttribute('data-invalid');
+      var msg = field.querySelector('.field-error');
+      if (msg) msg.remove();
+      var input = field.querySelector('input, select');
+      if (input) {
+        input.removeAttribute('aria-invalid');
+        input.removeAttribute('aria-describedby');
+      }
+    }
+
     function clearFieldErrors() {
-      Array.prototype.forEach.call(form.querySelectorAll('.field, .field--choice'), function (field) {
-        field.removeAttribute('data-invalid');
-        var msg = field.querySelector('.field--error');
-        if (msg) msg.remove();
-      });
+      Array.prototype.forEach.call(form.querySelectorAll('.field, .field--choice'), clearFieldError);
     }
 
     function showFieldError(name, message) {
@@ -459,13 +536,37 @@
       var field = input.closest('.field, .field--choice');
       if (!field) return;
       field.setAttribute('data-invalid', 'true');
+      var msgId = 'err-' + name;
       var msg = document.createElement('p');
-      msg.className = 'field--error';
-      msg.textContent = message;
+      msg.className = 'field-error';
+      msg.id = msgId;
+      msg.innerHTML = errorIconSVG();
+      msg.appendChild(document.createTextNode(message));
       field.appendChild(msg);
+      input.setAttribute('aria-invalid', 'true');
+      input.setAttribute('aria-describedby', msgId);
+    }
+
+    // Correção ao vivo: assim que o campo passa a ter valor, a mensagem
+    // daquele campo some — sem esperar outro envio.
+    Array.prototype.forEach.call(form.querySelectorAll('input[type="text"], input[type="tel"], input[type="email"]'), function (input) {
+      input.addEventListener('input', function () {
+        if (input.value.trim()) clearFieldError(input.closest('.field'));
+      });
+    });
+    var stateSelect = form.querySelector('#field-state');
+    if (stateSelect) {
+      stateSelect.addEventListener('change', function () {
+        if (stateSelect.value) clearFieldError(stateSelect.closest('.field'));
+      });
     }
 
     function setStatus(state, title, body) {
+      if (!state) {
+        status.removeAttribute('data-state');
+        status.innerHTML = '';
+        return;
+      }
       status.setAttribute('data-state', state);
       status.innerHTML = '';
       if (title) {
@@ -478,6 +579,13 @@
         p.textContent = body;
         status.appendChild(p);
       }
+    }
+
+    function setLoading(isLoading) {
+      submitButton.classList.toggle('is-loading', isLoading);
+      submitButton.disabled = isLoading;
+      submitButton.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+      if (submitLabel) submitLabel.textContent = isLoading ? 'Enviando...' : 'Enviar candidatura';
     }
 
     function radioValue(name) {
@@ -503,17 +611,23 @@
       if (hasVehicle !== undefined) data.hasOwnVehicle = hasVehicle;
 
       var missing = [];
-      if (!data.name) missing.push(['name', 'Preencha seu nome completo.']);
-      if (!data.phone) missing.push(['phone', 'Preencha um telefone com WhatsApp.']);
-      if (!data.email) missing.push(['email', 'Preencha um e-mail válido.']);
-      if (!data.city) missing.push(['city', 'Preencha a cidade onde você dirige.']);
-      if (!data.state) missing.push(['state', 'Selecione a UF.']);
+      if (!data.name) missing.push(['name', 'Informe seu nome completo.']);
+      if (!data.phone) missing.push(['phone', 'Informe um WhatsApp.']);
+      if (!data.email) missing.push(['email', 'Informe um e-mail válido.']);
+      if (!data.city) missing.push(['city', 'Informe a cidade.']);
+      if (!data.state) missing.push(['state', 'Escolha a UF.']);
 
       if (missing.length) {
+        // Sem resumo "Revise os campos marcados" aqui: ele duplicava as
+        // mensagens de cada campo e, com 106px, era a principal razão do
+        // cartão crescer e sair da tela (ver seção 1.1/1.7 da especificação).
+        setStatus(null);
         missing.forEach(function (pair) {
           showFieldError(pair[0], pair[1]);
         });
-        setStatus('error', 'Revise os campos marcados.', 'Faltou preencher alguma informação obrigatória.');
+        var firstInvalid = form.querySelector('[name="' + missing[0][0] + '"]');
+        if (firstInvalid) firstInvalid.focus();
+        syncJourneyMode();
         return;
       }
 
@@ -523,11 +637,12 @@
           'Ainda não dá para enviar por aqui.',
           'O endereço do servidor não foi configurado nesta publicação da página. Fale pelo WhatsApp (84) 3113-2584 ou tente novamente mais tarde.'
         );
+        syncJourneyMode();
         return;
       }
 
-      submitButton.disabled = true;
-      setStatus('info', 'Enviando...', '');
+      setStatus(null);
+      setLoading(true);
 
       fetch(config.apiBaseUrl.replace(/\/$/, '') + '/v1/driver-applications', {
         method: 'POST',
@@ -545,7 +660,7 @@
             });
         })
         .then(function (result) {
-          submitButton.disabled = false;
+          setLoading(false);
 
           if (result.ok) {
             setStatus(
@@ -554,6 +669,8 @@
               'A gente avalia e responde no WhatsApp que você informou.'
             );
             if (section) section.setAttribute('data-submitted', 'true');
+            syncJourneyMode();
+            status.focus();
             return;
           }
 
@@ -563,15 +680,21 @@
               Object.keys(fields).forEach(function (fieldName) {
                 showFieldError(fieldName, fields[fieldName]);
               });
+              // Aqui o resumo continua: o erro vem do servidor, depois que
+              // o cartão já está no tamanho final, e avisa que a causa não
+              // foi a validação do navegador.
               setStatus('error', 'Revise os campos marcados.', '');
+              syncJourneyMode();
               return;
             }
             setStatus('error', 'Não foi possível enviar.', 'Os dados enviados não foram aceitos pelo servidor.');
+            syncJourneyMode();
             return;
           }
 
           if (result.status === 429) {
             setStatus('error', 'Muitas tentativas.', 'Aguarde um momento e tente enviar de novo.');
+            syncJourneyMode();
             return;
           }
 
@@ -580,20 +703,24 @@
             'Não conseguimos enviar agora.',
             'O servidor não respondeu corretamente. Tente novamente em instantes ou fale pelo WhatsApp (84) 3113-2584.'
           );
+          syncJourneyMode();
         })
         .catch(function () {
-          submitButton.disabled = false;
+          setLoading(false);
           setStatus(
             'error',
             'Falha de conexão.',
             'Não foi possível falar com o servidor agora. Verifique sua internet e tente de novo.'
           );
+          syncJourneyMode();
         });
     });
   }
 
   function boot() {
     initJourney();
+    initHeaderScroll();
+    initHeroCta();
     initRouteLine();
     initReveal();
     initCarousel();

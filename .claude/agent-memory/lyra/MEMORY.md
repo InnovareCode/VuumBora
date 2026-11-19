@@ -36,3 +36,4 @@
 - [Carrossel multi-peek: índice ambíguo + último slide não alcança start](bug_carrossel_multi_peek_indice_e_fim_de_lista.md) — IntersectionObserver falha com várias cartas visíveis; scroll-snap trava antes do último slide sem spacer.
 - [`hidden` perde para `display` de autor](bug_hidden_attribute_perde_para_display_de_autor.md) — origem de autor sempre vence UA, mesmo empatando especificidade; precisa de `[hidden]{display:none}` explícito.
 - [Véu calibrado para a posição antiga do texto](bug_veu_calibrado_para_posicao_antiga_do_texto.md) — reposicionar texto dentro de hero com véu já calibrado exige remedir do zero.
+- [Modificador de 1 classe perde para seletor pai de 2 classes em qualquer largura](bug_form_row_city_perdeu_para_hero_card_form_row.md) — especificidade não respeita media query; UF nunca ficava em 136px.

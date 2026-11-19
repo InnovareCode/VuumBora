@@ -30,6 +30,19 @@ Estado do projeto entre sessões. Atualizar ao fim de cada marco.
 | 7 | Qualidade | Íris | 5, 6 | Etapa D: testes, a11y, telas pequenas |
 | 8 | Contrato de backend | Nova + Cronos + Vega | respostas de produto | Etapa E: API HTTP, modelo de dados |
 
+## Site de pré-lançamento (`site-cine/public`, decisões já tomadas)
+
+Reforma do formulário de candidatura e das seções pós-jornada
+(`docs/especificacao-formulario-e-secoes.md`, Apolo → Lyra, 19/11/2026).
+Duas decisões do dono, resolvidas, não reabrir:
+- **Aviso de privacidade resumido no cartão**: uma linha curta visível
+  (`<details><summary>`) com o texto literal completo abrindo num clique.
+  É o que mantém o cartão inteiro na tela mesmo em notebook baixo
+  (1366x768, 1280x720) com a rede de segurança da seção 1.7 da especificação.
+- **Rodapé**: a frase "A marca é real, então não existe aviso de marca
+  fictícia..." era anotação de bastidor do pacote de design, não texto do
+  site — removida. Ficou só "As imagens são ilustrativas." na barra inferior.
+
 ## Decisões em aberto (dependem do dono)
 
 Lista completa em `docs/decisions.md` → "Ambiguidades de produto". As que mais pesam para o MVP:

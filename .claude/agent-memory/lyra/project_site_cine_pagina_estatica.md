@@ -111,6 +111,42 @@ ver seção "Desvio declarado" do pacote). Projeto **separado** de `apps/site`
   [[bug_hidden_attribute_perde_para_display_de_autor]]. Título de carrossel em
   duas partes (`<strong>`+`<em>`, a segunda cor `--accent`) virou padrão
   reaproveitável pra "destaque parcial de frase" nesta página.
+- **Reforma do formulário e das seções pós-jornada (19/11/2026, a partir de
+  `docs/especificacao-formulario-e-secoes.md`, medida e prototipada pelo
+  Apolo antes de escrever):** pesos (nada de `font-weight:700` — Google
+  Fonts só carrega 500/800), raio de foco global (sem `border-radius:4px`
+  fixo, que quadrava botão/círculos), campos com `--field-bg` translúcido +
+  anel de foco amarelo, select de UF com seta própria (`appearance:none` +
+  SVG de fundo), toggle "Sim/Não" com rádio nativo transparente cobrindo um
+  `.seg__opt` (`:has(input:checked)` para o realce, `:has(input:focus-visible)`
+  pro anel — zero JS). Aviso de privacidade virou `<details>`: resumo de uma
+  linha + texto literal completo no clique (decisão do dono, ver
+  PROGRESSO.md). Botão de envio nunca mais fica cinza ao enviar
+  (`.is-loading:disabled` com especificidade de 2 classes vence
+  `.button--primary:disabled` genérico).
+  [[bug_form_row_city_perdeu_para_hero_card_form_row]] foi achado medindo,
+  não lendo o CSS: a UF virava metade do cartão ou a linha inteira porque
+  `.hero-card .form-row` (2 classes) vencia `.form-row--city` (1 classe) em
+  QUALQUER largura, não só no breakpoint que eu via primeiro.
+- **Rede de altura do cartão (seção 1.7 da especificação):**
+  `cinematicAllowed()` passou a medir `card.offsetHeight` contra
+  `window.innerHeight` (cabeçalho + folga) antes de ligar o modo
+  cinematográfico — e as duas funções (`initJourney` dono do modo,
+  `initApplicationForm` dono dos erros) precisam reavaliar isso toda vez
+  que o cartão muda de altura (mostrar erro, limpar erro, chegar no
+  sucesso). Resolvi com uma variável de ponte no escopo do IIFE
+  (`syncJourneyMode`, reatribuída de dentro de `initJourney`) em vez de
+  `window.*` — os dois init ficam no mesmo closure, não precisa poluir
+  global. Medido nas 4 larguras da especificação, inclusive com erro vazio:
+  o modo cinematográfico desliga sozinho quando o cartão cresceria para
+  fora da tela (1366x768 e 1280x720 com erro), e nunca estourou em
+  1440x900.
+- **Medir CSS com `transition` no meio: esperar a transição assentar antes
+  de ler `getComputedStyle`** — o anel de foco do `.seg__opt`
+  (`box-shadow`) tem `transition: box-shadow .15s ease`; lido 0-50ms depois
+  do Tab, o valor vinha parcial (rgba com alpha ~0.74, raio ~1.48px em vez
+  de 2px) e parecia bug. Esperar ~300ms (ou isolar sem transição) antes de
+  medir estado final de foco/hover.
 - **Medição sem ferramenta de browser dedicada:** mesma receita de
   [[feedback_medir_site_sem_browser_tool]] (`playwright-core` + `sharp`,
   versão 1.60.0 bateu com Chromium já em cache nesta máquina). Testado:

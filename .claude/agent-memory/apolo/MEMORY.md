@@ -4,3 +4,4 @@
 - [Medição visual no Expo Web](project_medicao_visual_expo_web.md) — fluxo de corrida, telas ocultas no DOM, Metro em CI congela bundle
 - [Texto do site](project_copy_site.md) — estratégia de franqueza, marcadores [confirmar]/[compromisso], recursos que só são mock
 - [Site x artes do dono](project_site_artes_do_dono.md) — 4 reprovações: véu apaga foto, títulos 28px, cartão repetido; comparar com a arte original
+- [Formulario do site-cine](project_formulario_site_cine.md) — 5a reprovacao: palco sticky corta o cartao, peso 700 inexistente, foco quadra pilula

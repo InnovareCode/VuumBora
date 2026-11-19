@@ -32,6 +32,18 @@
   --space-6: 3rem;
   --space-7: 4.5rem;
   --space-8: 7rem;
+
+  /* Tokens do formulário (seção 1.4 da especificação) */
+  color-scheme: dark;
+  --danger: #FF8A80;
+  --danger-ring: rgba(255, 138, 128, 0.16);
+  --field-bg: rgba(255, 255, 255, 0.05);
+  --field-bg-focus: rgba(255, 255, 255, 0.08);
+  --field-border: rgba(255, 255, 255, 0.14);
+  --field-border-hover: rgba(255, 255, 255, 0.26);
+  --label: #C9D3DE;
+  --placeholder: #7D8B9B;
+  --ring: 0 0 0 4px rgba(255, 204, 0, 0.18);
 }
 
 /* ---------- reset mínimo ---------- */
@@ -81,6 +93,26 @@ h1, h2, h3 {
   margin-bottom: var(--space-4);
 }
 
+/* Abertura de seção padrão (motivos, FAQ, simulador): rótulo mono +
+   título grande, sempre alinhados à esquerda do conteúdo que segue. */
+.section-head {
+  margin-bottom: 40px;
+  max-width: 640px;
+}
+.section-head .eyebrow {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 0.75rem;
+}
+.section-head h2 {
+  font-size: clamp(2rem, 1.3rem + 2.2vw, 2.75rem);
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+@media (max-width: 640px) {
+  .section-head { margin-bottom: 28px; }
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -102,7 +134,7 @@ h1, h2, h3 {
   color: var(--canvas);
   padding: 0.75rem 1.25rem;
   border-radius: var(--radius-sm);
-  font-weight: 700;
+  font-weight: 800;
   text-decoration: none;
   transition: top 0.2s ease;
 }
@@ -110,7 +142,10 @@ h1, h2, h3 {
   top: var(--space-3);
 }
 
-/* Foco visível consistente, nunca removido */
+/* Foco visível consistente, nunca removido. Sem border-radius fixo: o
+   contorno segue o raio do próprio elemento (pílula, círculo, campo).
+   Antes, `border-radius: 4px` aqui quadrava o botão "Enviar candidatura"
+   (999px) e os círculos de 44px do carrossel ao receber foco. */
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
@@ -119,7 +154,6 @@ summary:focus-visible,
 [tabindex]:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
-  border-radius: 4px;
 }
 
 ::selection {
@@ -146,7 +180,7 @@ summary:focus-visible,
   gap: 0.5rem;
   padding: 0.95rem 1.75rem;
   border-radius: 999px;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 1rem;
   text-decoration: none;
   border: none;
@@ -174,6 +208,49 @@ summary:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .button { transition: background-color 0.2s ease; }
   .button--primary:hover { transform: none; }
+}
+
+/* Botão "Enviar candidatura": mesma pílula do .button--primary, com
+   dimensão e estados próprios de botão de envio (seção 1.4). */
+.button--submit {
+  width: 100%;
+  height: 52px;
+  margin-top: 6px;
+  letter-spacing: -0.01em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 12px 28px -14px rgba(255, 204, 0, 0.6);
+}
+.button--submit:active {
+  background: #E6B800;
+  transform: translateY(0) scale(0.99);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.18);
+}
+.button--submit:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px #0A1119, 0 0 0 5px var(--accent);
+}
+/* "Enviando...": continua amarelo (nunca o cinza de :disabled padrão,
+   que parecia erro de carregamento). Especificidade de 2 classes +
+   :disabled vence a regra genérica .button--primary:disabled. */
+.button--submit.is-loading { cursor: progress; }
+.button--submit.is-loading:disabled {
+  background: var(--accent);
+  color: var(--canvas);
+  opacity: 0.72;
+  cursor: progress;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 12px 28px -14px rgba(255, 204, 0, 0.6);
+}
+.button__spinner {
+  display: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #0A1119;
+  border-top-color: transparent;
+  animation: button-spin 0.7s linear infinite;
+}
+.button--submit.is-loading .button__spinner { display: inline-block; }
+@keyframes button-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ---------- divisores finos, nunca cinza padrão ---------- */
@@ -438,12 +515,22 @@ summary:focus-visible,
 .after-journey > section {
   padding-block: var(--space-7);
 }
+@media (min-width: 900px) {
+  .after-journey > section {
+    padding-block: 112px;
+  }
+  /* O compromisso é uma faixa, não uma seção com título: entra mais
+     perto do que vem antes e depois, mesmo no desktop. */
+  .after-journey > section.commitment-section {
+    padding-block: 72px;
+  }
+}
 
 /* ---------- motivos ---------- */
 .reasons__grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--space-4);
+  gap: 20px;
 }
 @media (min-width: 640px) {
   .reasons__grid { grid-template-columns: repeat(2, 1fr); }
@@ -452,150 +539,366 @@ summary:focus-visible,
   .reasons__grid { grid-template-columns: repeat(4, 1fr); }
 }
 .reason-card {
-  background: var(--panel);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: var(--radius);
-  padding: var(--space-4);
+  position: relative;
+  min-height: 248px;
+  padding: 28px 24px 32px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)), #111B25;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+/* Antes, o texto terminava em alturas diferentes entre cartões e o
+   cartão 3 sobrava ~70px de painel vazio embaixo. O min-height iguala
+   o fundo dos quatro; some abaixo de 640px (1 coluna, sem razão pra
+   igualar). */
+.reason-card::before {
+  content: '';
+  display: block;
+  width: 28px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  margin-bottom: 20px;
+}
+.reason-card:hover {
+  border-color: rgba(255, 204, 0, 0.32);
+  transform: translateY(-2px);
 }
 .reason-card__label {
   display: block;
-  margin-bottom: var(--space-2);
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
 }
 .reason-card__title {
-  font-size: 1.25rem;
-  margin-bottom: var(--space-1);
+  font-size: 1.375rem;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  margin: 10px 0;
 }
 .reason-card__body {
   color: var(--text-secondary);
-  font-size: 0.95rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+@media (max-width: 640px) {
+  .reason-card { min-height: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reason-card { transition: border-color 0.2s ease; }
+  .reason-card:hover { transform: none; }
 }
 
-/* ---------- compromisso público ---------- */
+/* ---------- compromisso público ----------
+   Antes: fundo rgba(255,204,0,.18) sobre #0A1119 dava ~#36331A, um
+   verde-oliva sujo fora da paleta, com borda amarela sólida — parecia
+   alerta de sistema, não promessa da marca. */
 .commitment {
-  display: flex;
-  gap: var(--space-3);
-  align-items: flex-start;
-  border: 1.5px solid var(--accent);
-  border-radius: var(--radius);
-  padding: var(--space-4) var(--space-5);
-  background: var(--accent-muted);
+  max-width: 880px;
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 24px;
+  align-items: start;
+  padding: 36px 40px;
+  border-radius: 24px;
+  background: radial-gradient(120% 160% at 0% 0%, rgba(255, 204, 0, 0.09) 0%, rgba(255, 204, 0, 0) 55%), #111B25;
+  border: 1px solid rgba(255, 204, 0, 0.28);
 }
-.commitment__icon {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  margin-top: 2px;
+.commitment__icon-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 204, 0, 0.12);
+  border: 1px solid rgba(255, 204, 0, 0.3);
   color: var(--accent);
 }
+.commitment__icon {
+  width: 26px;
+  height: 26px;
+  margin: 0;
+}
+.commitment .eyebrow {
+  display: block;
+  margin-bottom: 8px;
+}
 .commitment p {
-  font-size: 1.05rem;
+  font-size: 1.25rem;
+  line-height: 1.5;
+  max-width: 52ch;
   color: var(--text-primary);
 }
+@media (max-width: 639px) {
+  .commitment {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 24px;
+  }
+  .commitment p { font-size: 1.0625rem; }
+}
 
-/* ---------- faq ---------- */
+/* ---------- faq ----------
+   Antes, 5 caixas de 1100x66px com 850px de barra vazia entre a
+   pergunta e o "+" (que era o caractere da mono, não um ícone). Agora:
+   2 colunas a partir de 960px, lista com fios e um "+" desenhado. */
+.faq__layout {
+  display: grid;
+  gap: var(--space-5);
+}
+@media (min-width: 960px) {
+  .faq__layout {
+    grid-template-columns: 340px 1fr;
+    gap: 64px;
+    align-items: start;
+  }
+  .faq__intro {
+    position: sticky;
+    top: 112px;
+  }
+}
+.faq__intro p {
+  margin-top: var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+}
+.faq__intro a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .faq__list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  max-width: 720px;
 }
 .faq__item {
-  background: var(--panel);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: none;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+  padding: 0;
+}
+.faq__item:last-child {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .faq__item summary {
   cursor: pointer;
-  font-weight: 700;
-  font-size: 1.05rem;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   list-style: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: var(--space-3);
+  gap: 24px;
+  min-height: 72px;
+  padding: 22px 0;
 }
 .faq__item summary::-webkit-details-marker { display: none; }
 .faq__item summary::after {
-  content: '+';
-  font-family: var(--font-mono);
-  font-size: 1.3rem;
-  color: var(--accent);
-  transition: transform 0.2s ease;
+  content: '';
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background:
+    linear-gradient(var(--accent), var(--accent)) center / 12px 1.75px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) center / 1.75px 12px no-repeat;
+  transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+.faq__item summary:hover::after {
+  border-color: var(--accent);
 }
 .faq__item[open] summary::after {
   transform: rotate(45deg);
+  border-color: var(--accent);
+  background:
+    linear-gradient(#0A1119, #0A1119) center / 12px 1.75px no-repeat,
+    linear-gradient(#0A1119, #0A1119) center / 1.75px 12px no-repeat,
+    var(--accent);
 }
 .faq__item p {
+  margin: 0;
+  padding: 0 56px 24px 0;
+  border: 0;
   color: var(--text-secondary);
-  margin-top: var(--space-2);
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--accent-muted);
+  font-size: 1rem;
+  line-height: 1.65;
+  max-width: 60ch;
 }
 @media (prefers-reduced-motion: reduce) {
   .faq__item summary::after { transition: none; }
 }
 
-/* ---------- simulação de taxa ---------- */
+/* ---------- simulação de taxa ----------
+   Painel único centrado (antes a seção ficava espremida à esquerda,
+   com 460px vazios à direita num container de 1270px). */
+.rate-sim__panel {
+  max-width: 960px;
+  margin-inline: auto;
+  padding: 24px;
+  border-radius: 24px;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+@media (min-width: 640px) {
+  .rate-sim__panel { padding: 40px; }
+}
 .rate-sim__intro {
   color: var(--text-secondary);
   max-width: 56ch;
-  margin-bottom: var(--space-4);
+  margin-top: 8px;
 }
+.rate-sim__grid {
+  display: grid;
+  gap: var(--space-5);
+}
+@media (min-width: 900px) {
+  .rate-sim__grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    align-items: center;
+  }
+}
+
+/* Coluna esquerda: controle */
 .rate-sim__control {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  max-width: 520px;
-  margin-bottom: var(--space-4);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 4px 0;
 }
 .rate-sim__control label {
-  font-weight: 700;
+  font: 500 0.8125rem/1.45 var(--font-body);
+  color: var(--label);
+  letter-spacing: 0.005em;
+  grid-column: 1;
 }
 .rate-sim__value {
-  font-family: var(--font-mono);
+  grid-column: 2;
+  display: inline-block;
+  min-width: 2.6em;
+  text-align: left;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 4rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
   color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
+.rate-sim__control input[type="range"] {
+  grid-column: 1 / -1;
+  margin-top: 12px;
+}
+.rate-sim__scale {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
 input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
-  accent-color: var(--accent);
-  height: 2rem;
+  height: 28px;
+  background: transparent;
+  cursor: pointer;
 }
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) 0 var(--pct, 50%), rgba(255, 255, 255, 0.12) var(--pct, 50%) 100%);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -9px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 4px solid #0A1119;
+  box-shadow: 0 0 0 1px rgba(255, 204, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+input[type="range"]::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 4px solid #0A1119;
+  box-shadow: 0 0 0 1px rgba(255, 204, 0, 0.6);
+}
+input[type="range"]:focus-visible { outline: none; }
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 1px rgba(255, 204, 0, 0.6), 0 0 0 7px rgba(255, 204, 0, 0.25);
+}
+input[type="range"]:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 7px rgba(255, 204, 0, 0.25);
+}
+
+/* Coluna direita: a conta, em formato de recibo */
 .rate-sim__breakdown {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-3);
-  max-width: 640px;
-  margin-bottom: var(--space-3);
+  display: block;
+  max-width: none;
+  margin: 0;
 }
 .rate-sim__breakdown div {
-  background: var(--panel);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .rate-sim__breakdown dt {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--text-secondary);
-  margin-bottom: 0.35rem;
+  margin: 0;
 }
 .rate-sim__breakdown dd {
-  font-size: 1.3rem;
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-align: right;
+  min-width: 7ch;
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
-#rate-net { color: var(--accent); }
+.rate-sim__breakdown div:last-child {
+  border-bottom: 0;
+  padding-top: 20px;
+}
+.rate-sim__breakdown div:last-child dt { color: var(--text-primary); }
+.rate-sim__breakdown div:last-child dd { font-size: 2rem; color: var(--accent); }
+
 .rate-sim__disclaimer {
   color: var(--text-secondary);
-  font-size: 0.9rem;
-  max-width: 56ch;
-}
-@media (max-width: 480px) {
-  .rate-sim__breakdown { grid-template-columns: 1fr; }
+  font-size: 0.8125rem;
+  max-width: none;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* ---------- formulário ---------- */
@@ -604,19 +907,24 @@ input[type="range"] {
 }
 #application-form {
   display: grid;
-  gap: var(--space-3);
+  gap: 14px;
   max-width: 640px;
 }
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 6px;
 }
 .field label,
-.field--choice legend {
-  font-weight: 700;
-  font-size: 0.95rem;
+.choice__label {
+  font: 500 0.8125rem/1.45 var(--font-body);
+  color: var(--label);
+  letter-spacing: 0.005em;
 }
+.optional {
+  color: var(--text-secondary);
+}
+
 .field input[type="text"],
 .field input[type="tel"],
 .field input[type="email"],
@@ -628,108 +936,313 @@ input[type="range"] {
      com o form-row de 2 colunas. */
   width: 100%;
   min-width: 0;
-  background: var(--canvas);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--radius-sm);
-  padding: 0.85rem 1rem;
+  height: 48px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
   color: var(--text-primary);
   font-size: 1rem;
+  line-height: 1;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
-.field input:focus-visible,
-.field select:focus-visible {
+.field input:hover,
+.field select:hover {
+  border-color: var(--field-border-hover);
+}
+.field input:focus,
+.field select:focus {
+  outline: none;
   border-color: var(--accent);
+  background: var(--field-bg-focus);
+  box-shadow: var(--ring);
 }
-.field input::placeholder { color: var(--text-secondary); }
+.field input::placeholder { color: var(--placeholder); opacity: 1; }
+
+/* Autopreenchimento do Chrome: sem isto o campo vira um bloco azul-claro
+   no cartão escuro. */
+.field input:-webkit-autofill,
+.field input:-webkit-autofill:hover,
+.field input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text-primary);
+  caret-color: var(--text-primary);
+  box-shadow: 0 0 0 1000px #1A2531 inset;
+  transition: background-color 9999s ease-out 0s;
+}
+.field input:-webkit-autofill:focus {
+  box-shadow: 0 0 0 1000px #1D2834 inset, var(--ring);
+}
+
+/* Select de UF: controle nativo continua (teclado, leitor de tela e
+   lista do celular funcionam), só o visual troca. */
+.field select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 38px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23A8B4C2' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px 8px;
+}
+.field select:focus {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23FFCC00' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.field select:invalid { color: var(--placeholder); }
+.field select option { background: #131E29; color: #F4F7FA; }
+/* Precisa vencer `.hero-card .form-row` (2 classes) em qualquer largura,
+   inclusive abaixo de 480px, onde aquela regra vira 1 coluna só. Medido:
+   sem o `.hero-card` aqui, a UF virava metade do cartão (185px) ou a
+   linha toda (308px no celular) em vez dos 136px fixos. */
+.hero-card .form-row.form-row--city,
+.form-row.form-row--city {
+  grid-template-columns: 1fr 136px;
+}
+
+/* Perguntas opcionais: rádio nativo cobre a opção inteira, transparente,
+   por isso teclado/Tab/leitor de tela funcionam sem JS nenhum. */
+.form-choices {
+  display: grid;
+  gap: 10px;
+}
 .field--choice {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-}
-.field--choice legend {
-  width: 100%;
-  margin-bottom: 0.25rem;
+  border: 0;
   padding: 0;
-}
-.field--choice label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-weight: 500;
-}
-.field--choice input[type="radio"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
-}
-.field--error {
-  color: #FF8A80;
-  font-size: 0.85rem;
   margin: 0;
+  min-inline-size: 0;
+}
+.choice__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.seg {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 76px;
+  gap: 3px;
+  padding: 3px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+}
+.seg__opt {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  border-radius: 9px;
+  font: 500 0.875rem/1 var(--font-body);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.seg__opt input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.seg__opt:hover { color: var(--text-primary); }
+.seg__opt:has(input:checked) {
+  background: rgba(255, 204, 0, 0.16);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(255, 204, 0, 0.55);
+}
+.seg__opt:has(input:focus-visible) {
+  box-shadow: 0 0 0 2px var(--canvas), 0 0 0 4px var(--accent);
+}
+@media (max-width: 539px) {
+  .choice__row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .seg { grid-auto-columns: 1fr; width: 100%; }
+  .seg__opt { height: 40px; }
+}
+
+/* ---------- erro de campo ---------- */
+.field-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--danger);
+  font-size: 0.78125rem;
+  font-weight: 500;
+  line-height: 1.4;
+  margin: 0;
+}
+.field-error__icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
 }
 .field[data-invalid="true"] input,
 .field[data-invalid="true"] select {
-  border-color: #FF8A80;
+  border-color: var(--danger);
+}
+.field[data-invalid="true"] input:focus,
+.field[data-invalid="true"] select:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 4px var(--danger-ring);
 }
 
+/* ---------- mensagem de status (servidor) ---------- */
 .form-status {
-  border-radius: var(--radius-sm);
-  padding: var(--space-3);
-  font-size: 0.95rem;
+  border-radius: 12px;
+  padding: 12px 14px 12px 16px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  border: 0;
+  border-left: 3px solid;
   display: none;
 }
 .form-status[data-state] { display: block; }
+.form-status h3 {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-bottom: 2px;
+}
 .form-status[data-state="error"] {
-  background: rgba(255, 138, 128, 0.12);
-  border: 1px solid rgba(255, 138, 128, 0.5);
+  background: rgba(255, 138, 128, 0.1);
+  border-left-color: var(--danger);
   color: #FFD3CF;
 }
 .form-status[data-state="info"] {
-  background: var(--accent-muted);
-  border: 1px solid var(--accent);
+  background: rgba(255, 255, 255, 0.05);
+  border-left-color: var(--text-secondary);
   color: var(--text-primary);
 }
 .form-status[data-state="success"] {
-  background: rgba(255, 204, 0, 0.1);
-  border: 1px solid var(--accent);
-  color: var(--text-primary);
+  background: none;
+  border: 0;
+  padding: 8px 0 4px;
+  text-align: center;
 }
-.form-status h3 {
-  font-size: 1.1rem;
-  margin-bottom: 0.35rem;
+.form-status[data-state="success"]::before {
+  content: "";
+  display: block;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: rgba(255, 204, 0, 0.14) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='%23FFCC00' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 26px no-repeat;
+  box-shadow: inset 0 0 0 1px rgba(255, 204, 0, 0.45);
+}
+.form-status[data-state="success"] h3 {
+  font-size: 1.375rem;
+  letter-spacing: -0.03em;
+  margin-bottom: 6px;
+}
+.form-status[data-state="success"] p {
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  max-width: 30ch;
+  margin-inline: auto;
 }
 
+/* ---------- aviso legal (resumido, texto completo num <details>) ---------- */
 .legal-notice {
   color: var(--text-secondary);
-  font-size: 0.82rem;
-  line-height: 1.6;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 2px;
 }
-.legal-notice a {
+.legal-notice summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--text-secondary);
+}
+.legal-notice summary::-webkit-details-marker { display: none; }
+.legal-notice[open] summary { margin-bottom: 6px; }
+.legal-notice p { margin: 0; }
+.legal-notice a,
+.legal-notice__link {
   color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
 }
 
 .application[data-submitted="true"] #application-form > *:not(.form-status):not(.legal-notice) {
   display: none;
 }
 
-/* ---------- rodapé ---------- */
+/* ---------- rodapé ----------
+   Antes: 4 parágrafos empilhados com no máximo 614px de largura, a
+   metade direita (656px) vazia, e a última linha publicava uma nota
+   interna de bastidor em vez de texto para o motorista. */
 .site-footer {
-  padding-block: var(--space-6);
-  border-top: 1px solid var(--accent-muted);
+  background: #070D14;
+  padding: 64px 0 32px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
-.site-footer p {
+.site-footer__grid {
+  display: grid;
+  gap: 40px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 900px) {
+  .site-footer__grid { grid-template-columns: 1.4fr 1fr 1fr; gap: 64px; }
+}
+.site-footer__brand p {
+  margin-top: var(--space-3);
   color: var(--text-secondary);
-  font-size: 0.88rem;
-  max-width: 68ch;
-  margin-bottom: var(--space-2);
+  font-size: 0.9375rem;
+}
+.site-footer h3 {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+.site-footer ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.site-footer li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9375rem;
+}
+.site-footer li svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
 }
 .site-footer a {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.site-footer a:hover {
   color: var(--accent);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-underline-offset: 3px;
+}
+.site-footer__bottom {
+  margin-top: 48px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  justify-content: space-between;
 }
 
 /* =========================================================
@@ -782,6 +1295,21 @@ noscript .reveal[data-hidden="true"] {
     rgba(var(--canvas-rgb), 0) 100%
   );
   pointer-events: none;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+/* Sólido ao rolar: no modo cinematográfico, só depois que a jornada
+   (palco fixo) já ficou atrás; fora dele, já no primeiro scroll — senão
+   a logo some no gradiente transparente sobre as seções de fundo liso.
+   Controlado por main.js (initHeaderScroll). */
+.site-header.is-scrolled {
+  background: rgba(10, 17, 25, 0.82);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .site-header.is-scrolled {
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
 }
 .site-header__brand {
   pointer-events: auto;
@@ -796,9 +1324,8 @@ noscript .reveal[data-hidden="true"] {
 
 .site-footer__logo {
   display: block;
-  height: 40px;
+  height: 36px;
   width: auto;
-  margin-bottom: var(--space-3);
 }
 
 /* =========================================================
@@ -823,7 +1350,12 @@ noscript .reveal[data-hidden="true"] {
 .hero-grid .faixa-text {
   padding: 0;
   margin-inline: 0;
-  max-width: 560px;
+  max-width: 600px;
+}
+/* H1 mede 44px hoje; a auditoria anterior (docs/auditoria-arte-site.md,
+   C2/C3) fixou 64-72px no desktop e nunca menos de 40px no celular. */
+.hero-grid h1 {
+  font-size: clamp(2.5rem, 1.6rem + 3vw, 4rem);
 }
 @media (min-width: 900px) {
   .hero-grid {
@@ -837,32 +1369,37 @@ noscript .reveal[data-hidden="true"] {
     padding-top: var(--space-2);
   }
   .hero-grid .hero-card {
-    flex: 0 0 380px;
+    flex: 0 0 440px;
   }
 }
 
 /* Cartão de candidatura em vidro fosco sobre a foto do amanhecer.
    @supports garante um plano B sólido onde backdrop-filter não existe. */
 .hero-card.application {
-  background: rgba(var(--panel-rgb), 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: var(--radius);
-  padding: var(--space-4);
-  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.65);
+  background: rgba(var(--panel-rgb), 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 30px 80px -24px rgba(0, 0, 0, 0.7);
+}
+@media (min-width: 480px) {
+  .hero-card.application { padding: 28px; }
 }
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
   .hero-card.application {
-    background: rgba(var(--panel-rgb), 0.56);
-    backdrop-filter: blur(18px) saturate(150%);
-    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    background: rgba(var(--panel-rgb), 0.72);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
   }
 }
-.hero-card .section-heading {
-  font-size: 1.15rem;
-  margin-bottom: var(--space-3);
+#candidatura {
+  scroll-margin-top: 92px;
 }
-.hero-card #application-form {
-  gap: var(--space-2);
+.hero-card .section-heading {
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  margin-bottom: 20px;
 }
 .hero-card .form-row {
   display: grid;
@@ -873,10 +1410,6 @@ noscript .reveal[data-hidden="true"] {
   .hero-card .form-row {
     grid-template-columns: 1fr 1fr;
   }
-}
-.hero-card .legal-notice {
-  font-size: 0.74rem;
-  line-height: 1.5;
 }
 
 /* =========================================================
