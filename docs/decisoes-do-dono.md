@@ -468,3 +468,26 @@ Com nome e CNPJ, duas coisas ficam liberadas:
 - um endereço de contato para pedidos de exclusão de dados. A LGPD dá esse
   direito, e o aviso precisa dizer para onde escrever. Hoje o projeto não
   tem nenhum canal de contato definido (ver decisão 11).
+
+## Canal de contato definido (19/11/2026)
+
+**contato@vuumbora.com.br**
+
+Com ele, o aviso de privacidade da lista de espera fica completo: controlador
+identificado (Innovare Code, CNPJ 09.813.446/0001-00) e endereço para onde a
+pessoa escreve ao pedir exclusão dos dados. O formulário fica liberado para ir
+ao ar.
+
+**Três cuidados que vêm junto, e não são formalidade:**
+
+1. **A caixa precisa existir e ser lida.** Publicar um endereço que ninguém
+   acompanha é pior que não publicar: a LGPD dá prazo de resposta a pedido do
+   titular, e o silêncio conta contra quem recebeu.
+2. **Esse mesmo endereço vai virar canal de suporte na prática**, mesmo sem
+   ninguém ter decidido isso. Quem tem dúvida sobre a corrida escreve no
+   contato que achar. Vale prever isso antes de o app lançar (decisão 11).
+3. **O endereço aparecerá publicamente no site**, então vai receber spam.
+   Filtro e expectativa de volume fazem parte.
+
+**Ainda pendente:** a cidade da empresa, para o bloco institucional. Não
+bloqueia o formulário, mas pesa na credibilidade.
