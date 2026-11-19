@@ -491,3 +491,17 @@ ao ar.
 
 **Ainda pendente:** a cidade da empresa, para o bloco institucional. Não
 bloqueia o formulário, mas pesa na credibilidade.
+
+## Cidade da empresa: decidido não publicar (19/11/2026)
+
+O dono optou por não exibir a cidade no bloco institucional. **Isso é uma
+decisão, não uma pendência** — ninguém deve voltar a cobrar essa informação.
+
+O bloco fica com: Innovare Code, CNPJ 09.813.446/0001-00 e
+contato@vuumbora.com.br. É o suficiente para a pessoa saber com quem está
+lidando e para o aviso de privacidade.
+
+Registro honesto do que se perde: dizer de onde a empresa é ajuda
+principalmente com motorista, que tende a desconfiar de aplicativo sem
+origem declarada. Se mais adiante isso aparecer como objeção real, o campo
+é fácil de acrescentar.
