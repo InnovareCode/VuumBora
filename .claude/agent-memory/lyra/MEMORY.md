@@ -28,3 +28,7 @@
 - [Variar forma de bloco foto+texto sem duplicar componente](feedback_photocard_variar_forma_sem_duplicar.md) — proporção como prop (`ratio`/`aspect-ratio` via CSS var), variação vive no layout ao redor, não na peça.
 - [Alternância clara/escura via escopo de custom property](feedback_light_section_token_scoping.md) — `.light-section` redefine os mesmos tokens, zero variante de componente.
 - [Carrossel automático sem reprovar acessibilidade](feedback_carrossel_autoplay_acessivel.md) — pausa em hover/foco/aba oculta, reduced-motion, funciona sem JS, testado com Playwright esperando o intervalo real.
+- [clamp(vw) vs. container com max-width fixo](bug_clamp_vw_vs_container_maxwidth.md) — H1 quebrava em 3 linhas só em telas LARGAS; teto do clamp tem que respeitar a largura platô do container, achada por bisseção real.
+- [opacity no botão dilui contraste do texto](bug_opacity_botao_dilui_contraste_texto.md) — cor nominal passa no cálculo, pixel renderizado real reprova; nunca medir contraste pela cor computada quando há ancestral com opacity<1.
+- [site-cine — página de pré-lançamento estática](project_site_cine_pagina_estatica.md) — HTML/CSS/JS puro sem build, jornada cinematográfica por scroll, véu calibrado por pixel, config.js pro endpoint.
+- [`<picture>` sem altura vira `img height:100%` em auto](bug_picture_sem_altura_img_height100_vira_auto.md) — CSS2.1 10.5; foto cai pra proporção intrínseca mesmo com object-fit:cover.

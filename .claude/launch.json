@@ -4,8 +4,27 @@
     {
       "name": "site",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--workspace", "@vuumbora/site"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace",
+        "@vuumbora/site"
+      ],
       "port": 3000
+    },
+    {
+      "name": "site-cine",
+      "runtimeExecutable": "npx.cmd",
+      "runtimeArgs": [
+        "-y",
+        "http-server",
+        "site-cine/public",
+        "-p",
+        "4300",
+        "-c-1",
+        "--silent"
+      ],
+      "port": 4300
     }
   ]
 }

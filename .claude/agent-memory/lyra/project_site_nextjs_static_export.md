@@ -489,3 +489,83 @@ sozinho" revogando o "sem autoplay" que eu tinha acabado de implementar.
 
 Ver também [[feedback_light_section_token_scoping]] e
 [[feedback_carrossel_autoplay_acessivel]].
+
+## Quatro ajustes pontuais pós-aprovação (19/11/2026, mesmo dia)
+
+Site já publicado e aprovado na estrutura; o dono pediu 4 ajustes pontuais
+(não outra reescrita): H1 em duas linhas em telas largas, tirar o branco
+chapado da seção clara, fotos do carrossel sem recorte, e trocar "Quem está
+por trás" por botões de loja desabilitados (CNPJ/contato indo pro rodapé).
+No meio da tarefa o Atlas repassou os endereços reais de WhatsApp/Instagram
+que estavam pendentes.
+
+- **H1 quebrando em 3 linhas só em telas LARGAS (1920px), não em 1440px**:
+  bug de `clamp(…,6.8vw,7rem)` vs. container com `max-width` fixo — ver
+  [[bug_clamp_vw_vs_container_maxwidth]] (causa raiz completa). Correção:
+  teto do clamp de `7rem`→`6.125rem`, achado por bisseção real no navegador,
+  não por estimativa. `.intro` fica em 543,9px de largura para QUALQUER
+  janela ≥1276px (o `--site-container-max:1180px` já platô antes disso) —
+  isso é o fato chave pra qualquer título futuro nesta página.
+- **Fundo da seção clara (carrossel) e cartões brancos chapados**: o dono
+  rejeitou "branco em si... em NENHUMA parte do site". `--color-background-base`
+  e `--color-background-surface`/`--site-card-bg` (dentro de `.light-section`,
+  ver [[feedback_light_section_token_scoping]]) só são consumidos via
+  `background:` (shorthand, nunca `background-color:` — confirmado por grep
+  antes de trocar), então aceitam `linear-gradient()` sem quebrar nada.
+  Fundo da seção virou degradê creme (amarelo bem diluído) → azul-acinzentado
+  (mesmo tom final de `--gradient-search-light`); cartão virou branco → areia
+  clara, mais claro e mais quente que o fundo ao redor (medido por pixel real
+  no vão entre cartões: ~[241,241,238] da seção contra ~[251,248,238] do
+  cartão — diferença pequena mas real e mensurável). Reforcei com
+  `box-shadow: var(--elevation-1)` no `.card` pra não depender só do degradê
+  pra separar cartão de fundo. De brinde, esse mesmo escopo de token já
+  resolveu o `PassengerNote`/`.box` e o `.notConfigured` do `WaitlistForm`
+  (ambos também dentro de `.light-section`) sem tocar nos componentes deles.
+  **Achado no caminho**: `SectionHeading`'s eyebrow (pílula/caption) era
+  sempre `--color-brand-yellow` fixo — ótimo em seção escura, mas ~1,5:1 de
+  contraste (reprova) sobre o fundo claro antigo (quase branco). Virou
+  `var(--site-eyebrow-ink)`, amarelo por padrão em `:root`, redefinido pra
+  navy dentro de `.light-section` — mesmo padrão de token scoping, achado só
+  porque medi o contraste de TUDO na seção, não só o texto que eu tinha
+  acabado de mexer.
+- **Fotos do carrossel cortadas numa caixa de proporção errada**: as 6 fotos
+  de `foto900` são todas 900×975 (proporção 0,9231, medido via
+  `img.naturalWidth/Height` no navegador para as 6, não só a primeira) mas
+  `ArtCard.module.css` forçava `.media{aspect-ratio:4/3}` — `object-fit:cover`
+  cortava a foto pra caber numa caixa bem mais larga que ela. Troquei pra
+  `aspect-ratio:12/13` (= 900/975): a caixa agora SEGUE a foto, não o
+  contrário — a foto aparece inteira (confirmado: `mediaRatio` e
+  `naturalRatio` batem, diferença <0,3%, cover vira equivalente a contain).
+- **`AboutBlock` ("Quem está por trás") removido, virou `AppDownloadBlock`**:
+  dois botões de loja (Google Play/App Store) `disabled` nativo +
+  `aria-disabled="true"` + `aria-describedby` apontando pra um parágrafo
+  SEMPRE visível explicando "em breve" (não só a cor sinaliza desabilitado).
+  CNPJ/razão social (`Innovare Code`) migraram pro `Footer`
+  (`FOOTER_CONTENT.legalEntity`), que já tinha o e-mail de contato.
+  **Armadilha pega medindo, não só lendo o CSS**: a primeira versão usava
+  `opacity:0.55` no botão inteiro pra parecer desabilitado — isso diluía o
+  texto da legenda pequena pra 3,95:1 de contraste real (medido por pixel,
+  a cor nominal do token passava em 6,8:1+ isoladamente). Ver
+  [[bug_opacity_botao_dilui_contraste_texto]]. Correção: tirar a opacity do
+  texto, sinalizar "desabilitado" só pela borda discreta + ausência de
+  cor de marca + `disabled` nativo + a legenda em texto.
+- **Redes sociais do rodapé**: endereços reais chegaram no meio da tarefa
+  (WhatsApp fixo de Natal `84 3113-2584`→`wa.me/558431132584`, Instagram
+  `@vuumbora.oficial`) em `src/content/social.ts`. Ícones são SVG inline
+  (sem lib de ícone, 2 ícones não justificam o peso de um pacote) com
+  `aria-label` próprio no `<a>` (não só no ícone, que é `aria-hidden`),
+  `target="_blank"` com "(abre em nova aba)" no rótulo, `rel="noopener
+  noreferrer"`, e `min-height:var(--layout-touch-target)` (44px) no link
+  inteiro. Lista filtra por `href` truthy — endereço vazio no futuro não
+  renderiza o ícone, nunca aponta pra lugar nenhum.
+- **Medido no navegador em 320/390/768/1440/1280/1920** (Playwright +
+  `sharp` por pixel real, receita de [[feedback_medir_site_sem_browser_tool]]):
+  zero overflow nas 4 larguras do critério de pronto; H1 em 2 linhas nas 3
+  larguras grandes (confirmado também por `rectHeight/lineHeight` batendo
+  com 2, não só contagem visual); todo texto novo/alterado ≥4,5:1 (pior
+  caso real 6,23:1, exceto o que corrigi acima); `npm run check` (raiz) e
+  `lint`/`typecheck` do site em 0.
+
+Ver também [[bug_clamp_vw_vs_container_maxwidth]],
+[[bug_opacity_botao_dilui_contraste_texto]] e
+[[feedback_light_section_token_scoping]].

@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VuumBora: pré-lançamento para motoristas em Natal e Grande Natal</title>
+<meta name="description" content="A VuumBora está chegando a Natal e à Grande Natal. O cadastro de motorista abre antes do aplicativo. Candidate-se agora.">
+<meta name="theme-color" content="#0A1119">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230A1119'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23FFCC00'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Poppins:wght@500;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<a class="skip-link" href="#candidatura">Pular para o formulário de candidatura</a>
+
+<div class="route-line" aria-hidden="true">
+  <svg viewBox="0 0 40 400" preserveAspectRatio="none">
+    <path class="route-line__path" d="M20 8 C 30 60, 10 100, 20 150 C 30 200, 10 250, 20 300 C 28 330, 14 360, 20 392" />
+    <path class="route-line__progress" d="M20 8 C 30 60, 10 100, 20 150 C 30 200, 10 250, 20 300 C 28 330, 14 360, 20 392" />
+    <circle class="route-line__pin" cx="20" cy="8" r="4" />
+    <circle class="route-line__pin" cx="20" cy="392" r="4" />
+  </svg>
+</div>
+
+<main>
+
+  <section class="journey" data-journey aria-label="O primeiro dia ao volante com a VuumBora">
+    <div class="journey__stage">
+
+      <div class="faixa" data-faixa="1">
+        <div class="faixa__media">
+          <picture>
+            <source media="(min-width: 961px)" srcset="assets/img/amanhecer-1920.jpg">
+            <img src="assets/img/amanhecer-960.jpg" alt="Vista de dentro do carro ao amanhecer, com o litoral e as montanhas de Natal iluminados pela luz âmbar do início do dia." width="1920" height="1080" loading="eager" fetchpriority="high">
+          </picture>
+        </div>
+        <div class="faixa__veil" aria-hidden="true"></div>
+        <div class="journey__embers" aria-hidden="true">
+          <span style="left:12%; animation-duration:9s; animation-delay:0s; --drift-x:14px;"></span>
+          <span style="left:22%; animation-duration:11s; animation-delay:1.2s; --drift-x:-10px;"></span>
+          <span style="left:34%; animation-duration:8.5s; animation-delay:2.4s; --drift-x:8px;"></span>
+          <span style="left:48%; animation-duration:10s; animation-delay:0.6s; --drift-x:-12px;"></span>
+          <span style="left:58%; animation-duration:12s; animation-delay:3s; --drift-x:10px;"></span>
+          <span style="left:67%; animation-duration:9.5s; animation-delay:1.8s; --drift-x:-8px;"></span>
+          <span style="left:76%; animation-duration:10.5s; animation-delay:2.9s; --drift-x:12px;"></span>
+          <span style="left:85%; animation-duration:8.8s; animation-delay:0.3s; --drift-x:-14px;"></span>
+        </div>
+        <div class="faixa-text">
+          <span class="eyebrow">PRÉ-LANÇAMENTO · NATAL E GRANDE NATAL</span>
+          <h1>Quem entra agora, entra no começo.</h1>
+          <p class="faixa-text__body">A VuumBora está chegando a Natal e à Grande Natal. O cadastro de motorista abre antes do aplicativo.</p>
+          <a class="button button--primary" href="#candidatura">Quero me candidatar</a>
+        </div>
+      </div>
+
+      <div class="faixa" data-faixa="2">
+        <div class="faixa__media">
+          <picture>
+            <source media="(min-width: 961px)" srcset="assets/img/dia-1920.jpg">
+            <img src="assets/img/dia-960.jpg" alt="Vista de dentro do carro atravessando uma ponte estaiada em pleno dia, com o céu azul e a cidade ao fundo." width="1920" height="1080" loading="lazy">
+          </picture>
+        </div>
+        <div class="faixa__veil" aria-hidden="true"></div>
+        <div class="faixa-text">
+          <h2>A cidade roda o dia inteiro.</h2>
+          <p class="faixa-text__body">Taxa menor e repasse mais rápido para quem passa o dia no volante.</p>
+        </div>
+      </div>
+
+      <div class="faixa" data-faixa="3">
+        <div class="faixa__media">
+          <picture>
+            <source media="(min-width: 961px)" srcset="assets/img/entardecer-1920.jpg">
+            <img src="assets/img/entardecer-960.jpg" alt="Vista de dentro do carro ao entardecer, numa rua residencial com palmeiras, voltando para casa no fim do dia." width="1920" height="1080" loading="lazy">
+          </picture>
+        </div>
+        <div class="faixa__veil" aria-hidden="true"></div>
+        <div class="faixa-text">
+          <h2>No fim do dia, o que importa é o que sobrou.</h2>
+          <p class="faixa-text__body">É por isso que a taxa pesa tanto.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <div class="divider" role="presentation"></div>
+
+  <div class="after-journey">
+
+    <section class="reasons reveal">
+      <div class="container">
+        <h2 class="visually-hidden">Motivos para se candidatar</h2>
+        <ul class="reasons__grid">
+          <li class="reason-card">
+            <span class="reason-card__label">TAXA</span>
+            <h3 class="reason-card__title">Taxa menor.</h3>
+            <p class="reason-card__body">O que fica com quem dirige é o que decide se vale a pena. A VuumBora começa por aí.</p>
+          </li>
+          <li class="reason-card">
+            <span class="reason-card__label">REPASSE</span>
+            <h3 class="reason-card__title">Repasse mais rápido.</h3>
+            <p class="reason-card__body">Receber rápido é o que paga a conta no fim da semana.</p>
+          </li>
+          <li class="reason-card">
+            <span class="reason-card__label">AQUI</span>
+            <h3 class="reason-card__title">Suporte daqui.</h3>
+            <p class="reason-card__body">Quem atende conhece a cidade onde você roda.</p>
+          </li>
+          <li class="reason-card">
+            <span class="reason-card__label">ESCOLHA</span>
+            <h3 class="reason-card__title">Motorista mulher.</h3>
+            <p class="reason-card__body">O passageiro poderá escolher essa opção ao pedir a corrida.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <div class="container"><div class="divider" role="presentation"></div></div>
+
+    <section>
+      <div class="container">
+        <aside class="commitment reveal" aria-label="Compromisso público">
+          <svg class="commitment__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 2L4 5v6c0 5 3.4 8.7 8 11 4.6-2.3 8-6 8-11V5l-8-3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <p>As regras de taxa da plataforma e de repasse ao motorista serão publicadas antes de o cadastro de motoristas ser aberto.</p>
+        </aside>
+      </div>
+    </section>
+
+    <div class="container"><div class="divider" role="presentation"></div></div>
+
+    <section class="faq reveal" aria-labelledby="faq-title">
+      <div class="container">
+        <h2 id="faq-title" class="section-heading">Perguntas frequentes</h2>
+        <div class="faq__list">
+          <details class="faq__item">
+            <summary>Quando começa?</summary>
+            <p>Ainda não temos data. Quem está na lista fica sabendo antes.</p>
+          </details>
+          <details class="faq__item">
+            <summary>Preciso pagar alguma coisa?</summary>
+            <p>Não. A candidatura é gratuita e não existe taxa de inscrição.</p>
+          </details>
+          <details class="faq__item">
+            <summary>Qualquer um entra?</summary>
+            <p>Não. Cada candidatura é avaliada antes de virar vaga.</p>
+          </details>
+          <details class="faq__item">
+            <summary>Que documentos preciso mandar agora?</summary>
+            <p>Nenhum. Nesta etapa pedimos só contato e cidade. Documento e endereço só depois da aprovação.</p>
+          </details>
+          <details class="faq__item">
+            <summary>Vocês vendem meus dados?</summary>
+            <p>Não. Os dados servem para avaliar a candidatura e avisar o resultado. Nada além disso.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <div class="container"><div class="divider" role="presentation"></div></div>
+
+    <section class="rate-sim reveal" aria-labelledby="rate-sim-title">
+      <div class="container">
+        <h2 id="rate-sim-title" class="section-heading">Simule a taxa</h2>
+        <p class="rate-sim__intro">Arraste a barra para ver quanto sobraria de uma corrida de exemplo.</p>
+        <div class="rate-sim__control">
+          <label for="rate-range">Taxa de exemplo: <span class="rate-sim__value" id="rate-range-value">20%</span></label>
+          <input type="range" id="rate-range" min="0" max="40" value="20" step="1" aria-describedby="rate-sim-disclaimer">
+        </div>
+        <dl class="rate-sim__breakdown" id="rate-breakdown">
+          <div>
+            <dt>Corrida de exemplo</dt>
+            <dd>R$ 100,00</dd>
+          </div>
+          <div>
+            <dt>Taxa</dt>
+            <dd id="rate-fee">R$ 20,00</dd>
+          </div>
+          <div>
+            <dt>Fica com você</dt>
+            <dd id="rate-net">R$ 80,00</dd>
+          </div>
+        </dl>
+        <p class="rate-sim__disclaimer" id="rate-sim-disclaimer">A taxa real da VuumBora será publicada antes de o cadastro de motoristas ser aberto. Este valor da simulação é só um exemplo para mostrar a conta.</p>
+      </div>
+    </section>
+
+    <div class="container"><div class="divider" role="presentation"></div></div>
+
+    <section class="application reveal" id="candidatura" aria-labelledby="candidatura-title">
+      <div class="container">
+        <h2 id="candidatura-title" class="section-heading">Candidatura de motorista</h2>
+
+        <noscript>
+          <p class="legal-notice">Esta candidatura precisa de JavaScript habilitado para ser enviada. Ative o JavaScript no navegador ou fale pelo WhatsApp (84) 3113-2584.</p>
+        </noscript>
+
+        <form id="application-form" novalidate>
+          <div class="field">
+            <label for="field-name">Nome completo</label>
+            <input type="text" id="field-name" name="name" autocomplete="name" required>
+          </div>
+
+          <div class="field">
+            <label for="field-phone">Telefone (WhatsApp)</label>
+            <input type="tel" id="field-phone" name="phone" autocomplete="tel" required>
+          </div>
+
+          <div class="field">
+            <label for="field-email">E-mail</label>
+            <input type="email" id="field-email" name="email" autocomplete="email" required>
+          </div>
+
+          <div class="field">
+            <label for="field-city">Cidade onde dirige</label>
+            <input type="text" id="field-city" name="city" autocomplete="address-level2" required>
+          </div>
+
+          <div class="field">
+            <label for="field-state">UF</label>
+            <select id="field-state" name="state" autocomplete="address-level1" required>
+              <option value="" disabled selected>Selecione</option>
+              <option value="AC">AC</option>
+              <option value="AL">AL</option>
+              <option value="AP">AP</option>
+              <option value="AM">AM</option>
+              <option value="BA">BA</option>
+              <option value="CE">CE</option>
+              <option value="DF">DF</option>
+              <option value="ES">ES</option>
+              <option value="GO">GO</option>
+              <option value="MA">MA</option>
+              <option value="MT">MT</option>
+              <option value="MS">MS</option>
+              <option value="MG">MG</option>
+              <option value="PA">PA</option>
+              <option value="PB">PB</option>
+              <option value="PR">PR</option>
+              <option value="PE">PE</option>
+              <option value="PI">PI</option>
+              <option value="RJ">RJ</option>
+              <option value="RN">RN</option>
+              <option value="RS">RS</option>
+              <option value="RO">RO</option>
+              <option value="RR">RR</option>
+              <option value="SC">SC</option>
+              <option value="SP">SP</option>
+              <option value="SE">SE</option>
+              <option value="TO">TO</option>
+            </select>
+          </div>
+
+          <fieldset class="field field--choice">
+            <legend>Já dirige por aplicativo?</legend>
+            <label><input type="radio" name="alreadyDrivesForApp" value="true"> Sim</label>
+            <label><input type="radio" name="alreadyDrivesForApp" value="false"> Não</label>
+          </fieldset>
+
+          <fieldset class="field field--choice">
+            <legend>Tem veículo próprio?</legend>
+            <label><input type="radio" name="hasOwnVehicle" value="true"> Sim</label>
+            <label><input type="radio" name="hasOwnVehicle" value="false"> Não</label>
+          </fieldset>
+
+          <div class="form-status" id="form-status" role="status" aria-live="polite"></div>
+
+          <button type="submit" class="button button--primary">Enviar candidatura</button>
+
+          <p class="legal-notice">Usamos nome, telefone, e-mail, cidade e UF só para avaliar sua candidatura e avisar o resultado. Controlado por Innovare Code (CNPJ 09.813.446/0001-00). Não vendemos nem repassamos seus dados a ninguém. Para remover seus dados, escreva para <a href="mailto:contato@vuumbora.com.br">contato@vuumbora.com.br</a>.</p>
+        </form>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <p>VuumBora, mobilidade urbana.</p>
+    <p>Desenvolvido por Innovare Code, CNPJ 09.813.446/0001-00.</p>
+    <p>Contato <a href="mailto:contato@vuumbora.com.br">contato@vuumbora.com.br</a>. WhatsApp <a href="https://wa.me/558431132584">(84) 3113-2584</a> e Instagram <a href="https://www.instagram.com/vuumbora.oficial">@vuumbora.oficial</a>.</p>
+    <p>A marca é real, então não existe aviso de marca fictícia. As fotos são geradas por computador e serão trocadas por fotos reais depois, decisão do dono em 19/11/2026.</p>
+  </div>
+</footer>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/main.js" defer></script>
+</body>
+</html>
