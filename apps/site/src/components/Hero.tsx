@@ -1,17 +1,21 @@
 import { HERO_CONTENT } from '@/content/hero';
 import { Container } from './Container';
 import { DriverApplicationForm } from './DriverApplicationForm';
-import { HeroScene } from './HeroScene';
 import styles from './Hero.module.css';
 
 /**
  * Página única de pré-lançamento (`docs/decisoes-do-dono.md` → "Virada do
- * site", 19/11/2026): um fundo escuro limpo (sem foto cinematográfica —
- * decisão deliberada, pesa menos e deixa a `HeroScene` ser o único foco
- * visual) + a cena animada + a candidatura do motorista, que é a AÇÃO da
- * página, lado a lado com o texto — não um link de âncora para mais
- * embaixo. Em telas estreitas, a ordem de leitura empilha: texto → cena →
- * formulário, tudo ainda no primeiro scroll.
+ * site"): foto noturna de cidade costeira com ponte iluminada no fundo, o
+ * texto, e a candidatura do motorista — que é a AÇÃO da página — lado a lado,
+ * não um link de âncora para mais embaixo.
+ *
+ * A `HeroScene` (pino 3D sobre rota que se desenha) saiu daqui em 19/11/2026,
+ * quando a foto entrou. Não por ser ruim: por competir. A rota âmbar de 4px
+ * caía exatamente em cima dos rastros de luz âmbar da avenida na foto e
+ * sumia — medido no navegador, a rota continuava desenhada e visível no DOM e
+ * mesmo assim não se lia na tela. Dois elementos da mesma cor disputando o
+ * mesmo lugar: a foto mostra a cidade melhor do que o mapa desenhado sugeria.
+ * O componente continua no projeto, sem uso, caso o fundo mude.
  */
 export function Hero() {
   return (
@@ -25,7 +29,6 @@ export function Hero() {
             <p className={styles['honesty']}>{HERO_CONTENT.honesty}</p>
           </div>
           <div className={styles['action']}>
-            <HeroScene />
             <DriverApplicationForm />
           </div>
         </div>

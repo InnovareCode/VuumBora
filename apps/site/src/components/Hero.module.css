@@ -1,7 +1,70 @@
+/*
+ * O dono comparou a pagina com uma arte que MOSTRA Natal (ponte iluminada,
+ * rastros de luz) e apontou, com razao, que a nossa so DIZIA "Natal" em texto
+ * sobre gradiente. A foto noturna entra como fundo do hero para a cidade
+ * aparecer, nao so ser citada.
+ *
+ * Por que a foto esta num ::before de ALTURA LIMITADA, e nao no fundo do
+ * .hero inteiro: medido no navegador em 390px, o hero tem 390x1779 (proporcao
+ * 0,22) e a foto tem 1,79. Com `cover` no elemento todo, a foto era ampliada
+ * para 3185x1779 e so 12% da largura dela aparecia -- uma tira vertical
+ * borrada onde Natal nao se reconhecia. Nenhum `background-position` conserta
+ * uma fatia de 12%. Limitando a altura, a faixa volta a uma proporcao que a
+ * foto aguenta, e o gradiente a dissolve no navy antes do formulario.
+ *
+ * O escurecimento NAO e decorativo: sem ele o texto branco cai em cima dos
+ * rastros ambar e some. Contraste medido no print, nao no olho: titulo
+ * 18,9:1, subtitulo 8,8:1, aviso discreto 5,2:1 (minimo exigido 4,5:1).
+ */
 .hero {
   position: relative;
-  background: var(--gradient-screen);
+  isolation: isolate;
+  background-color: var(--color-background-base);
   padding-block: clamp(28px, 6vh, 72px) clamp(40px, 8vh, 96px);
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: -1;
+  height: clamp(380px, 54vh, 560px);
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(7, 13, 24, 0.82) 0%,
+      rgba(7, 13, 24, 0.58) 38%,
+      rgba(7, 13, 24, 0.92) 86%,
+      rgb(7, 13, 24) 100%
+    ),
+    url('/hero/natal-noite-768.jpg');
+  background-size: cover;
+  background-position: center 62%;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+/*
+ * A partir de 768px o hero ja e largo o bastante para a foto caber inteira na
+ * proporcao dela, entao ela cobre a secao toda e entra a versao nativa de
+ * 1376px. Abaixo disso o celular baixa 39 KB em vez de 104 KB -- o publico
+ * desta pagina e motorista no 4G.
+ */
+@media (min-width: 768px) {
+  .hero::before {
+    inset: 0;
+    height: auto;
+    background-image:
+      linear-gradient(
+        180deg,
+        rgba(7, 13, 24, 0.86) 0%,
+        rgba(7, 13, 24, 0.6) 42%,
+        rgba(7, 13, 24, 0.5) 70%,
+        rgba(7, 13, 24, 0.88) 100%
+      ),
+      url('/hero/natal-noite-1376.jpg');
+    background-position: center 68%;
+  }
 }
 
 .layout {
