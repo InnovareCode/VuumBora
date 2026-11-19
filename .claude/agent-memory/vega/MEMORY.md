@@ -1,2 +1,2 @@
-- [Lista de espera (apps/api)](project_lista_de_espera.md) — stack, contrato, pendências do dono (CNPJ ok, falta canal de exclusão)
+- [Lista de espera + candidatura motorista (apps/api)](project_lista_de_espera.md) — 2 endpoints/tabelas separados; checar apps/site antes de estender contrato
 - [Fastify setErrorHandler x statusCode](feedback_fastify_error_handler_statuscode.md) — bug real: handler genérico vira 500 pra 4xx/429; checar sempre com curl

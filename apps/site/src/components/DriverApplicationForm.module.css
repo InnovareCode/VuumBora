@@ -10,8 +10,8 @@
 
 .eyebrow {
   font-size: var(--font-size-small);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.06em;
+  font-weight: var(--peso-olho);
+  letter-spacing: var(--tracking-olho);
   text-transform: uppercase;
   color: var(--color-brand-yellow);
 }
@@ -19,7 +19,7 @@
 .title {
   margin-top: var(--spacing-2);
   font-size: var(--font-size-heading);
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--peso-titulo);
   color: var(--color-text-primary);
 }
 
@@ -234,7 +234,7 @@
 }
 
 .successTitle {
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--peso-titulo);
   font-size: var(--font-size-title);
   color: var(--color-text-primary);
 }

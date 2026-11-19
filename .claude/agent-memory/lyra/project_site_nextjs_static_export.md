@@ -201,3 +201,137 @@ espera (backend pronto, `POST /v1/waitlist`) e o bloco institucional.
 - **Rodapé**: `contactNote` mudou de "ainda não temos canal" (falso agora)
   para apontar `contato@vuumbora.com.br` — mesmo e-mail do aviso de
   privacidade da lista de espera.
+
+## Virada para página única de pré-lançamento (19/11/2026)
+
+O dono: "está com cara de site amador feito por um estagiário". Pedido
+mudou de vitrine longa e explicativa para **uma página só, clean, com uma
+ação clara** — candidatura de motorista. Reescrevi `apps/site` quase por
+inteiro (ver `docs/decisoes-do-dono.md` → "Virada do site").
+
+- **Removidos do projeto** (sem uso restante, confirmado por grep antes de
+  apagar): `PassengerSection`, `DriverSection`, `ServicesSection`,
+  `CredibilitySection`, `FaqSection`, `ClosingBanner`, `JourneyShowcase`,
+  `ScreensStrip`, `ShowcaseRow`, `Card`, `FeatureGrid`,
+  `CredibilityColumns`, `StatusTag`, `DisabledAction`, `StoreBadges`,
+  `Section`, `SectionHeading`, `MobileNavToggle`, `AnchorCta` + os
+  `content/*.ts` que só eles usavam (`credibility`, `driver`, `faq`,
+  `finalBanner`, `passenger`, `services`, `nav`). `Header` virou só a logo
+  (sem menu — página única não tem seção para linkar). `PhoneMockup`
+  sobrevive, reaproveitado em `ProductGlimpse` (uma tela só, perto do
+  compromisso de taxa/repasse, para não parecer vitrine de novo).
+- **Candidatura de motorista em DUAS etapas, decisão fechada do dono em
+  19/11/2026** (`docs/decisoes-do-dono.md` → "DECISÃO: duas etapas"): etapa
+  1 (`DriverApplicationForm.tsx`, nesta página) pede nome completo,
+  telefone/WhatsApp, e-mail, cidade, UF (`<select>`, nunca texto livre,
+  RN pré-selecionado) + duas perguntas opcionais (já dirige por
+  app / tem veículo próprio). **Nada de endereço/CEP/documento** — isso é
+  a etapa 2, só depois da aprovação, fora do escopo desta página.
+  `DEFAULT_STATE='RN'` e a lista das 27 UFs vivem em
+  `content/driverApplication.ts`.
+- **Contrato do backend é PROVISÓRIO** — o Vega estava estendendo
+  `apps/api`/`packages/api-client` em paralelo a esta tarefa, sem entregar
+  a tempo. Criei `src/lib/driver-application-client.ts` por fora do
+  `@vuumbora/api-client` (não editei o pacote do Vega, para não colidir),
+  com uma porta própria (`DriverApplicationPort.apply`) que supõe
+  `POST {baseUrl}/v1/driver-applications` em camelCase, mesma convenção de
+  `/v1/waitlist` (`docs/lista-de-espera.md` §5: código de erro
+  `invalid_<campo>`, `429`→rate_limited, `5xx`→unavailable). **Quando o
+  contrato real chegar, o único arquivo que deveria mudar é esse** — o
+  componente já fala com a interface, não com `fetch` direto. Testei o
+  caminho inteiro (campo vazio → 4 erros sem chamar rede; erro do
+  servidor mapeado pro campo certo; valores preservados após erro; sucesso)
+  interceptando a rota com Playwright contra este contrato suposto — real
+  até onde dá para testar sem o Vega, mas a FORMA exata do contrato real
+  pode divergir (nome do endpoint, nomes de campo).
+- **`WaitlistForm` virou exclusivo do passageiro** (perfil sempre
+  `'passenger'`, sem seletor) — o motorista tem agora o seu próprio
+  formulário completo. Reaproveitado dentro de `PassengerNote.tsx`, caixa
+  discreta depois da candidatura (passageiro é secundário nesta página,
+  pedido do dono).
+- **`HeroScene.tsx`** é a animação pedida ("profissional, podendo ser
+  3D"): pino da marca girando em CSS 3D (`perspective` + `rotateY`
+  oscilando, sem spin completo) sobre uma rota SVG que se desenha uma vez
+  (`stroke-dashoffset`), tudo SSR/sem JavaScript — zero custo de bundle,
+  respeita `prefers-reduced-motion` via `@media` (estado padrão SEM media
+  query já é o estado final correto, igual ao resto do projeto). **Decisão
+  deliberada: nada de three.js/WebGL** — Runway (vídeo) estava fora por
+  exigir plano pago, e uma lib 3D pesaria o bundle à toa quando CSS puro
+  já entrega o efeito pedido ("pino em 3D" + "rota se desenhando").
+  Ver [[bug_glow_decorativo_sem_overflow_hidden]] pelo overflow horizontal
+  real que o brilho decorativo da cena causou em 320/390px antes da
+  correção, e [[bug_playwright_fullpage_sticky_fantasma]] (atualizado)
+  pelos vários falsos positivos de "fantasma" que descartei medindo com
+  `clip` em vez de `fullPage:true`.
+- **Tamanho da `HeroScene` varia por breakpoint de propósito**
+  (`max-width: 220px` <480px, `280px` <1024px, `360px` ≥1024px) — a
+  primeira versão (sempre até 360px) empurrava o formulário (a AÇÃO da
+  página) para ~1300px rolagem abaixo no celular; depois do ajuste de
+  tamanho + espaçamento do Hero, ficou ~870-970px (pouco mais de 1 tela).
+- **Peso medido** (Playwright, `response.body()` somado, servidor estático
+  sem compressão): ~711 KB total na home (JS ~478 KB é runtime
+  Next/React padrão — comprime bem com gzip/brotli em produção; JPG dos
+  mockups ~122 KB, CSS ~25 KB, fontes ~27 KB). Sem vídeo, sem lib 3D.
+- **Build final entregue de novo SEM `NEXT_PUBLIC_WAITLIST_API_URL`**
+  (mesma situação já registrada acima para a lista de espera) — usei a env
+  var só durante o teste manual do formulário (Playwright + `page.route`
+  mockando `/v1/driver-applications`) e removi antes de entregar. Os dois
+  formulários (motorista e passageiro) mostram o aviso "ainda não
+  pronto"/"ainda não estamos recebendo" até o Vulcano configurar essa var
+  no Easypanel quando `vuumbora-backend` for ao ar.
+
+## Reconstrução sobre as artes do dono (19/11/2026, mesmo dia da virada)
+
+Pedido do dono: nada de imagem gerada por IA — a página inteira construída em
+cima das artes fotográficas reais que ele entregou (`Imagens_Site/`, copiadas
+para `apps/site/public/artes/`), catalogadas com texto literal em
+`src/content/artes.ts` (um `Arte` por peça: `completa`/`completa800` 16:9 com
+o texto desenhado dentro, `vertical` 4:5 só-foto para celular, e os mesmos
+dizeres em campos `olho`/`titulo`/`tituloDestaque`/`apoio`).
+
+- **`ArtworkPanel.tsx`** (novo, reutilizável): `<picture>` com `<source
+  media="(min-width:768px)">` apontando pra `completa800`/`completa` (texto
+  já desenhado na imagem) e `<img>` fallback = `vertical` (só foto, sem
+  texto — abaixo de 768px a faixa de texto da arte renderiza com ~7px de
+  altura, ilegível). O bloco de texto em HTML (`figcaption` com
+  olho/título/destaque/apoio) **nunca sai do DOM**: vira sr-only (técnica
+  idêntica a `.visually-hidden` de `globals.css`: `width:1px;height:1px;
+  clip:rect(0,0,0,0)`) a partir de 768px, em vez de `display:none` —
+  decisão de acessibilidade real, não só visual: a arte completa não expõe
+  esse texto pra quem não vê a imagem, então quem usa leitor de tela precisa
+  continuar recebendo os dizeres em QUALQUER largura. `headingLevel` prop
+  (`'h1'|'h2'`) deixa o Hero usar h1 e as seções usarem h2, hierarquia única
+  na página.
+- **`ArteSection.tsx`** (novo): `Container` + `Reveal variant="media"` +
+  `ArtworkPanel`, uma seção por item de `ARTES_SECOES` (5 hoje). Children
+  opcional — único uso real é a seção `repasse-rapido` carregando o
+  `CommitmentBanner` (compromisso público de taxa/repasse já aprovado pelo
+  dono) como reforço, porque esse compromisso não tem arte própria e a
+  estrutura pedida era "uma seção por arte", não uma seção extra.
+- **`Hero.tsx` reescrito**: `ArtworkPanel` (arte `ARTE_HERO`, `priority`,
+  `headingLevel="h1"`) + `DriverApplicationForm` lado a lado (≥1024px) /
+  empilhados (abaixo disso) — a candidatura nunca desce da primeira seção.
+  O texto de abertura (`HERO_CONTENT.eyebrow/title/subtitle` antigos) saiu:
+  agora é a própria arte que fala (`olho`/`titulo`/`tituloDestaque`/`apoio`
+  dela). Sobrou só `HERO_HONESTY` (aviso de transparência, que não é texto
+  de nenhuma arte) perto do formulário. Ver
+  [[bug_align_items_center_vao_vazio_colunas_desiguais]] pelo acerto de
+  alinhamento entre a arte (16:9, curta) e o formulário (bem mais alto).
+- **Foto de fundo gerada por IA removida**: o `::before` de `Hero.module.css`
+  com `public/hero/natal-noite-*.jpg` (que o dono recusou) foi apagado por
+  inteiro, junto com os dois arquivos de imagem.
+- **`ProductGlimpse.tsx`/`PhoneMockup.tsx` removidos do projeto** (e seus
+  `.module.css`) — a estrutura nova da página é "Hero + uma seção por arte +
+  PassengerNote + AboutBlock + Footer", sem vitrine de mockup fotográfico;
+  ficaram sem nenhum uso depois da reescrita (confirmado por grep antes de
+  apagar). `public/mockups/*.jpg` ficou órfão, não apaguei (fora do escopo).
+- **`HeroScene.tsx`/`.module.css` seguem no projeto sem uso** (decisão
+  herdada da sessão anterior, não mexi) — pino 3D em CSS, reservado "caso o
+  fundo mude"; com o Hero agora baseado em foto real da arte, provavelmente
+  nunca mais entra, mas não é desta tarefa decidir apagar.
+- **Medido no navegador** (Playwright via `playwright-core`, ver
+  [[feedback_medir_site_sem_browser_tool]]) em 320/390/768/1440:
+  `scrollWidth === clientWidth` nas quatro, zero elemento com
+  `right > clientWidth`, `figcaption` visível (overlay) nas duas larguras
+  <768 e sr-only (1×1px) nas duas ≥768 — comportamento batendo com a regra
+  pedida, não só suposto.

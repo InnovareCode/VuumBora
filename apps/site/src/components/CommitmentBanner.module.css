@@ -25,8 +25,8 @@
 .label {
   display: block;
   font-size: var(--font-size-small);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.06em;
+  font-weight: var(--peso-olho);
+  letter-spacing: var(--tracking-olho);
   text-transform: uppercase;
   color: var(--color-brand-yellow);
   margin-bottom: var(--spacing-2);
@@ -34,7 +34,7 @@
 
 .text {
   font-size: var(--font-size-title);
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--peso-titulo);
   color: var(--color-text-primary);
   line-height: 1.35;
 }

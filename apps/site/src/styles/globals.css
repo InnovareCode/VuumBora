@@ -50,12 +50,30 @@ html {
   }
 }
 
+/*
+ * Escala tipografica DO SITE, separada dos tokens dos aplicativos.
+ *
+ * Os tokens do design system param no peso 700 porque foram feitos para os
+ * apps em Plus Jakarta Sans. O site usa Poppins para ficar uniforme com os
+ * banners de Imagens_Site/, e o dono especificou os pesos em 19/11/2026:
+ * 800 nos titulos, 500 nos textos de apoio, 600 no olho "PRE-LANCAMENTO" em
+ * maiusculas com mais espacamento. Ficam aqui, com nome proprio, para nao
+ * parecerem token do design system nem serem confundidos com os dos apps.
+ */
+:root {
+  --peso-titulo: 800;
+  --peso-apoio: 500;
+  --peso-olho: 600;
+  --tracking-olho: 0.14em;
+}
+
 body {
   margin: 0;
   background: var(--color-background-base);
   color: var(--color-text-primary);
-  font-family: var(--font-jakarta), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-site), system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: var(--font-size-body);
+  font-weight: var(--peso-apoio);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }

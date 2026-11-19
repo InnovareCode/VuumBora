@@ -163,7 +163,7 @@
 }
 
 .successTitle {
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--peso-titulo);
   color: var(--color-text-primary);
 }
 

@@ -1,36 +1,36 @@
-import { HERO_CONTENT } from '@/content/hero';
+import { ARTE_HERO } from '@/content/artes';
+import { HERO_HONESTY } from '@/content/hero';
+import { ArtworkPanel } from './ArtworkPanel';
 import { Container } from './Container';
 import { DriverApplicationForm } from './DriverApplicationForm';
 import styles from './Hero.module.css';
 
 /**
  * Página única de pré-lançamento (`docs/decisoes-do-dono.md` → "Virada do
- * site"): foto noturna de cidade costeira com ponte iluminada no fundo, o
- * texto, e a candidatura do motorista — que é a AÇÃO da página — lado a lado,
- * não um link de âncora para mais embaixo.
+ * site"): a arte `ARTE_HERO` (dirija com a VuumBora, Ponta Negra) ao lado da
+ * candidatura de motorista — que é a AÇÃO da página, nunca um link de âncora
+ * para mais embaixo.
  *
- * A `HeroScene` (pino 3D sobre rota que se desenha) saiu daqui em 19/11/2026,
- * quando a foto entrou. Não por ser ruim: por competir. A rota âmbar de 4px
- * caía exatamente em cima dos rastros de luz âmbar da avenida na foto e
- * sumia — medido no navegador, a rota continuava desenhada e visível no DOM e
- * mesmo assim não se lia na tela. Dois elementos da mesma cor disputando o
- * mesmo lugar: a foto mostra a cidade melhor do que o mapa desenhado sugeria.
- * O componente continua no projeto, sem uso, caso o fundo mude.
+ * Reescrito em 19/11/2026 para usar as artes reais do dono em vez da foto
+ * gerada que ele recusou — `ArtworkPanel` cuida de mostrar a arte completa a
+ * partir de 768px e o recorte vertical + texto em HTML abaixo disso.
+ *
+ * A arte fica FORA do `Container`, ocupando a largura inteira, e a candidatura
+ * vem logo abaixo. A primeira tentativa colocou as duas lado a lado e foi
+ * medida a 1440px: a arte caía para 564x317 (39% da tela), sobravam 444px de
+ * vazio sob ela porque o cartão de candidatura tem 761px de altura, e o título
+ * desenhado na arte encolhia para 220px de largura. Essas artes foram
+ * compostas como banner largo; espremidas numa coluna, perdem exatamente o
+ * impacto pelo qual foram feitas.
  */
 export function Hero() {
   return (
     <section id="topo" className={styles['hero']} aria-label="Apresentação do VuumBora">
+      <ArtworkPanel arte={ARTE_HERO} priority headingLevel="h1" className={styles['art']} />
       <Container>
-        <div className={styles['layout']}>
-          <div className={styles['pitch']}>
-            <span className={styles['eyebrow']}>{HERO_CONTENT.eyebrow}</span>
-            <h1 className={styles['title']}>{HERO_CONTENT.title}</h1>
-            <p className={styles['subtitle']}>{HERO_CONTENT.subtitle}</p>
-            <p className={styles['honesty']}>{HERO_CONTENT.honesty}</p>
-          </div>
-          <div className={styles['action']}>
-            <DriverApplicationForm />
-          </div>
+        <div className={styles['action']}>
+          <DriverApplicationForm />
+          <p className={styles['honesty']}>{HERO_HONESTY}</p>
         </div>
       </Container>
     </section>

@@ -1,112 +1,24 @@
 /*
- * O dono comparou a pagina com uma arte que MOSTRA Natal (ponte iluminada,
- * rastros de luz) e apontou, com razao, que a nossa so DIZIA "Natal" em texto
- * sobre gradiente. A foto noturna entra como fundo do hero para a cidade
- * aparecer, nao so ser citada.
+ * A foto de fundo gerada por IA que existia aqui (cena noturna em
+ * `public/hero/natal-noite-*.jpg`) foi recusada pelo dono em 19/11/2026: a
+ * página passou a ser construída sobre as artes reais que ele entregou
+ * (`src/content/artes.ts`), mostradas pela `ArtworkPanel`.
  *
- * Por que a foto esta num ::before de ALTURA LIMITADA, e nao no fundo do
- * .hero inteiro: medido no navegador em 390px, o hero tem 390x1779 (proporcao
- * 0,22) e a foto tem 1,79. Com `cover` no elemento todo, a foto era ampliada
- * para 3185x1779 e so 12% da largura dela aparecia -- uma tira vertical
- * borrada onde Natal nao se reconhecia. Nenhum `background-position` conserta
- * uma fatia de 12%. Limitando a altura, a faixa volta a uma proporcao que a
- * foto aguenta, e o gradiente a dissolve no navy antes do formulario.
- *
- * O escurecimento NAO e decorativo: sem ele o texto branco cai em cima dos
- * rastros ambar e some. Contraste medido no print, nao no olho: titulo
- * 18,9:1, subtitulo 8,8:1, aviso discreto 5,2:1 (minimo exigido 4,5:1).
+ * A arte do topo ocupa a LARGURA INTEIRA e a candidatura vem abaixo dela.
+ * A versão anterior punha as duas lado a lado; medido a 1440px, a arte ficava
+ * em 564x317 (39% da tela) com 444px de vazio embaixo, e o título desenhado
+ * nela encolhia para 220px. Banner largo espremido em coluna vira miniatura.
  */
 .hero {
-  position: relative;
-  isolation: isolate;
-  background-color: var(--color-background-base);
-  padding-block: clamp(28px, 6vh, 72px) clamp(40px, 8vh, 96px);
+  padding-block: 0 clamp(40px, 8vh, 96px);
 }
 
-.hero::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  z-index: -1;
-  height: clamp(380px, 54vh, 560px);
-  background-image:
-    linear-gradient(
-      180deg,
-      rgba(7, 13, 24, 0.82) 0%,
-      rgba(7, 13, 24, 0.58) 38%,
-      rgba(7, 13, 24, 0.92) 86%,
-      rgb(7, 13, 24) 100%
-    ),
-    url('/hero/natal-noite-768.jpg');
-  background-size: cover;
-  background-position: center 62%;
-  background-repeat: no-repeat;
-  pointer-events: none;
-}
-
-/*
- * A partir de 768px o hero ja e largo o bastante para a foto caber inteira na
- * proporcao dela, entao ela cobre a secao toda e entra a versao nativa de
- * 1376px. Abaixo disso o celular baixa 39 KB em vez de 104 KB -- o publico
- * desta pagina e motorista no 4G.
- */
-@media (min-width: 768px) {
-  .hero::before {
-    inset: 0;
-    height: auto;
-    background-image:
-      linear-gradient(
-        180deg,
-        rgba(7, 13, 24, 0.86) 0%,
-        rgba(7, 13, 24, 0.6) 42%,
-        rgba(7, 13, 24, 0.5) 70%,
-        rgba(7, 13, 24, 0.88) 100%
-      ),
-      url('/hero/natal-noite-1376.jpg');
-    background-position: center 68%;
-  }
-}
-
-.layout {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-7);
-  align-items: center;
-}
-
-.pitch {
-  max-width: 640px;
-  text-align: center;
-}
-
-.eyebrow {
-  display: inline-block;
-  font-size: var(--font-size-small);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-brand-yellow);
-  margin-bottom: var(--spacing-4);
-}
-
-.title {
-  font-size: clamp(28px, 5.4vw, 46px);
-  line-height: 1.15;
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
-}
-
-.subtitle {
-  margin-top: var(--spacing-5);
-  font-size: var(--font-size-subtitle);
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-}
-
-.honesty {
-  margin-top: var(--spacing-4);
-  font-size: var(--font-size-small);
-  color: var(--color-text-muted);
+.art {
+  width: 100%;
+  /* Encosta no topo da página: a arte já traz a própria logo e a própria
+     margem interna, então uma borda arredondada aqui só criaria uma moldura
+     em volta de algo que já é uma peça fechada. */
+  border-radius: 0;
 }
 
 .action {
@@ -115,28 +27,13 @@
   align-items: center;
   gap: var(--spacing-5);
   width: 100%;
+  margin-top: clamp(28px, 5vh, 56px);
 }
 
-@media (min-width: 1024px) {
-  .layout {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    text-align: left;
-    gap: var(--spacing-8);
-  }
-
-  .action {
-    gap: var(--spacing-6);
-  }
-
-  .pitch {
-    text-align: left;
-    flex: 1 1 420px;
-  }
-
-  .action {
-    flex: 0 0 auto;
-    width: auto;
-  }
+.honesty {
+  max-width: 520px;
+  font-size: var(--font-size-small);
+  font-weight: var(--peso-apoio);
+  color: var(--color-text-muted);
+  text-align: center;
 }
