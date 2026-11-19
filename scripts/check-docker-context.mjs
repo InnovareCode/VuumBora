@@ -27,7 +27,7 @@ const raiz = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // Os dois Dockerfiles do projeto. Qualquer um novo entra aqui: a guarda só
 // protege o que ela conhece, e o deploy que ela deixou passar em 19/11/2026
 // custou duas tentativas quebradas no servidor.
-const DOCKERFILES = ['apps/site/Dockerfile', 'site-cine/Dockerfile'];
+const DOCKERFILES = ['apps/site/Dockerfile', 'site-cine/Dockerfile', 'apps/api/Dockerfile'];
 const DOCKERIGNORE = '.dockerignore';
 
 /** Origens dos COPY do estágio de build (os `--from=` leem de outro estágio). */
