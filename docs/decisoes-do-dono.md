@@ -580,3 +580,33 @@ documento sensível antes de existir processo para isso.
 com qual critério. Sem isso, o formulário vira uma caixa que enche e não
 responde — e aí o pré-cadastro trabalha contra a credibilidade que ele
 deveria construir.
+
+### Ampliação pedida: cadastro completo no pré-cadastro (19/11/2026)
+
+O dono pediu os campos de um cadastro de motorista: nome completo, telefone,
+e-mail, endereço, bairro, CEP, cidade, UF, "entre outros".
+
+**Isso é viável, e o trade-off precisa estar registrado:**
+
+| | Formulário curto (4 campos) | Cadastro completo (10+ campos) |
+|---|---|---|
+| Quem termina | muita gente | bem menos, sobretudo no celular |
+| Serve para validar? | sim: região, veículo, experiência | sim, e ainda adianta a papelada |
+| Dado pessoal guardado | contato e cidade | **endereço residencial completo** |
+| Se vazar | lista de contatos | onde cada motorista mora |
+
+**O ponto central:** endereço, bairro e CEP **não ajudam a decidir se a
+candidatura é aprovada**. Eles são necessários no cadastro real, para
+contrato e documentação — depois da aprovação. Pedi-los antes significa
+guardar o endereço residencial de gente que talvez nem seja aprovada.
+
+**Saída recomendada — duas etapas, sem perder nenhum dado:**
+1. **Na página:** nome, telefone, e-mail, cidade/UF e as perguntas de
+   elegibilidade. Rápido de preencher, e já dá para validar.
+2. **Depois da aprovação:** endereço completo, CEP, documentos — quando a
+   pessoa já sabe que foi aceita e tem motivo para preencher com calma.
+
+Assim o dono tem os mesmos dados no fim, com mais candidaturas completas e
+menos dado sensível guardado de quem não entrou.
+
+**Decisão do dono registrada abaixo quando ele responder.**
