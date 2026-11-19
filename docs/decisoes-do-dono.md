@@ -505,3 +505,43 @@ Registro honesto do que se perde: dizer de onde a empresa é ajuda
 principalmente com motorista, que tende a desconfiar de aplicativo sem
 origem declarada. Se mais adiante isso aparecer como objeção real, o campo
 é fácil de acrescentar.
+
+---
+
+## Virada do site: página de pré-lançamento (19/11/2026)
+
+O dono avaliou o site e foi direto: *"está com cara de site amador feito por
+um estagiário"*. O pedido mudou de vitrine explicativa para **página de
+pré-lançamento**, e isso muda o alvo, não só o acabamento.
+
+**O que passa a valer:**
+
+1. **Uma página só, clean e minimalista.** O site atual é longo e
+   explicativo; o que se pede agora é impacto e uma ação. Menos texto, mais
+   peso visual.
+2. **Região definida: Natal e região metropolitana, no Rio Grande do Norte.**
+   Isso **revoga** a decisão anterior de não publicar a cidade — agora a
+   região é argumento central, porque cria expectativa local.
+3. **O motorista é o público principal.** A página existe para atrair quem
+   quer dirigir, e a ação é o **pré-cadastro**.
+4. **Pré-cadastro, não lista de espera simples.** O dono vai **validar** cada
+   cadastro e decidir quem entra. Isso muda o texto (é candidatura, não
+   inscrição) e provavelmente os campos coletados.
+5. **Animação profissional, podendo ser 3D.** A referência citada foi
+   qualidade de animação de estúdio.
+
+**Limite técnico encontrado, declarado na hora:** a geração de **vídeo** no
+Runway exige plano pago, e a conta é gratuita. Então animação de verdade
+precisa ser feita em código — 3D em WebGL ou transformações 3D em CSS —, não
+como filme pronto. Isso é viável e tem uma vantagem: anima de forma fluida,
+pesa pouco e não precisa carregar um arquivo de vídeo.
+
+**O que NÃO muda:** não prometer o que o produto não faz, o compromisso de
+publicar taxa e repasse antes de abrir o cadastro, e o aviso de privacidade
+completo no formulário.
+
+⚠️ **Uma implicação do pré-cadastro que precisa de decisão:** se o dono vai
+validar candidaturas, a página provavelmente precisa coletar mais do que
+e-mail — cidade onde dirige, se já tem veículo, se já dirige por aplicativo.
+Cada campo a mais é dado pessoal e aumenta a responsabilidade. O backend hoje
+guarda só e-mail e perfil.
