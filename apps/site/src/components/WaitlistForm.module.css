@@ -5,51 +5,6 @@
   gap: var(--spacing-4);
 }
 
-.profileFieldset {
-  border: 0;
-  padding: 0;
-  margin: 0;
-}
-
-.profileLegend {
-  font-size: var(--font-size-small);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-secondary);
-  padding: 0;
-  margin-bottom: var(--spacing-2);
-}
-
-.profileOptions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-3);
-}
-
-.profileOption {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  min-height: var(--layout-touch-target);
-  padding-inline: var(--spacing-4);
-  border-radius: var(--radius-pill);
-  background: var(--color-background-surface);
-  border: 1px solid var(--color-border-subtle);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-small);
-  cursor: pointer;
-}
-
-.profileOption:has(.profileRadio:checked) {
-  border-color: var(--color-brand-yellow);
-  color: var(--color-text-primary);
-}
-
-.profileRadio {
-  accent-color: var(--color-brand-yellow);
-  width: 16px;
-  height: 16px;
-}
-
 .field {
   display: flex;
   flex-direction: column;

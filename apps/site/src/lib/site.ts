@@ -5,4 +5,4 @@
 export const SITE_URL = 'https://www.vuumbora.com.br';
 export const SITE_NAME = 'VuumBora';
 export const SITE_DESCRIPTION =
-  'O VuumBora é um novo app de mobilidade urbana, em construção. Veja o que já está pronto, o que estamos construindo e o que ainda vamos decidir, para quem pede corrida e para quem dirige.';
+  'O VuumBora é um novo app de corrida chegando a Natal e à Grande Natal. Candidate-se para dirigir desde o começo — cada candidatura é avaliada.';

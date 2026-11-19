@@ -1,12 +1,12 @@
-import { ClosingBanner } from '@/components/ClosingBanner';
-import { CredibilitySection } from '@/components/CredibilitySection';
-import { DriverSection } from '@/components/DriverSection';
-import { FaqSection } from '@/components/FaqSection';
+import { AboutBlock } from '@/components/AboutBlock';
+import { CommitmentBanner } from '@/components/CommitmentBanner';
+import { Container } from '@/components/Container';
 import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { Hero } from '@/components/Hero';
-import { PassengerSection } from '@/components/PassengerSection';
-import { ServicesSection } from '@/components/ServicesSection';
+import { PassengerNote } from '@/components/PassengerNote';
+import { ProductGlimpse } from '@/components/ProductGlimpse';
+import { DRIVER_COMMITMENT } from '@/content/driverApplication';
 
 export default function HomePage() {
   return (
@@ -14,13 +14,17 @@ export default function HomePage() {
       <Header />
       <main id="conteudo">
         <Hero />
-        <PassengerSection />
-        <DriverSection />
-        <ServicesSection />
-        <CredibilitySection />
-        <FaqSection />
+        <Container>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-7)', paddingBottom: 'var(--site-section-gap)' }}>
+            <CommitmentBanner label={DRIVER_COMMITMENT.label} text={DRIVER_COMMITMENT.text} />
+            <ProductGlimpse />
+          </div>
+        </Container>
+        <PassengerNote />
+        <Container>
+          <AboutBlock />
+        </Container>
       </main>
-      <ClosingBanner />
       <Footer />
     </>
   );

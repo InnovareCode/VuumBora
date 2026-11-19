@@ -1,6 +1,5 @@
 import Image from 'next/image';
 import { FOOTER_CONTENT } from '@/content/footer';
-import { NAV_LINKS } from '@/content/nav';
 import { Container } from './Container';
 import styles from './Footer.module.css';
 
@@ -13,17 +12,6 @@ export function Footer() {
             <Image src="/brand/vuumbora-horizontal.png" alt="VuumBora" width={140} height={34} />
             <p className={styles['tagline']}>{FOOTER_CONTENT.tagline}</p>
           </div>
-
-          <nav aria-label="Rodapé">
-            <p className={styles['columnTitle']}>{FOOTER_CONTENT.siteColumnTitle}</p>
-            <ul className={styles['navList']}>
-              {NAV_LINKS.map((link) => (
-                <li key={link.href}>
-                  <a href={link.href}>{link.label}</a>
-                </li>
-              ))}
-            </ul>
-          </nav>
 
           <div>
             <p className={styles['columnTitle']}>{FOOTER_CONTENT.legalColumnTitle}</p>

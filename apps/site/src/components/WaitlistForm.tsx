@@ -2,7 +2,6 @@
 
 import { useId, useState } from 'react';
 import type { FormEvent } from 'react';
-import type { WaitlistProfile } from '@vuumbora/api-client/waitlist';
 import { WAITLIST_CONTENT } from '@/content/waitlist';
 import { getWaitlistPort } from '@/lib/waitlist-client';
 import styles from './WaitlistForm.module.css';
@@ -15,9 +14,9 @@ type Status = 'idle' | 'loading' | 'success' | 'error';
 const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * Formulário da lista de espera — um único formulário para os dois
- * públicos (o perfil é opcional no contrato), rótulo do botão e texto de
- * apoio trocam conforme a escolha (`docs/conteudo-site.md` §7 "Versão B").
+ * Lista de espera do passageiro — formulário secundário da página (o
+ * motorista tem o seu próprio, `DriverApplicationForm`). Perfil sempre
+ * `'passenger'`, sem seletor: ver nota em `content/waitlist.ts`.
  *
  * Honesto quando o backend ainda não está configurado
  * (`NEXT_PUBLIC_WAITLIST_API_URL` ausente, ver `src/lib/waitlist-client.ts`):
@@ -26,7 +25,6 @@ const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function WaitlistForm() {
   const [port] = useState(() => getWaitlistPort());
   const [email, setEmail] = useState('');
-  const [profile, setProfile] = useState<WaitlistProfile | undefined>(undefined);
   const [status, setStatus] = useState<Status>('idle');
   const [fieldError, setFieldError] = useState<string | undefined>(undefined);
   const [generalError, setGeneralError] = useState<string | undefined>(undefined);
@@ -35,7 +33,6 @@ export function WaitlistForm() {
   const errorId = useId();
   const privacyId = useId();
 
-  const profileKey = profile ?? 'none';
   const loading = status === 'loading';
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -52,12 +49,11 @@ export function WaitlistForm() {
     setGeneralError(undefined);
     setStatus('loading');
 
-    const result = await port.signUp(profile ? { email: trimmed, profile } : { email: trimmed });
+    const result = await port.signUp({ email: trimmed, profile: 'passenger' });
 
     if (result.ok) {
       setStatus('success');
       setEmail('');
-      setProfile(undefined);
       return;
     }
 
@@ -99,25 +95,6 @@ export function WaitlistForm() {
 
   return (
     <form className={styles['form']} onSubmit={handleSubmit} noValidate>
-      <fieldset className={styles['profileFieldset']}>
-        <legend className={styles['profileLegend']}>{WAITLIST_CONTENT.profileLabel}</legend>
-        <div className={styles['profileOptions']}>
-          {WAITLIST_CONTENT.profileOptions.map((option) => (
-            <label key={option.value} className={styles['profileOption']}>
-              <input
-                type="radio"
-                name="waitlist-profile"
-                value={option.value}
-                checked={profile === option.value}
-                onChange={() => setProfile(option.value)}
-                className={styles['profileRadio']}
-              />
-              {option.label}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
       <div className={styles['field']}>
         <label htmlFor={emailId} className={styles['label']}>
           {WAITLIST_CONTENT.emailLabel}
@@ -143,7 +120,7 @@ export function WaitlistForm() {
             disabled={loading}
           />
           <button type="submit" className={styles['submit']} disabled={loading} aria-busy={loading}>
-            {loading ? WAITLIST_CONTENT.submitLoadingLabel : WAITLIST_CONTENT.submitLabel[profileKey]}
+            {loading ? WAITLIST_CONTENT.submitLoadingLabel : WAITLIST_CONTENT.submitLabel}
           </button>
         </div>
         {fieldError ? (
@@ -153,7 +130,7 @@ export function WaitlistForm() {
         ) : null}
       </div>
 
-      <p className={styles['supportText']}>{WAITLIST_CONTENT.supportText[profileKey]}</p>
+      <p className={styles['supportText']}>{WAITLIST_CONTENT.supportText}</p>
 
       {generalError ? (
         <p className={styles['generalError']} role="alert">

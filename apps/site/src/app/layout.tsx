@@ -17,7 +17,7 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'VuumBora — app de corrida para passageiros e motoristas (em construção)',
+    default: 'VuumBora — chegando a Natal e à Grande Natal. Candidate-se para dirigir.',
     template: '%s · VuumBora',
   },
   description: SITE_DESCRIPTION,
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     locale: 'pt_BR',
     url: '/',
     siteName: SITE_NAME,
-    title: 'VuumBora — app de corrida para passageiros e motoristas (em construção)',
+    title: 'VuumBora — chegando a Natal e à Grande Natal. Candidate-se para dirigir.',
     description: SITE_DESCRIPTION,
     images: [
       {
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'VuumBora — app de corrida para passageiros e motoristas (em construção)',
+    title: 'VuumBora — chegando a Natal e à Grande Natal. Candidate-se para dirigir.',
     description: SITE_DESCRIPTION,
     images: ['/og-image.jpg'],
   },

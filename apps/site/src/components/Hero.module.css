@@ -1,82 +1,34 @@
 .hero {
   position: relative;
-  min-height: clamp(560px, 94vh, 860px);
-  display: flex;
-  align-items: flex-end;
-  overflow: hidden;
-}
-
-.photoWrap {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  z-index: 0;
-}
-
-.photo {
-  position: absolute;
-  inset: -4% -4%;
-  width: 108%;
-  height: 108%;
-  object-fit: cover;
-  object-position: 50% 32%;
-}
-
-/* Ken Burns: zoom lento e contínuo, só decoração — nunca a única forma de
-   entender a cena (a foto já é legível parada). Desligado sob movimento
-   reduzido (docs/movimento.md). */
-@media (prefers-reduced-motion: no-preference) {
-  .photo {
-    animation: kenburns 22s ease-in-out infinite alternate;
-  }
-}
-
-@keyframes kenburns {
-  from {
-    transform: scale(1);
-  }
-  to {
-    transform: scale(1.09);
-  }
-}
-
-/* Direção de arte (docs/direcao-de-arte.md §9 item 9): scrim OBRIGATÓRIO atrás
-   de texto sobre foto. gradient.photoScrim é o mesmo recurso usado nas telas
-   do app (boas-vindas) atrás do bloco de título/CTA. */
-.scrim {
-  position: absolute;
-  inset: 0;
-  background: var(--gradient-photo-scrim);
-  z-index: 1;
+  background: var(--gradient-screen);
+  padding-block: clamp(28px, 6vh, 72px) clamp(40px, 8vh, 96px);
 }
 
 .layout {
-  position: relative;
-  z-index: 2;
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  flex-direction: column;
   gap: var(--spacing-7);
-  padding-block: clamp(48px, 10vh, 96px) clamp(40px, 8vh, 72px);
+  align-items: center;
 }
 
-.content {
+.pitch {
   max-width: 640px;
+  text-align: center;
 }
 
 .eyebrow {
   display: inline-block;
   font-size: var(--font-size-small);
   font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-brand-yellow);
   margin-bottom: var(--spacing-4);
 }
 
 .title {
-  font-size: clamp(30px, 6vw, 52px);
-  line-height: 1.12;
+  font-size: clamp(28px, 5.4vw, 46px);
+  line-height: 1.15;
   font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
 }
@@ -85,7 +37,6 @@
   margin-top: var(--spacing-5);
   font-size: var(--font-size-subtitle);
   color: var(--color-text-secondary);
-  max-width: 52ch;
   line-height: 1.6;
 }
 
@@ -93,36 +44,36 @@
   margin-top: var(--spacing-4);
   font-size: var(--font-size-small);
   color: var(--color-text-muted);
-  max-width: 52ch;
 }
 
-.actions {
-  margin-top: var(--spacing-7);
+.action {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-4);
-}
-
-.stores {
-  margin-top: var(--spacing-6);
-}
-
-/* O celular flutuante só entra em telas largas o bastante para não brigar
-   com o texto nem empurrar o CTA para fora da dobra (320–1023px: hero fica
-   só texto + foto, como já era). Sem filter: drop-shadow aqui — o mockup
-   fotográfico já traz sombra e brilho próprios embutidos na imagem; somar
-   outra sombra por cima só embaçava a borda (pedido do dono, 18/11/2026). */
-.showcase {
-  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-5);
+  width: 100%;
 }
 
 @media (min-width: 1024px) {
-  .showcase {
-    display: block;
-    flex-shrink: 0;
+  .layout {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+    gap: var(--spacing-8);
   }
-}
 
-.mockup {
-  width: clamp(260px, 22vw, 360px);
+  .action {
+    gap: var(--spacing-6);
+  }
+
+  .pitch {
+    text-align: left;
+    flex: 1 1 420px;
+  }
+
+  .action {
+    flex: 0 0 auto;
+    width: auto;
+  }
 }

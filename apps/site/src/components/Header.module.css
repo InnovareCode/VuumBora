@@ -1,99 +1,15 @@
 .header {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: rgba(7, 13, 24, 0.86);
-  border-bottom: 1px solid var(--color-border-subtle);
-  backdrop-filter: blur(0px); /* sem blur real (direção de arte §5) — só reforça a opacidade acima */
+  position: relative;
+  z-index: 10;
 }
 
 .bar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-4);
-  padding-block: var(--spacing-3);
+  padding-block: var(--spacing-5);
 }
 
 .logoLink {
   display: inline-flex;
   align-items: center;
-}
-
-.desktopNav {
-  display: none;
-}
-
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--layout-touch-target);
-  height: var(--layout-touch-target);
-  background: transparent;
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-md);
-  color: var(--color-text-primary);
-}
-
-/* Bug já cometido aqui uma vez: declarar esta media query ANTES da regra
-   base `.toggle` (mesma especificidade) fazia a base "ganhar" por vir depois
-   no arquivo, e o botão de menu nunca sumia no desktop. A regra geral virou
-   lição: toda regra responsiva de override entra DEPOIS da regra base que
-   ela sobrescreve, nunca antes — não importa a especificidade. */
-@media (min-width: 900px) {
-  .desktopNav {
-    display: flex;
-    gap: var(--spacing-7);
-  }
-
-  .desktopNav a {
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-secondary);
-    text-decoration: none;
-    padding-block: var(--spacing-2);
-    transition: color 0.15s ease;
-  }
-
-  .desktopNav a:hover {
-    color: var(--color-text-primary);
-  }
-
-  .toggle {
-    display: none;
-  }
-}
-
-.mobileNav {
-  display: none;
-  flex-basis: 100%;
-  flex-direction: column;
-  gap: var(--spacing-1);
-  padding-bottom: var(--spacing-4);
-}
-
-.mobileNav[data-open='true'] {
-  display: flex;
-}
-
-.mobileNav a {
-  display: block;
-  padding: var(--spacing-3) var(--spacing-2);
-  color: var(--color-text-secondary);
-  text-decoration: none;
-  font-weight: var(--font-weight-medium);
-  border-radius: var(--radius-sm);
-  min-height: var(--layout-touch-target);
-}
-
-.mobileNav a:hover {
-  color: var(--color-text-primary);
-  background: var(--color-background-surface);
-}
-
-@media (min-width: 900px) {
-  .mobileNav {
-    display: none !important;
-  }
 }

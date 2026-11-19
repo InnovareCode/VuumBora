@@ -1,0 +1,34 @@
+.row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-4);
+  text-align: center;
+}
+
+.caption {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  max-width: 44ch;
+}
+
+/*
+ * Esta é a ÚNICA imagem do produto na página inteira, então ela não pode usar
+ * a largura de apoio do PhoneMockup (teto de 240px, pensada para mockup
+ * secundário). Medido a 1440px em 19/11/2026: 240px de celular com ~1200px de
+ * vazio assimétrico ao lado não lê como respiro, lê como seção inacabada.
+ *
+ * Empilhado e centralizado de propósito, em vez de celular à esquerda e
+ * legenda solta à direita: o vazio simétrico é respiro; o de um lado só é
+ * buraco. `.row .mockup` (e não `.mockup`) para vencer a classe do próprio
+ * PhoneMockup sem depender da ordem em que os módulos CSS entram.
+ */
+.row .mockup {
+  width: clamp(240px, 42vw, 408px);
+}
+
+@media (min-width: 768px) {
+  .row .mockup {
+    width: clamp(320px, 30vw, 408px);
+  }
+}

@@ -1,22 +1,23 @@
 /**
- * Texto final de `docs/conteudo-site.md` §1. O dono confirmou em 18/11/2026
- * que o motorista vê o destino antes de aceitar a corrida (é o que o app já
- * implementa, não promessa) — o subtítulo usa a versão principal, com
- * "o destino" (`docs/decisoes-do-dono.md`).
+ * Virada para página única de pré-lançamento (`docs/decisoes-do-dono.md` →
+ * "Virada do site: página de pré-lançamento", 19/11/2026). Região (Natal e
+ * Grande Natal, RN) é argumento central, não rodapé — revoga a decisão
+ * anterior de não publicar cidade. Motorista é o público principal; a ação
+ * é a candidatura (`DriverApplicationForm`), não um link de âncora.
  */
 export const HERO_CONTENT = {
-  eyebrow: 'App de mobilidade urbana · em construção',
-  title: 'Antes de confirmar, você já sabe. Antes de aceitar, também.',
+  eyebrow: 'VuumBora em construção · Natal e Grande Natal, RN',
+  title: 'Natal vai ter o VuumBora. Candidate-se para dirigir desde o começo.',
   subtitle:
-    'O VuumBora é um novo app de corrida para quem pede e para quem dirige. Quem pede vê o preço estimado e o tempo de espera antes de confirmar, e o nome do motorista, o carro e a placa antes de embarcar. Quem dirige vê o destino, a distância e o valor estimado antes de aceitar.',
+    'Estamos construindo um novo app de corrida, começando por Natal e pela região metropolitana. Quem se candidatar agora é avaliado para fazer parte desde o início.',
   honesty:
-    'Ainda não estamos nas lojas. Este site mostra o que já está pronto, o que estamos construindo e o que ainda vamos decidir.',
-  primaryCta: { label: 'Sou passageiro', href: '#passageiro' },
-  secondaryCta: { label: 'Quero dirigir', href: '#motorista' },
-};
+    'Ainda não estamos nas lojas. O cadastro de motoristas não abre para todo mundo de uma vez: cada candidatura é avaliada antes de confirmar a vaga.',
+} as const;
 
-export const STORE_BADGES_CONTENT = {
-  groupLabel: 'Disponibilidade nas lojas de aplicativo',
-  caption: 'Em breve na',
-  stores: ['Google Play', 'App Store'] as const,
-};
+/** Nota secundária para quem só vai pedir corridas — o passageiro aparece
+ * em segundo plano nesta página, propositalmente. */
+export const PASSENGER_NOTE = {
+  eyebrow: 'Para quem vai pedir corrida',
+  title: 'Também vai se deslocar pelo VuumBora?',
+  description: 'Avisamos quando o app chegar para passageiros em Natal e na Grande Natal. Nada além disso.',
+} as const;
