@@ -1,27 +1,32 @@
 #!/usr/bin/env node
 /**
- * Runner de migração minimalista — sem dependência nova além de `pg`
- * (já usada pelo servidor). Aplica, em ordem alfabética, todo `.sql` em
- * `migrations/` que ainda não está registrado em `schema_migrations`.
+ * Atalho de linha de comando para preparar o banco: cria (se faltar) e
+ * aplica as migrações pendentes.
  *
- * Uso:
- *   node scripts/migrate.mjs
  *   npm run migrate --workspace @vuumbora/api
  *
- * Exige DATABASE_URL no ambiente (mesma variável do servidor). Em produção
- * vem injetado pelo Easypanel; local, lê `apps/api/.env` se existir (via
- * `dotenv/config` — silencioso se o arquivo não existir).
+ * A LÓGICA NÃO MORA AQUI. Este arquivo chama `src/migrate.ts` (compilado em
+ * `dist/migrate.js`), o mesmo módulo que o servidor executa no boot.
+ *
+ * Por que: até 19/11/2026 este script tinha a própria cópia do runner.
+ * Duas portas mantendo metades do mesmo estado é exatamente como uma delas
+ * fica para trás sem ninguém perceber — e aqui "para trás" significa um
+ * banco com tabela faltando, descoberto só quando o primeiro motorista
+ * tenta se cadastrar.
+ *
+ * Em produção isto é redundante por desenho: o servidor já faz tudo sozinho
+ * ao subir. O script continua existindo para rodar a migração sem subir a
+ * API (conferência, ambiente local, recuperação manual).
  */
 import 'dotenv/config';
-import { readdirSync, readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import pg from 'pg';
 
-const { Pool } = pg;
-
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const MIGRATIONS_DIR = join(ROOT, 'migrations');
+const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
+const COMPILADO = join(RAIZ, 'dist', 'migrate.js');
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -30,55 +35,30 @@ async function main() {
     process.exit(1);
   }
 
-  const pool = new Pool({ connectionString: databaseUrl });
+  if (!existsSync(COMPILADO)) {
+    console.error('[migrate] dist/migrate.js não existe. Rode antes:');
+    console.error('          npm run build --workspace @vuumbora/api');
+    process.exit(1);
+  }
 
+  const { prepararBanco } = await import(pathToFileURL(COMPILADO).href);
+
+  const pool = new pg.Pool({ connectionString: databaseUrl, max: 2 });
   try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS schema_migrations (
-        id TEXT PRIMARY KEY,
-        applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      );
-    `);
-
-    const applied = new Set(
-      (await pool.query('SELECT id FROM schema_migrations')).rows.map((row) => row.id),
-    );
-
-    const files = readdirSync(MIGRATIONS_DIR)
-      .filter((name) => name.endsWith('.sql'))
-      .sort();
-
-    let appliedCount = 0;
-    for (const file of files) {
-      if (applied.has(file)) {
-        console.log(`[migrate] já aplicada: ${file}`);
-        continue;
-      }
-
-      const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf8');
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        await client.query(sql);
-        await client.query('INSERT INTO schema_migrations (id) VALUES ($1)', [file]);
-        await client.query('COMMIT');
-        console.log(`[migrate] aplicada: ${file}`);
-        appliedCount += 1;
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw new Error(`falha ao aplicar ${file}: ${err.message}`);
-      } finally {
-        client.release();
-      }
-    }
-
-    console.log(`[migrate] concluído — ${appliedCount} migração(ões) nova(s), ${files.length} no total.`);
+    await prepararBanco({
+      databaseUrl,
+      pool,
+      criarBanco: process.env.CREATE_DATABASE_IF_MISSING !== 'false',
+      esperaEmSegundos: Number(process.env.DB_BOOT_WAIT_SECONDS ?? 60),
+    });
+    console.log('[migrate] concluído.');
   } finally {
     await pool.end();
   }
 }
 
 main().catch((err) => {
+  // Só a mensagem: o erro inteiro do `pg` pode ecoar a connection string.
   console.error(`[migrate] erro: ${err.message}`);
   process.exit(1);
 });

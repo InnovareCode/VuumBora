@@ -26,24 +26,59 @@ projeto. Abra-o e copie a **string de conexão interna**, aquela que começa com
 Use a interna de propósito: o banco não precisa ficar exposto para fora, e um
 Postgres aberto na internet é varrido por robôs em questão de horas.
 
-## 2. As migrações
+## 2. As migrações: nada a fazer
 
-Duas, nesta ordem, em `apps/api/migrations/`:
+**A API cria o banco e aplica as migrações sozinha, no boot.** Não há SQL para
+colar, console para abrir nem ordem para acertar.
 
-1. `0001_create_waitlist_signups.sql` — a lista de espera do passageiro
-2. `0002_create_driver_applications.sql` — a candidatura de motorista
+Isto mudou em 19/11/2026, depois que a primeira tentativa manual quase colou o
+SQL no banco `postgres` em vez do `vuumbora`: as tabelas teriam nascido no
+lugar errado e a API falharia depois, com o banco existindo e vazio. Um passo
+manual que precisa acertar o banco certo no console certo é um passo que vai
+errar algum dia.
 
-No Easypanel, abra o `vuumbora-banco`, entre no console de SQL e cole o conteúdo
-de cada arquivo, um de cada vez, conferindo que o primeiro terminou sem erro
-antes de passar ao segundo.
+O que acontece quando o contêiner sobe, antes de a primeira requisição ser
+aceita (`apps/api/src/migrate.ts`):
 
-Para confirmar que deu certo:
+1. **Cria o banco** apontado pela `DATABASE_URL`, se ele não existir.
+2. **Espera** o Postgres aceitar conexão (até `DB_BOOT_WAIT_SECONDS`, padrão 60):
+   o banco costuma subir depois da API.
+3. **Aplica** todo `.sql` de `apps/api/migrations/` que ainda não está
+   registrado em `schema_migrations`, cada um na própria transação.
+
+Se qualquer um dos três falhar, **o processo morre em vez de servir**. É de
+propósito: reiniciar em loop visível é melhor que um formulário que aceita
+candidatura e não grava nada.
+
+É seguro repetir. Provado em 19/11/2026 contra um PostgreSQL 18 real, com
+**quatro instâncias subindo ao mesmo tempo num servidor sem o banco**: as
+quatro responderam `healthz 200`, sobrou um banco só e cada migração ficou
+registrada uma única vez. Um `pg_advisory_lock` faz a fila. O mesmo teste
+revelou um defeito que a leitura do código não revelaria: `CREATE DATABASE` em
+paralelo devolve `23505`, não o `42P04` que a documentação sugere, e a primeira
+versão matava três das quatro instâncias no boot.
+
+Para conferir depois de subir, se quiser:
 
 ```sql
 select table_name from information_schema.tables where table_schema = 'public';
 ```
 
-Tem que listar `waitlist_signups` e `driver_applications`.
+Lista `waitlist_signups`, `driver_applications` e `schema_migrations`.
+
+**Rodar sem subir a API** (conferência ou recuperação manual), de dentro do
+contêiner ou com a `DATABASE_URL` no ambiente:
+
+```
+npm run migrate --workspace @vuumbora/api
+```
+
+Esse script chama o mesmo módulo do boot, de propósito: duas implementações de
+migração é como uma delas fica para trás sem ninguém perceber.
+
+`docs/sql/migracoes-completas.sql` continua no repositório só como saída de
+emergência, para colar à mão se um dia o boot não puder rodar. No caminho
+normal, ninguém precisa abrir esse arquivo.
 
 ## 3. O serviço do backend
 
@@ -67,8 +102,19 @@ propósito, para nunca rodar com banco vazio em silêncio. `TRUST_PROXY` importa
 porque o limite de requisições conta por IP, e atrás do proxy do Easypanel todo
 mundo chegaria com o mesmo endereço sem isso.
 
+⚠️ A `DATABASE_URL` tem que terminar no nome do banco da aplicação, por exemplo
+`.../vuumbora`. Se terminar em `/postgres`, é nesse banco que as tabelas vão ser
+criadas — funciona, mas mistura os dados da aplicação com o banco de sistema.
+
 O que **não** precisa mexer: os limites de requisição têm padrão de 5 tentativas
-a cada 10 minutos, que é o que validamos.
+a cada 10 minutos, que é o que validamos. A migração automática também já vem
+ligada. As três variáveis abaixo existem só para casos fora do comum:
+
+| Variável | Padrão | Para quê |
+|---|---|---|
+| `RUN_MIGRATIONS_ON_BOOT` | ligado | `false` desliga o preparo no boot (migração manual controlada) |
+| `CREATE_DATABASE_IF_MISSING` | ligado | `false` em Postgres gerenciado, onde o banco já vem pronto e o usuário não pode criar |
+| `DB_BOOT_WAIT_SECONDS` | `60` | quanto esperar o Postgres aceitar conexão antes de desistir |
 
 ## 4. O endereço da API
 
@@ -109,10 +155,28 @@ npm run driver-applications:export --workspace @vuumbora/api
 Esse script lê o banco e lista as candidaturas. Se a sua aparecer ali, o caminho
 inteiro está fechado: formulário, API, banco.
 
+## O que já foi provado contra Postgres real
+
+Em 19/11/2026, contra um PostgreSQL 18.1 rodando de verdade (um cluster
+temporário e isolado, em porta separada, apagado depois):
+
+- **Banco criado do zero pelo boot**, as duas migrações aplicadas, `healthz 200`.
+- **Segundo boot não repete nada:** "0 migração(ões) nova(s)".
+- **Quatro instâncias ao mesmo tempo, banco inexistente:** as quatro saudáveis,
+  um banco só, cada migração registrada uma única vez.
+- **Deduplicação por e-mail:** quatro envios do mesmo endereço, incluindo em
+  MAIÚSCULAS e com espaços em volta, viraram **uma linha** no banco. A resposta é
+  sempre `{"ok":true}`, sem revelar que o e-mail já estava lá.
+- **Normalização de telefone:** `(84) 9 8888-7777`, `84988887777` e
+  `+55 84 98888-7777` gravaram todos como `+5584988887777`.
+
+Antes disso a API só tinha sido exercitada com `app.inject()` — validação de
+campo, 400 com todos os campos, 429 do limite, 503 sem banco.
+
 ## O que continua sem prova
 
-Nada disso rodou contra Postgres real ainda. A API foi exercitada com
-`app.inject()` (validação de campo, erro 400 com todos os campos, 429 do limite,
-503 sem banco), mas **a deduplicação por e-mail e a normalização de telefone com
-entrada real de gente nunca foram testadas contra o banco**. É o primeiro
-trabalho da Íris quando o backend subir.
+A imagem Docker **nunca foi construída nesta máquina** (não há Docker aqui): o
+que foi provado é a aplicação rodando com Node direto, mais a guarda
+`check-docker-context.mjs`, que confere que os `COPY` dos Dockerfiles e o
+`.dockerignore` não se contradizem. Build verde no servidor continua sendo o
+primeiro teste real da imagem.

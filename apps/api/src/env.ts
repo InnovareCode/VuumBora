@@ -36,6 +36,30 @@ const schema = z.object({
     .optional()
     .transform((value) => value !== 'false'),
 
+  /**
+   * O boot cria o banco (se faltar) e aplica as migrações pendentes antes
+   * de aceitar a primeira requisição. Ligado por padrão: publicar não pode
+   * depender de alguém colar SQL no console certo do banco certo.
+   * Para desligar (ex.: migração manual controlada), ponha `false`.
+   */
+  RUN_MIGRATIONS_ON_BOOT: z
+    .string()
+    .optional()
+    .transform((value) => value !== 'false'),
+
+  /**
+   * Criar o banco da DATABASE_URL quando ele não existe. Separado do item
+   * acima porque em Postgres gerenciado o banco já vem pronto e o usuário
+   * não tem permissão de CREATE DATABASE — ali isto só gera ruído no log.
+   */
+  CREATE_DATABASE_IF_MISSING: z
+    .string()
+    .optional()
+    .transform((value) => value !== 'false'),
+
+  /** Quanto esperar o Postgres aceitar conexão no boot: ele costuma subir depois da API. */
+  DB_BOOT_WAIT_SECONDS: z.coerce.number().int().positive().default(60),
+
   WAITLIST_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
   WAITLIST_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(10),
 
