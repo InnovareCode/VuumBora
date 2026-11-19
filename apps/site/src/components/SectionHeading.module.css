@@ -8,7 +8,7 @@
   font-weight: var(--peso-olho);
   letter-spacing: var(--tracking-olho);
   text-transform: uppercase;
-  color: var(--color-brand-yellow);
+  color: var(--site-eyebrow-ink);
 }
 
 /* clamp(24px,3.2vw,40px): bem abaixo da metade do H1 do Hero

@@ -1,4 +1,4 @@
-import { AboutBlock } from '@/components/AboutBlock';
+import { AppDownloadBlock } from '@/components/AppDownloadBlock';
 import { ArtCarousel } from '@/components/ArtCarousel';
 import { CommitmentBanner } from '@/components/CommitmentBanner';
 import { Container } from '@/components/Container';
@@ -22,10 +22,13 @@ import { ARTES_CAROUSEL_HEADING } from '@/content/hero';
  * Quatro faixas, cada uma uma forma diferente (nunca o mesmo bloco duas
  * vezes seguidas, `docs/padrao-visual-site.md` §4):
  *   1. Hero (navy/foto) — candidatura flutuante
- *   2. `.light-section` — carrossel de cartões brancos
+ *   2. `.light-section` — carrossel de cartões (fundo e cartão em degradê
+ *      claro, nunca branco chapado — ajuste de 19/11/2026, ver globals.css)
  *   3. navy — compromisso público (selo de confiança, sozinho)
  *   4. `.light-section` — lista de espera do passageiro ("formulário claro")
- * `AboutBlock`/`Footer` fecham a página no mesmo navy do cabeçalho.
+ * `AppDownloadBlock`/`Footer` fecham a página no mesmo navy do cabeçalho —
+ * `AppDownloadBlock` substituiu "Quem está por trás" (`AboutBlock`,
+ * removido em 19/11/2026); CNPJ/contato foram para o rodapé.
  */
 export default function HomePage() {
   return (
@@ -54,7 +57,7 @@ export default function HomePage() {
         </div>
 
         <Container>
-          <AboutBlock />
+          <AppDownloadBlock />
         </Container>
       </main>
       <Footer />

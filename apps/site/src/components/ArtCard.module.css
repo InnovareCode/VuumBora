@@ -10,13 +10,27 @@
   background: var(--site-card-bg, #ffffff);
   border: 1px solid var(--site-card-border, #d9dfe2);
   border-radius: var(--site-radius-photo);
+  /* Sombra sutil + o degradê mais claro/quente do próprio cartão (ver
+     globals.css) são o que separa o cartão do fundo da seção agora — medido
+     em 19/11/2026: o fundo da seção no vão entre cartões sai ~[241,241,238]
+     (quase neutro) contra ~[251,248,238] do cartão (mais claro e com um
+     leve tom quente, visível no canal vermelho/azul). A sombra reforça essa
+     diferença sem escurecer nada. */
+  box-shadow: var(--elevation-1);
   overflow: hidden;
 }
 
+/* 19/11/2026: as 6 fotos de `foto900` são todas 900×975 (proporção 0,9231,
+   medido no navegador — `naturalWidth`/`naturalHeight`, não suposto), e o
+   cartão forçava `4/3` (1,333) nelas: `object-fit:cover` cortava a foto pra
+   caber numa caixa bem mais larga que ela. A forma do cartão agora SEGUE a
+   proporção real da foto (`12/13` = 900/975) em vez do contrário — a foto
+   aparece inteira, sem recorte, e `object-fit:cover` fica inofensivo (as
+   proporções já são iguais, não há nada para cobrir/recortar). */
 .media {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 12 / 13;
   background: var(--color-background-surface);
 }
 
@@ -26,7 +40,6 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 32%;
 }
 
 .body {

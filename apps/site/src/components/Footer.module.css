@@ -20,6 +20,17 @@
   font-size: var(--font-size-small);
 }
 
+.legalEntity {
+  margin-top: var(--spacing-3);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  line-height: 1.6;
+}
+
+.legalEntity strong {
+  color: var(--color-text-secondary);
+}
+
 .columnTitle {
   font-size: var(--font-size-caption);
   font-weight: var(--peso-olho);
@@ -71,6 +82,36 @@
   color: var(--color-brand-yellow);
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.socialColumnTitle {
+  margin-top: var(--spacing-5);
+}
+
+.socialList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+/* 44×44 de alvo de toque real (mesmo token dos rádios do formulário,
+   `--layout-touch-target`) — a altura mínima vem do próprio link, não só
+   de um ícone pequeno dentro de uma área maior. */
+.socialLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  min-height: var(--layout-touch-target);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.socialLink svg {
+  flex-shrink: 0;
+}
+
+.socialLink:hover {
+  color: var(--color-text-primary);
 }
 
 .bottom {

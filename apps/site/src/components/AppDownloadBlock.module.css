@@ -1,0 +1,91 @@
+.block {
+  margin-top: var(--spacing-7);
+  padding-top: var(--spacing-6);
+  padding-bottom: var(--spacing-8);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.eyebrow {
+  display: inline-flex;
+  font-size: var(--font-size-caption);
+  font-weight: var(--peso-olho);
+  letter-spacing: var(--tracking-olho);
+  text-transform: uppercase;
+  color: var(--color-brand-yellow);
+}
+
+.title {
+  margin-top: var(--spacing-2);
+  font-size: clamp(20px, 2.4vw, 24px);
+  letter-spacing: var(--site-tracking-titulo);
+  font-weight: var(--peso-titulo);
+  color: var(--color-text-primary);
+}
+
+.description {
+  margin-top: var(--spacing-3);
+  max-width: 60ch;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.buttons {
+  margin-top: var(--spacing-5);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-4);
+}
+
+/* Desabilitado de verdade (`disabled` nativo já tira do foco/tab e é
+   anunciado como "desabilitado" por qualquer leitor de tela) — o visual
+   "apagado" NÃO pode ser a única pista (nem a principal): usar `opacity`
+   no botão inteiro escurecia o TEXTO junto com a borda e derrubava o
+   contraste da legenda para 3,95:1 (medido por pixel real, abaixo do
+   4,5:1 exigido) — a cor nominal do token era suficiente, só a opacidade
+   é que furava. Por isso aqui só a BORDA fica discreta (tom sutil, sem
+   o branco forte do botão "Sou passageiro"); o texto mantém a cor cheia
+   dos tokens. O que sinaliza "não clicável" é o conjunto: sem foco por
+   teclado, cursor "não permitido", nenhuma cor de marca/gradiente (só os
+   CTAs de verdade usam `--gradient-cta`/borda branca forte), e `.note`
+   abaixo, sempre em texto visível, explicando o motivo. */
+.storeButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  min-height: var(--layout-touch-target);
+  padding-inline: 20px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  border: 1.5px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+}
+
+.storeButton svg {
+  opacity: 0.8;
+}
+
+.storeText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+}
+
+.storeCaption {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.storeName {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.note {
+  margin-top: var(--spacing-4);
+  max-width: 56ch;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}

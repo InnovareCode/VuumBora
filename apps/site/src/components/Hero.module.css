@@ -89,12 +89,24 @@
   color: var(--color-brand-yellow);
 }
 
-/* H1 de clamp(3.4rem,6.8vw,7rem) = 97,9px em 1440px, tracking -0,055em
-   (-5,4px nesse tamanho) — os números exatos que o dono aprovou no exemplo
-   de referência (`VuumBora_Pre_Lancamento_Web`). */
+/* H1 de clamp(3.4rem,6.8vw,6.125rem) — o teto (antes 7rem/112px) foi
+   medido de novo em 19/11/2026: `.intro` fica preso em 543,9px de largura
+   para QUALQUER viewport ≥1280px (o `.container` do site já platea em
+   1180px bem antes disso — ver `--site-container-max`), mas o `6.8vw` do
+   `font-size` não sabe disso e segue crescendo com a janela, não com o
+   container. Resultado: em qualquer tela larga o bastante para o `vw`
+   furar esse teto fixo (a partir de ~1647px, onde batia no antigo 7rem),
+   "Dirija com a" (precisa de ~550-615px no fonte-size que vinha) não cabia
+   mais nos 543,9px disponíveis — por isso quebrava em TRÊS linhas (ex.
+   1920px), não duas. Achei o maior fonte-size que ainda cabe por bissecção
+   real no navegador (Playwright, não estimativa): ~98,2px com 4px de
+   margem. 6,125rem=98px fica dentro disso com ~5px de folga, e o `vw`
+   passa a platear em 98px a partir de ~1441px — ou seja, 1440px (97,9px,
+   o número que o dono aprovou) e 1920px (98px) saem praticamente iguais,
+   ambos em DUAS linhas; confirmado também em 1280px. */
 .title {
   margin-top: 18px;
-  font-size: clamp(3.4rem, 6.8vw, 7rem);
+  font-size: clamp(3.4rem, 6.8vw, 6.125rem);
   line-height: 1.06;
   letter-spacing: -0.055em;
   font-weight: var(--peso-titulo);

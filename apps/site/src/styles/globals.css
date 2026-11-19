@@ -19,6 +19,10 @@
   --site-veil-rgb: 7, 13, 24;
   --site-radius-photo: 28px; /* raio do cartão de foto na referência */
   --site-tracking-titulo: -0.025em; /* tracking negativo nos títulos grandes */
+  /* Olho do `SectionHeading` — amarelo por padrão (seções escuras). Trocado
+     para navy dentro de `.light-section` (ver abaixo), onde amarelo puro
+     sobre fundo claro reprova contraste. */
+  --site-eyebrow-ink: var(--color-brand-yellow);
 }
 
 /*
@@ -32,10 +36,29 @@
  * `--color-text-on-light-muted` já existia no design system (tela de app
  * sobre fundo claro) — reaproveitado aqui, não inventado.
  */
+/*
+ * 19/11/2026, ajuste pontual: o dono reprovou o branco chapado desta seção
+ * ("o branco em si não gostei em NENHUMA parte do site") — tanto o fundo
+ * quanto os cartões eram uma cor sólida só. `--color-background-base` e
+ * `--color-background-surface`/`--site-card-bg` SÓ são consumidos via
+ * `background:` (shorthand, nunca `background-color:`), então aceitam
+ * `linear-gradient()` sem quebrar nada que já lia esses tokens (confirmado
+ * por grep antes de trocar). Os dois degradês usam a MESMA paleta da marca
+ * (amarelo/navy), só diluída: fundo da seção vai de um creme amarelado
+ * (`--color-brand-yellow` bem clareado) a um azul-acinzentado (mesmo tom
+ * final de `--gradient-search-light`, já usado no design system para
+ * superfície clara); o cartão é um degradê mais claro e mais quente
+ * (branco → areia), para ficar perceptivelmente mais claro/quente que o
+ * fundo ao redor — é essa diferença de tom que dá profundidade sem escurecer
+ * nada (ver auditoria anterior sobre "página virou um bloco escuro único").
+ * `--color-background-input`/`--color-background-elevated` ficam de fora de
+ * propósito: campo de formulário com fundo em degradê piora a leitura do
+ * texto digitado, então continuam sólidos.
+ */
 .light-section {
   color-scheme: light;
-  --color-background-base: #fafaf8;
-  --color-background-surface: #ffffff;
+  --color-background-base: linear-gradient(160deg, #fdf6e7 0%, #f4f1ea 46%, #eef1f6 100%);
+  --color-background-surface: linear-gradient(165deg, #ffffff 0%, #faf5e8 100%);
   --color-background-elevated: #ffffff;
   --color-background-input: #ffffff;
   --color-text-primary: var(--color-brand-navy);
@@ -46,11 +69,16 @@
   --color-border-emphasis: #c3cbd2;
   /* Consumidos por ArtCard/ArtCarousel (fallback idêntico embutido ali, só
      redeclarados aqui para ficarem num único lugar de verdade). */
-  --site-card-bg: #ffffff;
+  --site-card-bg: linear-gradient(165deg, #ffffff 0%, #faf5e8 100%);
   --site-card-border: #d9dfe2;
   --site-card-ink: var(--color-brand-navy);
   --site-card-eyebrow: var(--color-brand-navy);
   --site-card-text-secondary: var(--color-text-on-light-muted);
+  /* `SectionHeading` é usado em seção clara E escura — o olho amarelo sobre
+     fundo escuro tem contraste ótimo, mas sobre este fundo claro cai para
+     ~1,5:1 (reprova). Este token troca só dentro do escopo claro; ver
+     SectionHeading.module.css. */
+  --site-eyebrow-ink: var(--color-brand-navy);
   background: var(--color-background-base);
   color: var(--color-text-primary);
 }
