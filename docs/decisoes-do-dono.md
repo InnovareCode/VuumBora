@@ -545,3 +545,38 @@ validar candidaturas, a página provavelmente precisa coletar mais do que
 e-mail — cidade onde dirige, se já tem veículo, se já dirige por aplicativo.
 Cada campo a mais é dado pessoal e aumenta a responsabilidade. O backend hoje
 guarda só e-mail e perfil.
+
+## Campos do pré-cadastro de motorista (19/11/2026)
+
+O dono quer coletar mais que e-mail, para poder **validar** a candidatura.
+Proposta, guiada pelo princípio de pedir só o que serve à finalidade:
+
+| Campo | Por que | Obrigatório |
+|---|---|---|
+| Nome | falar com a pessoa pelo nome, e validar | sim |
+| E-mail | avisar do resultado e do lançamento | sim |
+| Celular (WhatsApp) | é por onde motorista responde de fato | sim |
+| Cidade onde dirige | o lançamento é por região; define quem entra primeiro | sim |
+| Já dirige por aplicativo | separa quem começa amanhã de quem precisa de apoio | não |
+| Tem veículo próprio | critério direto de elegibilidade | não |
+
+**O que NÃO pedir agora, e o motivo:** CPF, CNH, documento do veículo, foto,
+comprovante. Isso é a etapa de **cadastro de verdade**, que vem depois da
+aprovação, exige guarda segura e processo de verificação (decisão 9). Pedir
+documento num formulário de pré-cadastro é assumir obrigação de guardar
+documento sensível antes de existir processo para isso.
+
+**O que muda de responsabilidade, com os campos novos:**
+
+1. **Nome e celular tornam os dados identificáveis de verdade.** E-mail
+   solto já é dado pessoal; nome e telefone juntos deixam a base mais
+   sensível, e um vazamento passa a ser mais grave.
+2. **O aviso de privacidade precisa citar os campos**, não só "seu e-mail".
+3. **Criou-se uma expectativa de resposta.** Quem se candidata e informa
+   telefone espera retorno. Não responder é pior do que não ter coletado.
+4. **A exclusão passa a valer para tudo**, não só o e-mail.
+
+**Pendência que isso cria:** quem analisa as candidaturas, em quanto tempo e
+com qual critério. Sem isso, o formulário vira uma caixa que enche e não
+responde — e aí o pré-cadastro trabalha contra a credibilidade que ele
+deveria construir.
