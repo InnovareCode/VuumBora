@@ -404,14 +404,25 @@ justamente o dado que ainda não temos.
 
 **Isto bloqueia a publicação do formulário**, não o desenvolvimento dele.
 
+**Resolvido em 19/11/2026:** o dono informou a razão social — **Innovare
+Code**, CNPJ **09.813.446/0001-00**. Esse é o controlador a citar no aviso
+de privacidade do formulário.
+
 ### 2. Aviso de privacidade no próprio formulário (mínimo viável)
 
 Não precisa da política completa para começar, mas precisa, ao lado do
 campo, de forma curta e legível:
 - qual a finalidade (avisar quando o app lançar — e só isso);
-- quem é o controlador (item 1);
+- quem é o controlador (item 1 — já resolvido, ver acima);
 - que o e-mail não será vendido nem repassado;
 - como pedir a exclusão, e para onde escrever.
+
+**Ainda falta (19/11/2026):** não existe, até agora, um endereço de
+contato (e-mail ou canal) para quem quiser pedir exclusão. Sem isso, o
+aviso de privacidade fica incompleto mesmo com o controlador identificado
+— a pessoa precisa de um "para onde escrever" real. Continua bloqueando a
+publicação do formulário junto com o restante do item 2. Registrado também
+em `docs/lista-de-espera.md`.
 
 ### 3. Onde os dados ficam
 

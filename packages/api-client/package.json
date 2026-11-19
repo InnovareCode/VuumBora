@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./passenger": "./src/passenger/index.ts",
-    "./driver": "./src/driver/index.ts"
+    "./driver": "./src/driver/index.ts",
+    "./waitlist": "./src/waitlist/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p ."

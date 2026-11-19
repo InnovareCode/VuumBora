@@ -1,0 +1,32 @@
+{
+  "name": "@vuumbora/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "API minima do VuumBora — primeira peca real de backend (Fase 5). Hoje so a lista de espera.",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p .",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p . --noEmit",
+    "migrate": "node scripts/migrate.mjs",
+    "waitlist:export": "node scripts/export-waitlist.mjs",
+    "waitlist:delete": "node scripts/delete-waitlist.mjs"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.2",
+    "dotenv": "^18.0.10",
+    "@fastify/helmet": "^12.0.1",
+    "@fastify/rate-limit": "^10.2.2",
+    "fastify": "^5.2.1",
+    "pg": "^8.13.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "~6.0.3"
+  }
+}

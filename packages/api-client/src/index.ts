@@ -25,6 +25,7 @@ export type ApiError =
   | { readonly kind: 'not_found' }
   | { readonly kind: 'conflict'; readonly reason: string }
   | { readonly kind: 'validation'; readonly fields: Readonly<Record<string, string>> }
+  | { readonly kind: 'rate_limited'; readonly retryAfterSeconds?: number }
   | { readonly kind: 'unavailable'; readonly retryable: true }
   | { readonly kind: 'unknown'; readonly message: string };
 
