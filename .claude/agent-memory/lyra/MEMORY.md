@@ -14,7 +14,7 @@
 - [Reaproveitar componente com numberOfLines fixo trunca em caso novo](bug_componente_reaproveitado_numberoflines_fixo.md) — RouteSummaryRow→TripDetailRow, por que duplicar em vez de generalizar.
 - [Image.resolveAssetSource não existe no react-native-web](bug_resolveassetsource_react_native_web.md) — use `imageSource`/asset number direto, nunca resolva pra URI.
 - [Referência "linha única" pode não caber em NENHUM breakpoint real](bug_referencia_linha_unica_nao_cabe_breakpoint.md) — medir largura mínima antes de tentar um breakpoint esperto.
-- [apps/site — Next.js static export](project_site_nextjs_static_export.md) — gerador de tokens→CSS, favicon/OG, domínio, pendências do dono, reforma premium 18/11, mockups+lista de espera+about 19/11, virada pra página única 19/11, e reconstrução sobre as artes reais (sem IA) 19/11.
+- [apps/site — Next.js static export](project_site_nextjs_static_export.md) — gerador de tokens→CSS, favicon/OG, domínio, pendências do dono, reforma premium 18/11, mockups+lista de espera+about 19/11, virada pra página única 19/11, reconstrução sobre artes reais 19/11, 2ª reescrita (composição/PhotoCard) 19/11, 4ª reescrita (vidro+claro/escuro+carrossel) 19/11.
 - [CSS: override antes da regra base perde](bug_css_module_ordem_override_perde_para_base.md) — menu mobile não sumia no desktop; ordem no arquivo decide empate de especificidade.
 - [Playwright fullPage cria fantasma mesmo sem sticky](bug_playwright_fullpage_sticky_fantasma.md) — nunca usar fullPage:true pra medir; redimensionar viewport + screenshot normal, ou clip.
 - [Glow decorativo sem overflow:hidden vaza a página](bug_glow_decorativo_sem_overflow_hidden.md) — inset negativo em elemento decorativo cria overflow horizontal real ≤390px.
@@ -25,3 +25,6 @@
 - [Medir site no navegador sem ferramenta de browser](feedback_medir_site_sem_browser_tool.md) — playwright-core casando versão com cache de Chromium já no disco, armadilhas de scroll/EBUSY.
 - [Fundo de mockup vs. tom de seção](bug_fundo_mockup_vs_tom_secao.md) — halo atrás de mockup: desbotar até TRANSPARENTE, nunca até cor fixa, senão vira caixa visível em seção de outro tom.
 - [align-items:center em colunas desiguais cria vão vazio duplo](bug_align_items_center_vao_vazio_colunas_desiguais.md) — hero com imagem 16:9 curta ao lado de formulário alto: flex-start bate melhor que center/stretch.
+- [Variar forma de bloco foto+texto sem duplicar componente](feedback_photocard_variar_forma_sem_duplicar.md) — proporção como prop (`ratio`/`aspect-ratio` via CSS var), variação vive no layout ao redor, não na peça.
+- [Alternância clara/escura via escopo de custom property](feedback_light_section_token_scoping.md) — `.light-section` redefine os mesmos tokens, zero variante de componente.
+- [Carrossel automático sem reprovar acessibilidade](feedback_carrossel_autoplay_acessivel.md) — pausa em hover/foco/aba oculta, reduced-motion, funciona sem JS, testado com Playwright esperando o intervalo real.

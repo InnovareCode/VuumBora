@@ -7,6 +7,14 @@
 export const HERO_HONESTY =
   'Ainda não estamos nas lojas. O cadastro de motoristas não abre para todo mundo de uma vez: cada candidatura é avaliada antes de confirmar a vaga.';
 
+/** Título da seção clara do carrossel de artes (`ArtCarousel`) — chrome
+ * estrutural da página, não uma frase de uma arte específica (por isso vive
+ * aqui, e não em `artes.ts`). */
+export const ARTES_CAROUSEL_HEADING = {
+  eyebrow: 'Pré-lançamento · Grande Natal',
+  title: 'Conheça a VuumBora',
+} as const;
+
 /** Nota secundária para quem só vai pedir corridas — o passageiro aparece
  * em segundo plano nesta página, propositalmente. */
 export const PASSENGER_NOTE = {

@@ -335,3 +335,157 @@ dizeres em campos `olho`/`titulo`/`tituloDestaque`/`apoio`).
   `right > clientWidth`, `figcaption` visível (overlay) nas duas larguras
   <768 e sr-only (1×1px) nas duas ≥768 — comportamento batendo com a regra
   pedida, não só suposto.
+
+## 2ª reescrita: composição em vez de lista (19/11/2026, mesmo dia)
+
+O dono reprovou a versão acima: "parece um site que só jogou as imagens e
+pronto" — `ArteSection` empilhava as 5 artes como retângulos idênticos, cada
+uma com o mesmo peso. Ele apontou `docs/padrao-visual-site.md` (medido por
+quem orquestrou, não por mim) como a receita a seguir. `ArtworkPanel`/
+`ArteSection` foram **apagados** e substituídos:
+
+- **`PhotoCard.tsx`** (substitui `ArtworkPanel`): sempre usa `foto900`/
+  `foto560` (o recorte SEM texto desenhado) com overlay HTML por cima — nunca
+  mais troca pra `completa` (texto já desenhado) a partir de 768px como o
+  componente antigo fazia. Isso elimina a razão de existir do truque
+  sr-only/visually-hidden: o texto é HTML em QUALQUER largura, sempre a
+  mesma árvore. Dois véus reais (`::before`/`::after`-like via dois `<span>`
+  absolutos): um vertical "de baixo" (onde o texto senta, 3 stops) + um "de
+  cima" (profundidade, 2 stops) — `rgba(var(--site-veil-rgb), alfa)`, cor
+  igual ao token `--color-background-base` decomposta em R,G,B (não é HEX
+  solto para o `check-boundaries.mjs`, é `rgba()` com números).
+  **O pulo do gato para variar a FORMA sem duplicar componente**: `ratio`/
+  `ratioDesktop` viram `aspect-ratio` via CSS custom property
+  (`--pc-ratio`/`--pc-ratio-desktop`) passada por `style` inline — a MESMA
+  arte (`foto900`, sempre ~0,92 de proporção intrínseca) cobre
+  (`object-fit:cover`) qualquer proporção que o layout pedir. Isso é o que
+  permite reaproveitar `PhotoCard` em 3 blocos de forma diferente sem violar
+  "componentes pequenos, nunca um gigante que faz tudo".
+- **`ArtworkPairSection.tsx`** (novo): duas `PhotoCard` lado a lado
+  (`grid-template-columns` via prop `columns`, empilha <768px). Usado duas
+  vezes com `columns` diferente — `'1fr 1fr'` (par de peso igual,
+  repasse-rápido + candidatura motorista-mulher, com `CommitmentBanner`
+  como `children` reforçando embaixo) e `'3fr 2fr'` (par assimétrico,
+  prefere-motorista-mulher grande + sua-escolha pequena). Mesmo componente,
+  dois blocos que LEEM como formas diferentes — é a resposta direta a
+  "blocos precisam variar de forma, não repetir o mesmo cartão".
+- **`PhotoBand.tsx`** (novo): uma `PhotoCard` só, `ratio="16/9"` (faixa baixa
+  e larga) — a 3ª forma da página, reservada pra `suporte-local`. Risco que
+  cogitei e descartei: cortar pra uma proporção muito mais larga (21:9)
+  arriscava cortar o rosto da pessoa num recorte de foto que é ~0,92
+  (quase quadrado); 16:9 já lê como "faixa" (claramente mais baixa que os
+  cartões 4:5 dos outros blocos) sem arriscar o enquadramento — confirmei
+  olhando o screenshot, não só calculando.
+- **`Hero.tsx` 2ª versão**: `PhotoCard` (ratio 4/5 mobile, 3/4 ≥1024px) ao
+  lado da candidatura — a mudança que tornou isso seguro (a 1ª tentativa de
+  hero lado a lado, registrada na seção anterior desta memória, tinha
+  falhado por usar a arte `completa` 16:9 com texto desenhado, que
+  encolhia pra 39% da tela numa coluna). Com `foto900` (recorte sem texto,
+  proporção livre), o mesmo problema não existe — a prova foi medir de novo,
+  não assumir que "dessa vez ia dar certo".
+- **`globals.css` ganhou 3 tokens só do site** (mesmo padrão de
+  `--site-container-max`, não mexe em `tokens.generated.css`):
+  `--site-veil-rgb: 7, 13, 24` (p/ os véus), `--site-radius-photo: 28px`
+  (raio medido na referência, diferente do nosso `--radius-xxl` de 24px),
+  `--site-tracking-titulo: -0.025em` (tracking negativo nos títulos grandes
+  — o detalhe que a referência aponta como "o que separa amador de
+  acabado"). O olho/eyebrow também virou pílula de verdade (fundo +
+  padding 4px/10px + raio 10px), não só texto colorido solto.
+- **Contraste medido por pixel de verdade, não estimado**: screenshot via
+  Playwright + `sharp().extract()` lendo o pixel real atrás de cada texto
+  (amostra ao lado do fim do texto, mesma linha = mesma opacidade de véu),
+  fórmula WCAG de luminância relativa calculada à mão. Todos os textos sobre
+  foto deram >9:1 nas 4 larguras (320/390/768/1440) — o véu de baixo garante
+  isso por construção (alfa 0,8–0,95 onde o texto senta), mas medir pixel
+  real é o que prova, não o CSS.
+
+Ver também [[feedback_photocard_variar_forma_sem_duplicar]].
+
+## 4ª reescrita: vidro fosco + alternância clara/escura + carrossel automático (19/11/2026, mesmo dia)
+
+O dono reprovou nível zero: "está muito muito muito feito". Chegou um exemplo
+PRONTO dele (`VuumBora_Pre_Lancamento_Web/public/index.html`+`site.css`) e uma
+auditoria do Apolo (`docs/auditoria-arte-site.md`) medindo cada defeito com
+número — reimplementei em cima disso, não por cima da versão anterior.
+Durante o trabalho o Atlas trouxe DUAS correções do dono por cima do pedido
+original (chegaram via mensagem do coordenador, não por mim ter perguntado):
+candidatura flutuando em vidro sobre a arte, e depois "o carrossel passa
+sozinho" revogando o "sem autoplay" que eu tinha acabado de implementar.
+
+- **`.light-section` (`globals.css`): REDEFINE os tokens de cor, não
+  reescreve componente nenhum.** Em vez de criar uma variante clara de
+  `WaitlistForm`/`AboutBlock`/`PassengerNote`, criei uma classe que troca
+  `--color-background-surface`/`--color-text-primary`/etc. para os
+  equivalentes claros DENTRO do seu escopo — qualquer componente que já
+  consome esses tokens (todos consomem, é a convenção do projeto) vira claro
+  automaticamente. `<div className="light-section"><PassengerNote/></div>`
+  foi a mudança inteira. Padrão a reaproveitar sempre que pedirem alternância
+  clara/escura num projeto que já é token-driven — fica em `globals.css`.
+- **Hero vira foto de fundo de TODA a seção** (`position:absolute;inset:0`
+  no `<img>`, `isolation:isolate` no `<section>`), não mais grid foto-lado-a-
+  lado-com-formulário. O cartão da candidatura (`DriverApplicationForm`)
+  senta em cima da MESMA foto, em vidro fosco
+  (`backdrop-filter:blur(20px) saturate(140%)` + `rgba(veil,0.62)`, fallback
+  `@supports` com alpha 0.86 sólido pra navegador sem suporte). Causa raiz
+  do H1 caindo abaixo da dobra (auditoria C3) era `align-items:center` no
+  grid — a correção REAL foi trocar para `align-items:start`: o H1 fica
+  preso perto do topo não importa a altura do card ao lado, então "flutuar
+  o formulário sobre a arte" e "H1 acima da dobra" deixam de competir.
+  Medido (Playwright): H1 a 97,92px em 1440px e tracking -5,4px, exatamente o
+  número que o exemplo do dono tinha — `clamp(3.4rem,6.8vw,7rem)` +
+  `letter-spacing:-0.055em`, copiado do `site.css` dele, não reinventado.
+  Contraste de TODO texto do cartão de vidro medido por pixel real (receita
+  de [[feedback_medir_site_sem_browser_tool]]) nas 4 larguras: pior caso
+  5,73:1 (texto de privacidade em 1440px), todos acima do mínimo WCAG AA.
+- **`ArtCard`/`ArtCarousel` substituem `PhotoCard`/`ArtworkPairSection`/
+  `PhotoBand` (apagados)**: cartão BRANCO de borda com foto LIMPA (sem véu
+  algum) + texto abaixo em tinta navy — resolve de raiz a crítica C1 da
+  auditoria ("véu apagou as fotos") porque não sobrou véu pra apagar nada.
+  O destaque amarelo do título (assinatura visual das artes) virou
+  sublinhado grosso em vez de TEXTO amarelo — amarelo da marca sobre branco
+  dá ~1,6:1 de contraste, reprova; sublinhado preserva a assinatura sem
+  reprovar.
+- **Carrossel automático com toda a acessibilidade que movimento automático
+  exige** — pedido final do dono, revogando o "sem autoplay" do pedido
+  anterior no MESMO dia (guardar isso: direção pode mudar DENTRO da mesma
+  tarefa, o handoff anterior não é garantia do que vem a seguir). Receita
+  testada (Playwright, não só lida no código):
+  - Avança sozinho a cada 5,5s via `track.scrollTo({left,behavior:'smooth'})`
+    — o deslize suave É o próprio `scroll-snap` nativo, não existe motor de
+    animação paralelo pra manter.
+  - Pausa com `onPointerEnter`/`onFocusCapture` (dois estados: pausa
+    MANUAL via botão, que persiste, vs. pausa de INTERAÇÃO via hover/foco,
+    que é transitória — resolvi com dois booleans combinados em
+    `playing = !reduced && !manual && !interaction && !tabHidden`, nunca um
+    só).
+  - Pausa com `document.visibilitychange` (aba oculta).
+  - `prefers-reduced-motion` nunca inicia o intervalo — inicializado por
+    `useState(() => matchMedia(...).matches)` (inicializador preguiçoso),
+    NUNCA por `setState` dentro de `useEffect`: isso dispara
+    `react-hooks/set-state-in-effect` (erro de lint, não warning) porque o
+    projeto trata "cascading render síncrono" como erro de build.
+  - Funciona SEM JavaScript: a `<ul>` já é `overflow-x:auto` + `scroll-snap`
+    puro CSS; confirmado com `context = browser.newContext({
+    javaScriptEnabled:false })` — a seção e os 5 slides continuam no DOM,
+    roláveis por gesto/scroll nativo mesmo sem hidratar.
+  - Testei cada comportamento isoladamente esperando ~6,2s real (não só lendo
+    o código): avança sozinho, pausa no hover, retoma ao sair, pausa ao
+    focar por teclado, retoma ao perder foco, botão pausa persiste, reduced
+    motion não inicia E esconde o botão de pausa (não faz sentido oferecer
+    pausar o que nunca anda), aba oculta não avança.
+- **`SectionHeading`** (novo, pequeno e reutilizável): pílula+H2 para toda
+  seção nova — piso do `clamp` calibrado a 24px (não 28px) depois de medir
+  que em 320–768px o H1 do Hero também bate no piso dele (54,4px): com H2 a
+  28px a razão caía pra 1,94× e reprovava o critério "H1 ≥ 2× qualquer H2"
+  por uma margem pequena só nessas larguras — 24px resolveu com folga
+  (2,21–2,27×) sem mexer no H1 aprovado.
+- **Armadilha nova**: `DriverApplicationForm`'s `.title` usava
+  `var(--font-size-heading)` (28px, token de tela de app) — é um título de
+  CARTÃO, devia ser 22-24px (`docs/padrao-visual-site.md` §2), e também era
+  o verdadeiro responsável por reprovar o "H1 ≥ 2×" em mobile (não o
+  `SectionHeading`, que eu suspeitei primeiro — medir qual heading é o
+  culpado real antes de ajustar, `document.querySelectorAll('h2,h3')` com
+  `fontSize` de cada um, em vez de corrigir o primeiro candidato óbvio).
+
+Ver também [[feedback_light_section_token_scoping]] e
+[[feedback_carrossel_autoplay_acessivel]].

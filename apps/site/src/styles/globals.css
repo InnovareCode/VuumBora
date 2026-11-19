@@ -9,6 +9,50 @@
   --site-container-max: 1180px;
   --site-gutter: var(--layout-screen-padding-compact); /* 16px, <375px */
   --site-section-gap: clamp(56px, 9vw, 112px);
+
+  /* Medidos em docs/padrao-visual-site.md (19/11/2026) a partir da
+     referência do dono. --site-veil-rgb é o nosso --color-background-base
+     (#070D18) em componentes R,G,B — formato exigido para usar com
+     rgba(var(...), alfa) nos dois véus de foto (ArtworkPanel/PhotoCard).
+     Não é HEX solto (scripts/check-boundaries.mjs só proíbe literais em
+     #hex; isto é a mesma cor do token, só que decomposta). */
+  --site-veil-rgb: 7, 13, 24;
+  --site-radius-photo: 28px; /* raio do cartão de foto na referência */
+  --site-tracking-titulo: -0.025em; /* tracking negativo nos títulos grandes */
+}
+
+/*
+ * Alternância claro/escuro pedida pelo dono em 19/11/2026: "hero navy →
+ * seção clara (#fafaf8) com cards brancos → seção navy → formulário claro".
+ * Em vez de reescrever a cor de cada componente para a versão clara, esta
+ * classe REDEFINE os mesmos tokens de cor que os componentes já consomem
+ * (--color-background-surface, --color-text-primary, etc.) só dentro do seu
+ * escopo — qualquer coisa que já usa os tokens (WaitlistForm, AboutBlock...)
+ * vira clara automaticamente sem precisar de uma segunda folha de estilo.
+ * `--color-text-on-light-muted` já existia no design system (tela de app
+ * sobre fundo claro) — reaproveitado aqui, não inventado.
+ */
+.light-section {
+  color-scheme: light;
+  --color-background-base: #fafaf8;
+  --color-background-surface: #ffffff;
+  --color-background-elevated: #ffffff;
+  --color-background-input: #ffffff;
+  --color-text-primary: var(--color-brand-navy);
+  --color-text-secondary: var(--color-text-on-light-muted);
+  --color-text-muted: #6b7686;
+  --color-border-default: #d9dfe2;
+  --color-border-subtle: #e3e7ea;
+  --color-border-emphasis: #c3cbd2;
+  /* Consumidos por ArtCard/ArtCarousel (fallback idêntico embutido ali, só
+     redeclarados aqui para ficarem num único lugar de verdade). */
+  --site-card-bg: #ffffff;
+  --site-card-border: #d9dfe2;
+  --site-card-ink: var(--color-brand-navy);
+  --site-card-eyebrow: var(--color-brand-navy);
+  --site-card-text-secondary: var(--color-text-on-light-muted);
+  background: var(--color-background-base);
+  color: var(--color-text-primary);
 }
 
 @media (min-width: 375px) {
@@ -103,7 +147,10 @@ ol {
   list-style: none;
 }
 
-button {
+button,
+input,
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
@@ -121,6 +168,10 @@ button {
   max-width: var(--site-container-max);
   margin-inline: auto;
   padding-inline: var(--site-gutter);
+}
+
+.section-pad {
+  padding-block: var(--site-section-gap);
 }
 
 .visually-hidden {

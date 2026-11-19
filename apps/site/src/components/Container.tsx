@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 interface ContainerProps {
   children: ReactNode;
-  className?: string;
+  className?: string | undefined;
 }
 
 /** Largura máxima central do site + gutter responsivo (ver globals.css). */

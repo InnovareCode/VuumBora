@@ -1,34 +1,64 @@
 import { ARTE_HERO } from '@/content/artes';
 import { HERO_HONESTY } from '@/content/hero';
-import { ArtworkPanel } from './ArtworkPanel';
 import { Container } from './Container';
 import { DriverApplicationForm } from './DriverApplicationForm';
 import styles from './Hero.module.css';
 
 /**
- * Página única de pré-lançamento (`docs/decisoes-do-dono.md` → "Virada do
- * site"): a arte `ARTE_HERO` (dirija com a VuumBora, Ponta Negra) ao lado da
- * candidatura de motorista — que é a AÇÃO da página, nunca um link de âncora
- * para mais embaixo.
+ * Hero reescrito em 19/11/2026 (correção sobre a correção): o dono pediu
+ * explicitamente que a candidatura "vá por cima da arte", flutuando em
+ * vidro fosco — não mais foto de um lado e formulário do outro.
  *
- * Reescrito em 19/11/2026 para usar as artes reais do dono em vez da foto
- * gerada que ele recusou — `ArtworkPanel` cuida de mostrar a arte completa a
- * partir de 768px e o recorte vertical + texto em HTML abaixo disso.
+ * A foto (`ARTE_HERO`) é fundo `position:absolute` de TODA a seção — cobre
+ * tanto o texto de abertura quanto o cartão da candidatura, que sentam na
+ * mesma imagem. O véu é só de um lado (horizontal no desktop, onde o texto
+ * fica à esquerda; vertical no celular, onde tudo empilha) — nunca a foto
+ * inteira escurecida (é o defeito que `docs/auditoria-arte-site.md` C1
+ * apontou no cartão antigo).
  *
- * A arte fica FORA do `Container`, ocupando a largura inteira, e a candidatura
- * vem logo abaixo. A primeira tentativa colocou as duas lado a lado e foi
- * medida a 1440px: a arte caía para 564x317 (39% da tela), sobravam 444px de
- * vazio sob ela porque o cartão de candidatura tem 761px de altura, e o título
- * desenhado na arte encolhia para 220px de largura. Essas artes foram
- * compostas como banner largo; espremidas numa coluna, perdem exatamente o
- * impacto pelo qual foram feitas.
+ * O texto NUNCA fica centralizado verticalmente contra o cartão da
+ * candidatura (`align-items: start`, não `center`) — essa troca é a causa
+ * raiz, medida na auditoria (C3), de o H1 cair abaixo da dobra quando o
+ * formulário é mais alto que a foto. Com `start`, o H1 fica preso perto do
+ * topo não importa quão alto o cartão fique.
  */
 export function Hero() {
   return (
-    <section id="topo" className={styles['hero']} aria-label="Apresentação do VuumBora">
-      <ArtworkPanel arte={ARTE_HERO} priority headingLevel="h1" className={styles['art']} />
-      <Container>
-        <div className={styles['action']}>
+    <section className={styles['hero']} aria-label="Apresentação do VuumBora">
+      {/* <img> dentro de <picture> não dispara @next/next/no-img-element. */}
+      <picture>
+        <img
+          src={ARTE_HERO.foto900}
+          srcSet={ARTE_HERO.foto560 ? `${ARTE_HERO.foto560} 560w, ${ARTE_HERO.foto900} 900w` : undefined}
+          sizes="100vw"
+          alt=""
+          aria-hidden="true"
+          fetchPriority="high"
+          decoding="async"
+          className={styles['bg']}
+          style={ARTE_HERO.objectPosition ? { objectPosition: ARTE_HERO.objectPosition } : undefined}
+        />
+      </picture>
+      <span className={styles['veil']} aria-hidden="true" />
+
+      <Container className={styles['grid']}>
+        <div className={styles['intro']}>
+          <span className={styles['eyebrow']}>{ARTE_HERO.olho}</span>
+          <h1 className={styles['title']}>
+            {ARTE_HERO.titulo} <strong className={styles['highlight']}>{ARTE_HERO.tituloDestaque}</strong>
+          </h1>
+          <p className={styles['support']}>{ARTE_HERO.apoio}</p>
+          <div className={styles['ctas']}>
+            <a href="#candidatura" className={styles['ctaPrimary']}>
+              Candidate-se para dirigir
+            </a>
+            <a href="#passageiros" className={styles['ctaSecondary']}>
+              Sou passageiro
+            </a>
+          </div>
+        </div>
+
+        <div id="candidatura" className={styles['action']}>
           <DriverApplicationForm />
           <p className={styles['honesty']}>{HERO_HONESTY}</p>
         </div>
