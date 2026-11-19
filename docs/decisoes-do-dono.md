@@ -610,3 +610,15 @@ Assim o dono tem os mesmos dados no fim, com mais candidaturas completas e
 menos dado sensível guardado de quem não entrou.
 
 **Decisão do dono registrada abaixo quando ele responder.**
+
+**DECISÃO: duas etapas** (19/11/2026)
+
+**Etapa 1 — na página, é o que se constrói agora:**
+nome completo, telefone (WhatsApp), e-mail, cidade, UF, e as duas perguntas
+de elegibilidade (já dirige por aplicativo, tem veículo próprio).
+
+**Etapa 2 — depois da aprovação, fora do escopo atual:**
+endereço, bairro, CEP, documentos (CNH, documento do veículo, seguro). Só
+existe quando houver processo de verificação (decisão 9) e guarda segura.
+
+O endereço residencial **não é coletado** de quem ainda não foi aprovado.
