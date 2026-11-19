@@ -24,7 +24,10 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const raiz = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const DOCKERFILE = 'apps/site/Dockerfile';
+// Os dois Dockerfiles do projeto. Qualquer um novo entra aqui: a guarda só
+// protege o que ela conhece, e o deploy que ela deixou passar em 19/11/2026
+// custou duas tentativas quebradas no servidor.
+const DOCKERFILES = ['apps/site/Dockerfile', 'site-cine/Dockerfile'];
 const DOCKERIGNORE = '.dockerignore';
 
 /** Origens dos COPY do estágio de build (os `--from=` leem de outro estágio). */
@@ -79,26 +82,33 @@ function excluiPor(origem, padrao) {
   return o === p || o.startsWith(p + '/');
 }
 
-const dockerfile = readFileSync(resolve(raiz, DOCKERFILE), 'utf8');
 const dockerignore = existsSync(resolve(raiz, DOCKERIGNORE))
   ? readFileSync(resolve(raiz, DOCKERIGNORE), 'utf8')
   : '';
-
-const copies = origensDeCopy(dockerfile);
 const ignorados = padroesIgnorados(dockerignore);
 const problemas = [];
+let totalCopies = 0;
 
-for (const { origem, linha } of copies) {
-  if (!existsSync(resolve(raiz, origem))) {
-    problemas.push(`${DOCKERFILE}:${linha}  COPY de "${origem}" — esse caminho não existe no repositório`);
+for (const DOCKERFILE of DOCKERFILES) {
+  if (!existsSync(resolve(raiz, DOCKERFILE))) {
+    problemas.push(`${DOCKERFILE} — está na lista da guarda mas não existe no repositório`);
     continue;
   }
-  const bate = ignorados.find(({ padrao }) => excluiPor(origem, padrao));
-  if (bate) {
-    problemas.push(
-      `${DOCKERFILE}:${linha}  COPY de "${origem}", mas ${DOCKERIGNORE}:${bate.linha} exclui "${bate.padrao}" ` +
-        `— o Docker recusa com "CopyIgnoredFile" e o deploy quebra`,
-    );
+  const copies = origensDeCopy(readFileSync(resolve(raiz, DOCKERFILE), 'utf8'));
+  totalCopies += copies.length;
+
+  for (const { origem, linha } of copies) {
+    if (!existsSync(resolve(raiz, origem))) {
+      problemas.push(`${DOCKERFILE}:${linha}  COPY de "${origem}" — esse caminho não existe no repositório`);
+      continue;
+    }
+    const bate = ignorados.find(({ padrao }) => excluiPor(origem, padrao));
+    if (bate) {
+      problemas.push(
+        `${DOCKERFILE}:${linha}  COPY de "${origem}", mas ${DOCKERIGNORE}:${bate.linha} exclui "${bate.padrao}" ` +
+          `— o Docker recusa com "CopyIgnoredFile" e o deploy quebra`,
+      );
+    }
   }
 }
 
@@ -109,4 +119,7 @@ if (problemas.length > 0) {
   process.exit(1);
 }
 
-console.log(`check-docker-context: ok (${copies.length} COPY conferidos contra ${ignorados.length} regras do .dockerignore)`);
+console.log(
+  `check-docker-context: ok (${totalCopies} COPY de ${DOCKERFILES.length} Dockerfiles, ` +
+    `conferidos contra ${ignorados.length} regras do .dockerignore)`,
+);
