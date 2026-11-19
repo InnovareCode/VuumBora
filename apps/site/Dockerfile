@@ -31,13 +31,31 @@ WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY apps/site/package.json apps/site/package.json
 COPY packages/tokens/package.json packages/tokens/package.json
+COPY packages/api-client/package.json packages/api-client/package.json
+COPY packages/domain/package.json packages/domain/package.json
 RUN npm ci --ignore-scripts
 
-# Agora o código-fonte necessário. Nada de passenger/driver/ui/domain/api-client
-# aqui — o site não depende deles (ver apps/site/package.json).
+# Agora o código-fonte necessário. Nada de passenger/driver/ui aqui — o site
+# não depende deles (ver `dependencies` em apps/site/package.json).
+#
+# `api-client` e `domain` ENTRAM, e isso é obrigatório: o site fala com o
+# backend por `@vuumbora/api-client/waitlist` e `/driver-applications`, e o
+# api-client declara `@vuumbora/domain`. Estes pacotes publicam TypeScript
+# direto (`"exports": "./src/index.ts"`), então o bundler precisa dos fontes,
+# não de um dist compilado — copiar só o package.json faz o `npm ci` criar um
+# link de workspace apontando para pasta vazia, o `npm ci` PASSA, e o build
+# quebra depois com "Module not found".
+#
+# Foi exatamente o que derrubou o deploy de 19/11/2026: este arquivo dizia em
+# comentário que o site não dependia do api-client, o que era verdade quando
+# foi escrito e deixou de ser quando a lista de espera e a candidatura
+# surgiram. Ao acrescentar aqui qualquer import de outro workspace, a linha
+# correspondente tem que entrar nas duas listas abaixo (manifesto e fonte).
 COPY tsconfig.base.json ./
 COPY apps/site apps/site
 COPY packages/tokens packages/tokens
+COPY packages/api-client packages/api-client
+COPY packages/domain packages/domain
 COPY VuumBora_Claude_Design_System/tokens VuumBora_Claude_Design_System/tokens
 
 # `npm run build` (dentro do workspace) roda generate-tokens-css.mjs e depois
