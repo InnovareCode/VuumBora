@@ -65,6 +65,14 @@
   line-height: 1.6;
 }
 
+.contactEmail {
+  display: inline-block;
+  margin-top: var(--spacing-2);
+  color: var(--color-brand-yellow);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .bottom {
   margin-top: var(--spacing-8);
   padding-top: var(--spacing-5);

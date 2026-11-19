@@ -5,6 +5,15 @@
   align-items: center;
 }
 
+/* Mockup fotográfico: nada de caixa com borda visível — o halo escuro
+   desbota até a transparência total bem antes da borda do container, então
+   em qualquer tom de seção (base OU elevated, ver Section.tsx) o fundo
+   real da seção aparece por baixo sem costura. Pedido do dono em
+   18/11/2026: "o fundo da seção deve acompanhar, não brigar" — testado nas
+   duas seções que usam mockup hoje (passageiro = tom base, motorista = tom
+   elevated) e só desbotando até transparente funciona nos dois. Um glow
+   âmbar bem discreto no centro estende a luz que já sai do celular, não
+   cria uma luz nova. */
 .visual {
   position: relative;
   display: flex;
@@ -12,20 +21,17 @@
   justify-content: center;
   min-height: 360px;
   padding: var(--spacing-7) var(--spacing-5);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
   order: 1;
+  background: radial-gradient(
+    ellipse 55% 50% at 50% 46%,
+    rgba(255, 204, 0, 0.07) 0%,
+    rgba(6, 13, 32, 0.5) 38%,
+    rgba(6, 13, 32, 0) 72%
+  );
 }
 
-.sceneLayer {
-  position: absolute;
-  inset: 0;
-  border-radius: 0;
-}
-
-.phoneLayer {
-  position: relative;
-  z-index: 1;
+.mockup {
+  width: clamp(220px, 30vw, 320px);
 }
 
 .text {

@@ -45,24 +45,20 @@ export const PASSENGER_JOURNEY_STEPS = [
     tag: '1. Pedir',
     title: 'Diga para onde vai',
     description: 'Digite o destino ou escolha um lugar salvo.',
-    screen: { src: '/screens/pedir-destino.jpg', alt: 'Tela do app pedindo o destino da corrida' },
-    scene: {
-      src: '/cenas/passageiro-noite.jpg',
-      srcSmall: '/cenas/passageiro-noite-960.jpg',
-      alt: '',
-      focusY: '35%',
+    visual: {
+      src1120: '/mockups/pedir-destino.jpg',
+      src560: '/mockups/pedir-destino-560.jpg',
+      alt: 'Tela do app pedindo o destino da corrida',
     },
   },
   {
     tag: '2. Confirmar',
     title: 'Compare e confirme',
     description: 'Veja as opções com tempo de espera e preço estimado, escolha a forma de pagamento e confirme.',
-    screen: { src: '/screens/confirmar-corrida.jpg', alt: 'Tela de confirmação da corrida, com categoria e forma de pagamento' },
-    scene: {
-      src: '/cenas/passageiro-noite.jpg',
-      srcSmall: '/cenas/passageiro-noite-960.jpg',
-      alt: '',
-      focusY: '60%',
+    visual: {
+      src1120: '/mockups/confirmar-corrida.jpg',
+      src560: '/mockups/confirmar-corrida-560.jpg',
+      alt: 'Tela de confirmação da corrida, com categoria e forma de pagamento',
     },
   },
   {
@@ -70,12 +66,12 @@ export const PASSENGER_JOURNEY_STEPS = [
     title: 'Confira quem vem e acompanhe até chegar',
     description:
       'Nome do motorista, carro e placa aparecem assim que alguém aceita. Siga o trajeto pelo mapa. No fim, você recebe o recibo e avalia a corrida.',
-    screen: { src: '/screens/acompanhar-corrida.jpg', alt: 'Tela de busca do motorista em andamento' },
-    scene: {
-      src: '/cenas/motorista-noite.jpg',
-      srcSmall: '/cenas/motorista-noite-960.jpg',
-      alt: '',
-      focusY: '45%',
+    // Mockup fotográfico chegou em 19/11/2026 — última tela que ainda usava
+    // a moldura CSS + cena antiga.
+    visual: {
+      src1120: '/mockups/acompanhar-corrida.jpg',
+      src560: '/mockups/acompanhar-corrida-560.jpg',
+      alt: 'Tela de busca do motorista em andamento',
     },
   },
 ] as const;

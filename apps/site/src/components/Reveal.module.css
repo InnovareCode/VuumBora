@@ -11,11 +11,23 @@
   transform: translateY(24px);
 }
 
+/* Imagem/mockup: deslocamento mais perceptível + leve escala — o produto
+   "assenta" na composição em vez de só desbotar (docs/movimento.md). */
+.reveal[data-hidden='true'][data-variant='media'] {
+  transform: translateY(32px) scale(0.94);
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .reveal {
     transition:
       opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
       transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .reveal[data-variant='media'] {
+    transition:
+      opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
   }
 }
 
@@ -23,7 +35,8 @@
    algum dia o padrão mudar, isto garante que reduzir movimento sempre vence. */
 @media (prefers-reduced-motion: reduce) {
   .reveal,
-  .reveal[data-hidden='true'] {
+  .reveal[data-hidden='true'],
+  .reveal[data-hidden='true'][data-variant='media'] {
     opacity: 1;
     transform: none;
     transition: none;

@@ -109,7 +109,9 @@
 
 /* O celular flutuante só entra em telas largas o bastante para não brigar
    com o texto nem empurrar o CTA para fora da dobra (320–1023px: hero fica
-   só texto + foto, como já era). */
+   só texto + foto, como já era). Sem filter: drop-shadow aqui — o mockup
+   fotográfico já traz sombra e brilho próprios embutidos na imagem; somar
+   outra sombra por cima só embaçava a borda (pedido do dono, 18/11/2026). */
 .showcase {
   display: none;
 }
@@ -118,6 +120,9 @@
   .showcase {
     display: block;
     flex-shrink: 0;
-    filter: drop-shadow(0 24px 48px rgba(0, 0, 0, 0.45));
   }
+}
+
+.mockup {
+  width: clamp(260px, 22vw, 360px);
 }

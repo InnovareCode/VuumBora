@@ -9,6 +9,11 @@ interface RevealProps {
   /** Atraso em ms, para escalonar itens de uma lista (docs/movimento.md: até
    * 6 itens com 30ms de atraso entre si; acima disso, todos juntos). */
   delay?: number;
+  /** 'media': entrada com leve escala além de fade+subida — reservado para
+   * imagem/mockup, que é "o herói" da composição e merece um deslocamento
+   * mais perceptível que texto (docs/movimento.md: "a animação explica o
+   * que aconteceu" — aqui, que o produto está chegando à vista). */
+  variant?: 'default' | 'media';
   className?: string | undefined;
 }
 
@@ -29,7 +34,7 @@ const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffec
  * DOM via ref, sem `useState`: nenhum re-render do React por Reveal, e nada
  * de "setState dentro de efeito" (regra do projeto, `react-hooks`).
  */
-export function Reveal({ children, delay = 0, className }: RevealProps) {
+export function Reveal({ children, delay = 0, variant = 'default', className }: RevealProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useIsomorphicLayoutEffect(() => {
@@ -59,6 +64,7 @@ export function Reveal({ children, delay = 0, className }: RevealProps) {
       ref={ref}
       className={className ? `${styles['reveal']} ${className}` : styles['reveal']}
       data-hidden="false"
+      data-variant={variant}
       style={{ transitionDelay: `${delay}ms` }}
     >
       {children}

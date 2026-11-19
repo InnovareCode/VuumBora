@@ -1,3 +1,4 @@
+import type { ShowcaseRowProps } from './ShowcaseRow';
 import { ShowcaseRow } from './ShowcaseRow';
 import styles from './JourneyShowcase.module.css';
 
@@ -5,8 +6,7 @@ export interface JourneyStep {
   tag: string;
   title: string;
   description: string;
-  screen: { src: string; alt: string };
-  scene: { src: string; srcSmall: string; alt: string; focusY: string };
+  visual: ShowcaseRowProps['visual'];
 }
 
 interface JourneyShowcaseProps {
@@ -18,8 +18,8 @@ interface JourneyShowcaseProps {
 }
 
 /**
- * Vitrine de telas reais do app em molduras de celular, alternando com as
- * cenas fotográficas noturnas — usada pela seção do passageiro.
+ * Vitrine de telas reais do app, cada uma em mockup fotográfico (celular
+ * renderizado) — usada pela seção do passageiro.
  */
 export function JourneyShowcase({ steps, legend }: JourneyShowcaseProps) {
   return (
@@ -31,8 +31,7 @@ export function JourneyShowcase({ steps, legend }: JourneyShowcaseProps) {
             tag={step.tag}
             title={step.title}
             description={step.description}
-            screen={step.screen}
-            scene={step.scene}
+            visual={step.visual}
             reverse={index % 2 === 1}
           />
         ))}

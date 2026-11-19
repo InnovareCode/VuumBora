@@ -13,6 +13,10 @@
   scroll-snap-align: start;
 }
 
+.mockup {
+  width: clamp(180px, 44vw, 220px);
+}
+
 .legend {
   margin-top: var(--spacing-4);
   font-size: var(--font-size-small);

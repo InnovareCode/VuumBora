@@ -77,15 +77,9 @@ export const DRIVER_BUILT_LIST = [
   },
 ] as const;
 
-export const DRIVER_SCENE = {
-  src: '/cenas/motorista-noite.jpg',
-  srcSmall: '/cenas/motorista-noite-960.jpg',
-  alt: '',
-  focusY: '40%',
-};
-
-export const DRIVER_SCREEN = {
-  src: '/screens/motorista-ganhos.jpg',
+export const DRIVER_VISUAL = {
+  src1120: '/mockups/motorista-ganhos.jpg',
+  src560: '/mockups/motorista-ganhos-560.jpg',
   alt: 'Painel do motorista com ganhos do dia e uma corrida chegando para aceitar',
 };
 

@@ -50,9 +50,33 @@ export const CREDIBILITY_COLUMNS = [
 export const CREDIBILITY_SCREENS_LEGEND =
   'Telas reais do app em construção. Nomes, valores, endereços e veículos são de exemplo.';
 
+/**
+ * Só os 4 mockups fotográficos que existem hoje em `public/mockups/`
+ * (home-passageiro, pedir-destino, confirmar-corrida, motorista-ganhos) —
+ * de propósito, nenhuma moldura CSS misturada nesta fileira (ver
+ * `ScreensStrip.tsx`). "Boas-vindas" e "acompanhar-corrida" saíram daqui até
+ * terem mockup equivalente; a tela de boas-vindas já aparece em destaque no
+ * Hero.
+ */
 export const CREDIBILITY_SCREENS = [
-  { src: '/screens/boas-vindas.jpg', alt: 'Tela de boas-vindas do app' },
-  { src: '/screens/home-passageiro.jpg', alt: 'Tela inicial do passageiro, com mapa e categorias de veículo' },
-  { src: '/screens/acompanhar-corrida.jpg', alt: 'Tela de busca do motorista em andamento' },
-  { src: '/screens/motorista-ganhos.jpg', alt: 'Painel do motorista com ganhos do dia' },
+  {
+    src1120: '/mockups/home-passageiro.jpg',
+    src560: '/mockups/home-passageiro-560.jpg',
+    alt: 'Tela inicial do passageiro, com mapa e categorias de veículo',
+  },
+  {
+    src1120: '/mockups/pedir-destino.jpg',
+    src560: '/mockups/pedir-destino-560.jpg',
+    alt: 'Tela do app pedindo o destino da corrida',
+  },
+  {
+    src1120: '/mockups/confirmar-corrida.jpg',
+    src560: '/mockups/confirmar-corrida-560.jpg',
+    alt: 'Tela de confirmação da corrida, com categoria e forma de pagamento',
+  },
+  {
+    src1120: '/mockups/motorista-ganhos.jpg',
+    src560: '/mockups/motorista-ganhos-560.jpg',
+    alt: 'Painel do motorista com ganhos do dia',
+  },
 ] as const;

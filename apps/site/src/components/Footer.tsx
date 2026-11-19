@@ -40,6 +40,9 @@ export function Footer() {
           <div>
             <p className={styles['columnTitle']}>{FOOTER_CONTENT.contactColumnTitle}</p>
             <p className={styles['contactNote']}>{FOOTER_CONTENT.contactNote}</p>
+            <a className={styles['contactEmail']} href={`mailto:${FOOTER_CONTENT.contactEmail}`}>
+              {FOOTER_CONTENT.contactEmail}
+            </a>
           </div>
         </div>
 

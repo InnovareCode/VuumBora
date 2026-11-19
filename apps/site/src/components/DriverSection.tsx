@@ -6,9 +6,8 @@ import {
   DRIVER_CTA,
   DRIVER_FAQ_LINK,
   DRIVER_HEADING,
-  DRIVER_SCENE,
-  DRIVER_SCREEN,
   DRIVER_SHOWCASE_DESCRIPTION,
+  DRIVER_VISUAL,
 } from '@/content/driver';
 import { SCREENS_LEGEND } from '@/content/passenger';
 import { AnchorCta } from './AnchorCta';
@@ -40,8 +39,7 @@ export function DriverSection() {
         <ShowcaseRow
           title="Seu painel, seus números"
           description={DRIVER_SHOWCASE_DESCRIPTION}
-          screen={DRIVER_SCREEN}
-          scene={DRIVER_SCENE}
+          visual={DRIVER_VISUAL}
         />
       </div>
       <p className={styles['legend']}>{SCREENS_LEGEND}</p>
