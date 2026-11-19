@@ -15,6 +15,12 @@
 <body>
 <a class="skip-link" href="#candidatura">Pular para o formulário de candidatura</a>
 
+<header class="site-header">
+  <a class="site-header__brand" href="#" aria-label="VuumBora, voltar ao início da página">
+    <img class="site-header__logo" src="assets/img/logo-vuumbora.png" alt="VuumBora" width="480" height="118">
+  </a>
+</header>
+
 <div class="route-line" aria-hidden="true">
   <svg viewBox="0 0 40 400" preserveAspectRatio="none">
     <path class="route-line__path" d="M20 8 C 30 60, 10 100, 20 150 C 30 200, 10 250, 20 300 C 28 330, 14 360, 20 392" />
@@ -47,11 +53,101 @@
           <span style="left:76%; animation-duration:10.5s; animation-delay:2.9s; --drift-x:12px;"></span>
           <span style="left:85%; animation-duration:8.8s; animation-delay:0.3s; --drift-x:-14px;"></span>
         </div>
-        <div class="faixa-text">
-          <span class="eyebrow">PRÉ-LANÇAMENTO · NATAL E GRANDE NATAL</span>
-          <h1>Quem entra agora, entra no começo.</h1>
-          <p class="faixa-text__body">A VuumBora está chegando a Natal e à Grande Natal. O cadastro de motorista abre antes do aplicativo.</p>
-          <a class="button button--primary" href="#candidatura">Quero me candidatar</a>
+        <div class="hero-grid">
+          <div class="faixa-text">
+            <span class="eyebrow">PRÉ-LANÇAMENTO · NATAL E GRANDE NATAL</span>
+            <h1>Quem entra agora, entra no começo.</h1>
+            <p class="faixa-text__body">A VuumBora está chegando a Natal e à Grande Natal. O cadastro de motorista abre antes do aplicativo.</p>
+            <a class="button button--primary" href="#candidatura">Quero me candidatar</a>
+          </div>
+
+          <section class="application hero-card" id="candidatura" aria-labelledby="candidatura-title">
+            <h2 id="candidatura-title" class="section-heading">Candidatura de motorista</h2>
+
+            <noscript>
+              <p class="legal-notice">Esta candidatura precisa de JavaScript habilitado para ser enviada. Ative o JavaScript no navegador ou fale pelo WhatsApp (84) 3113-2584.</p>
+            </noscript>
+
+            <form id="application-form" novalidate>
+              <div class="form-row">
+                <div class="field">
+                  <label for="field-name">Nome completo</label>
+                  <input type="text" id="field-name" name="name" autocomplete="name" required>
+                </div>
+
+                <div class="field">
+                  <label for="field-phone">Telefone (WhatsApp)</label>
+                  <input type="tel" id="field-phone" name="phone" autocomplete="tel" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="field">
+                  <label for="field-email">E-mail</label>
+                  <input type="email" id="field-email" name="email" autocomplete="email" required>
+                </div>
+
+                <div class="field">
+                  <label for="field-city">Cidade onde dirige</label>
+                  <input type="text" id="field-city" name="city" autocomplete="address-level2" required>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="field-state">UF</label>
+                <select id="field-state" name="state" autocomplete="address-level1" required>
+                  <option value="" disabled selected>Selecione</option>
+                  <option value="AC">AC</option>
+                  <option value="AL">AL</option>
+                  <option value="AP">AP</option>
+                  <option value="AM">AM</option>
+                  <option value="BA">BA</option>
+                  <option value="CE">CE</option>
+                  <option value="DF">DF</option>
+                  <option value="ES">ES</option>
+                  <option value="GO">GO</option>
+                  <option value="MA">MA</option>
+                  <option value="MT">MT</option>
+                  <option value="MS">MS</option>
+                  <option value="MG">MG</option>
+                  <option value="PA">PA</option>
+                  <option value="PB">PB</option>
+                  <option value="PR">PR</option>
+                  <option value="PE">PE</option>
+                  <option value="PI">PI</option>
+                  <option value="RJ">RJ</option>
+                  <option value="RN">RN</option>
+                  <option value="RS">RS</option>
+                  <option value="RO">RO</option>
+                  <option value="RR">RR</option>
+                  <option value="SC">SC</option>
+                  <option value="SP">SP</option>
+                  <option value="SE">SE</option>
+                  <option value="TO">TO</option>
+                </select>
+              </div>
+
+              <div class="form-row">
+                <fieldset class="field field--choice">
+                  <legend>Já dirige por aplicativo?</legend>
+                  <label><input type="radio" name="alreadyDrivesForApp" value="true"> Sim</label>
+                  <label><input type="radio" name="alreadyDrivesForApp" value="false"> Não</label>
+                </fieldset>
+
+                <fieldset class="field field--choice">
+                  <legend>Tem veículo próprio?</legend>
+                  <label><input type="radio" name="hasOwnVehicle" value="true"> Sim</label>
+                  <label><input type="radio" name="hasOwnVehicle" value="false"> Não</label>
+                </fieldset>
+              </div>
+
+              <div class="form-status" id="form-status" role="status" aria-live="polite"></div>
+
+              <button type="submit" class="button button--primary">Enviar candidatura</button>
+
+              <p class="legal-notice">Usamos nome, telefone, e-mail, cidade e UF só para avaliar sua candidatura e avisar o resultado. Controlado por Innovare Code (CNPJ 09.813.446/0001-00). Não vendemos nem repassamos seus dados a ninguém. Para remover seus dados, escreva para <a href="mailto:contato@vuumbora.com.br">contato@vuumbora.com.br</a>.</p>
+            </form>
+          </section>
         </div>
       </div>
 
@@ -115,6 +211,100 @@
             <p class="reason-card__body">O passageiro poderá escolher essa opção ao pedir a corrida.</p>
           </li>
         </ul>
+      </div>
+    </section>
+
+    <div class="container"><div class="divider" role="presentation"></div></div>
+
+    <section class="carousel reveal" aria-labelledby="carousel-title">
+      <div class="container">
+        <h2 id="carousel-title" class="visually-hidden">Destaques do pré-lançamento</h2>
+        <div class="carousel__viewport" data-carousel>
+          <ul class="carousel__track" data-carousel-track>
+            <li class="carousel__slide" role="group" aria-roledescription="slide" aria-label="1 de 5">
+              <figure class="carousel-card">
+                <div class="carousel-card__media">
+                  <img src="assets/img/carrossel-repasse-rapido.jpg" alt="Motorista sorridente apoiado no carro, com o litoral de Natal ao entardecer ao fundo." width="900" height="975" loading="lazy">
+                  <div class="carousel-card__veil" aria-hidden="true"></div>
+                </div>
+                <figcaption class="carousel-card__text">
+                  <span class="eyebrow">PRÉ-LANÇAMENTO</span>
+                  <p class="carousel-card__title"><strong>Repasse mais</strong> <em>rápido.</em></p>
+                  <p class="carousel-card__body">Para quem ganha a vida ao volante na Grande Natal.</p>
+                </figcaption>
+              </figure>
+            </li>
+            <li class="carousel__slide" role="group" aria-roledescription="slide" aria-label="2 de 5">
+              <figure class="carousel-card">
+                <div class="carousel-card__media">
+                  <img src="assets/img/carrossel-motorista-mulher-candidatura.jpg" alt="Motorista mulher sorridente ao lado do carro, com uma ponte estaiada ao fundo." width="900" height="975" loading="lazy">
+                  <div class="carousel-card__veil" aria-hidden="true"></div>
+                </div>
+                <figcaption class="carousel-card__text">
+                  <span class="eyebrow">PRÉ-LANÇAMENTO · GRANDE NATAL</span>
+                  <p class="carousel-card__title"><strong>Motorista, vem dirigir</strong> <em>com a gente.</em></p>
+                  <p class="carousel-card__body">Entre na fila de espera para dirigir na modalidade com motoristas mulheres.</p>
+                </figcaption>
+              </figure>
+            </li>
+            <li class="carousel__slide" role="group" aria-roledescription="slide" aria-label="3 de 5">
+              <figure class="carousel-card">
+                <div class="carousel-card__media">
+                  <img src="assets/img/carrossel-prefere-motorista-mulher.jpg" alt="Motorista mulher cumprimentando uma passageira na orla, ao entardecer." width="900" height="975" loading="lazy">
+                  <div class="carousel-card__veil" aria-hidden="true"></div>
+                </div>
+                <figcaption class="carousel-card__text">
+                  <span class="eyebrow">PRÉ-LANÇAMENTO · GRANDE NATAL</span>
+                  <p class="carousel-card__title"><strong>Prefere uma</strong> <em>motorista mulher?</em></p>
+                  <p class="carousel-card__body">Na VuumBora, você poderá fazer essa escolha ao pedir sua corrida.</p>
+                </figcaption>
+              </figure>
+            </li>
+            <li class="carousel__slide" role="group" aria-roledescription="slide" aria-label="4 de 5">
+              <figure class="carousel-card">
+                <div class="carousel-card__media">
+                  <img src="assets/img/carrossel-sua-corrida-sua-escolha.jpg" alt="Passageira sorrindo e mexendo no celular, com a motorista ao fundo." width="900" height="975" loading="lazy">
+                  <div class="carousel-card__veil" aria-hidden="true"></div>
+                </div>
+                <figcaption class="carousel-card__text">
+                  <span class="eyebrow">PRÉ-LANÇAMENTO · GRANDE NATAL</span>
+                  <p class="carousel-card__title"><strong>Sua corrida,</strong> <em>sua escolha.</em></p>
+                  <p class="carousel-card__body">Selecione a opção de viajar com uma motorista mulher.</p>
+                </figcaption>
+              </figure>
+            </li>
+            <li class="carousel__slide" role="group" aria-roledescription="slide" aria-label="5 de 5">
+              <figure class="carousel-card">
+                <div class="carousel-card__media">
+                  <img src="assets/img/carrossel-suporte-local.jpg" alt="Atendente sorridente usando headset, com a orla de Natal ao fundo." width="900" height="975" loading="lazy">
+                  <div class="carousel-card__veil" aria-hidden="true"></div>
+                </div>
+                <figcaption class="carousel-card__text">
+                  <span class="eyebrow">PRÉ-LANÇAMENTO</span>
+                  <p class="carousel-card__title"><strong>Suporte</strong> <em>local.</em></p>
+                  <p class="carousel-card__body">Gente daqui para atender você.</p>
+                </figcaption>
+              </figure>
+            </li>
+            <li class="carousel__spacer" data-carousel-spacer aria-hidden="true"></li>
+          </ul>
+
+          <div class="carousel__controls" data-carousel-controls hidden>
+            <button type="button" class="carousel__arrow carousel__arrow--prev" data-carousel-prev aria-label="Slide anterior">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button type="button" class="carousel__pause" data-carousel-pause aria-pressed="false">
+              <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>
+              <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7V5z" fill="currentColor"/></svg>
+              <span class="visually-hidden" data-carousel-pause-label>Pausar avanço automático</span>
+            </button>
+            <button type="button" class="carousel__arrow carousel__arrow--next" data-carousel-next aria-label="Próximo slide">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+
+          <div class="carousel__dots" data-carousel-dots hidden></div>
+        </div>
       </div>
     </section>
 
@@ -190,97 +380,12 @@
       </div>
     </section>
 
-    <div class="container"><div class="divider" role="presentation"></div></div>
-
-    <section class="application reveal" id="candidatura" aria-labelledby="candidatura-title">
-      <div class="container">
-        <h2 id="candidatura-title" class="section-heading">Candidatura de motorista</h2>
-
-        <noscript>
-          <p class="legal-notice">Esta candidatura precisa de JavaScript habilitado para ser enviada. Ative o JavaScript no navegador ou fale pelo WhatsApp (84) 3113-2584.</p>
-        </noscript>
-
-        <form id="application-form" novalidate>
-          <div class="field">
-            <label for="field-name">Nome completo</label>
-            <input type="text" id="field-name" name="name" autocomplete="name" required>
-          </div>
-
-          <div class="field">
-            <label for="field-phone">Telefone (WhatsApp)</label>
-            <input type="tel" id="field-phone" name="phone" autocomplete="tel" required>
-          </div>
-
-          <div class="field">
-            <label for="field-email">E-mail</label>
-            <input type="email" id="field-email" name="email" autocomplete="email" required>
-          </div>
-
-          <div class="field">
-            <label for="field-city">Cidade onde dirige</label>
-            <input type="text" id="field-city" name="city" autocomplete="address-level2" required>
-          </div>
-
-          <div class="field">
-            <label for="field-state">UF</label>
-            <select id="field-state" name="state" autocomplete="address-level1" required>
-              <option value="" disabled selected>Selecione</option>
-              <option value="AC">AC</option>
-              <option value="AL">AL</option>
-              <option value="AP">AP</option>
-              <option value="AM">AM</option>
-              <option value="BA">BA</option>
-              <option value="CE">CE</option>
-              <option value="DF">DF</option>
-              <option value="ES">ES</option>
-              <option value="GO">GO</option>
-              <option value="MA">MA</option>
-              <option value="MT">MT</option>
-              <option value="MS">MS</option>
-              <option value="MG">MG</option>
-              <option value="PA">PA</option>
-              <option value="PB">PB</option>
-              <option value="PR">PR</option>
-              <option value="PE">PE</option>
-              <option value="PI">PI</option>
-              <option value="RJ">RJ</option>
-              <option value="RN">RN</option>
-              <option value="RS">RS</option>
-              <option value="RO">RO</option>
-              <option value="RR">RR</option>
-              <option value="SC">SC</option>
-              <option value="SP">SP</option>
-              <option value="SE">SE</option>
-              <option value="TO">TO</option>
-            </select>
-          </div>
-
-          <fieldset class="field field--choice">
-            <legend>Já dirige por aplicativo?</legend>
-            <label><input type="radio" name="alreadyDrivesForApp" value="true"> Sim</label>
-            <label><input type="radio" name="alreadyDrivesForApp" value="false"> Não</label>
-          </fieldset>
-
-          <fieldset class="field field--choice">
-            <legend>Tem veículo próprio?</legend>
-            <label><input type="radio" name="hasOwnVehicle" value="true"> Sim</label>
-            <label><input type="radio" name="hasOwnVehicle" value="false"> Não</label>
-          </fieldset>
-
-          <div class="form-status" id="form-status" role="status" aria-live="polite"></div>
-
-          <button type="submit" class="button button--primary">Enviar candidatura</button>
-
-          <p class="legal-notice">Usamos nome, telefone, e-mail, cidade e UF só para avaliar sua candidatura e avisar o resultado. Controlado por Innovare Code (CNPJ 09.813.446/0001-00). Não vendemos nem repassamos seus dados a ninguém. Para remover seus dados, escreva para <a href="mailto:contato@vuumbora.com.br">contato@vuumbora.com.br</a>.</p>
-        </form>
-      </div>
-    </section>
-
   </div>
 </main>
 
 <footer class="site-footer">
   <div class="container">
+    <img class="site-footer__logo" src="assets/img/logo-vuumbora.png" alt="VuumBora" width="480" height="118" loading="lazy">
     <p>VuumBora, mobilidade urbana.</p>
     <p>Desenvolvido por Innovare Code, CNPJ 09.813.446/0001-00.</p>
     <p>Contato <a href="mailto:contato@vuumbora.com.br">contato@vuumbora.com.br</a>. WhatsApp <a href="https://wa.me/558431132584">(84) 3113-2584</a> e Instagram <a href="https://www.instagram.com/vuumbora.oficial">@vuumbora.oficial</a>.</p>

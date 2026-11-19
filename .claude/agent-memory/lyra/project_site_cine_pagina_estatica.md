@@ -93,6 +93,24 @@ ver seção "Desvio declarado" do pacote). Projeto **separado** de `apps/site`
   (confirmadas à parte, grep em `main.js`). Buscas por travessão (—) e pelas
   palavras de encher linguiça do pacote: zero ocorrências em todo
   `site-cine/public/` (HTML, CSS, JS, inclusive comentários).
+- **Acréscimos de 19/11/2026 (logo, formulário no hero, carrossel):**
+  logomarca (`assets/img/logo-vuumbora.png`) num `.site-header` fixo (overlay,
+  `pointer-events:none` exceto no link da marca) e no rodapé; o cartão de
+  candidatura inteiro (`#candidatura`) foi RELOCADO pra dentro da faixa 1,
+  virando `.hero-card` em vidro fosco (`backdrop-filter` + `@supports` com
+  plano B sólido) ao lado do texto — duas colunas só a partir de 900px
+  (mesmo ponto em que o modo cinematográfico liga, de propósito, pra nunca
+  existir uma faixa de largura com os dois modos descasados), `align-items:
+  flex-start` (colunas de altura desigual, ver
+  [[bug_align_items_center_vao_vazio_colunas_desiguais]]). Expôs 3 bugs reais
+  só visíveis medindo (não lendo o CSS): [[bug_flex_item_min_width_auto_vaza_largura_input]],
+  [[bug_veu_calibrado_para_posicao_antiga_do_texto]] (veio do reposicionamento
+  do texto) e, no carrossel novo (5 artes, scroll-snap + autoplay 5,5s pela
+  receita de [[feedback_carrossel_autoplay_acessivel]]),
+  [[bug_carrossel_multi_peek_indice_e_fim_de_lista]] e
+  [[bug_hidden_attribute_perde_para_display_de_autor]]. Título de carrossel em
+  duas partes (`<strong>`+`<em>`, a segunda cor `--accent`) virou padrão
+  reaproveitável pra "destaque parcial de frase" nesta página.
 - **Medição sem ferramenta de browser dedicada:** mesma receita de
   [[feedback_medir_site_sem_browser_tool]] (`playwright-core` + `sharp`,
   versão 1.60.0 bateu com Chromium já em cache nesta máquina). Testado:

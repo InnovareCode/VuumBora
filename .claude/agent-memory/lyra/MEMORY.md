@@ -32,3 +32,7 @@
 - [opacity no botão dilui contraste do texto](bug_opacity_botao_dilui_contraste_texto.md) — cor nominal passa no cálculo, pixel renderizado real reprova; nunca medir contraste pela cor computada quando há ancestral com opacity<1.
 - [site-cine — página de pré-lançamento estática](project_site_cine_pagina_estatica.md) — HTML/CSS/JS puro sem build, jornada cinematográfica por scroll, véu calibrado por pixel, config.js pro endpoint.
 - [`<picture>` sem altura vira `img height:100%` em auto](bug_picture_sem_altura_img_height100_vira_auto.md) — CSS2.1 10.5; foto cai pra proporção intrínseca mesmo com object-fit:cover.
+- [Input/select sem width:100% vaza largura mínima pelo flex](bug_flex_item_min_width_auto_vaza_largura_input.md) — automatic minimum size estoura flex-basis do card mesmo com flex-grow/shrink:0.
+- [Carrossel multi-peek: índice ambíguo + último slide não alcança start](bug_carrossel_multi_peek_indice_e_fim_de_lista.md) — IntersectionObserver falha com várias cartas visíveis; scroll-snap trava antes do último slide sem spacer.
+- [`hidden` perde para `display` de autor](bug_hidden_attribute_perde_para_display_de_autor.md) — origem de autor sempre vence UA, mesmo empatando especificidade; precisa de `[hidden]{display:none}` explícito.
+- [Véu calibrado para a posição antiga do texto](bug_veu_calibrado_para_posicao_antiga_do_texto.md) — reposicionar texto dentro de hero com véu já calibrado exige remedir do zero.

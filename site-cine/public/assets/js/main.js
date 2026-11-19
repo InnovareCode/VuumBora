@@ -31,7 +31,12 @@
 
     var active = false; // modo cinematográfico está de fato ligado agora
     var ticking = false;
-    var lastActiveIndex = 0;
+    // -1, e nao 0: o update so age quando o indice MUDA, entao comecar em 0
+    // faz a primeira passada nao disparar quando a faixa do topo tambem e 0.
+    // O efeito era visivel: ao abrir a pagina sem rolar, a faixa 1 nunca era
+    // marcada como assentada e o titulo ficava borrado ate o primeiro toque
+    // de rolagem. Primeira impressao da pagina, justamente.
+    var lastActiveIndex = -1;
 
     function opacityFor(index, progress) {
       if (index === 1) {
@@ -125,7 +130,7 @@
       if (active) return;
       active = true;
       journey.classList.add('is-cinematic');
-      lastActiveIndex = 0;
+      lastActiveIndex = -1;
       requestTick();
     }
 
@@ -224,6 +229,174 @@
     items.forEach(function (el) {
       observer.observe(el);
     });
+  }
+
+  /* =========================================================
+     Carrossel de artes: base é a lista com scroll-snap (funciona
+     sem JS, inclusive teclado/touch). Setas, pausa e bolinhas são
+     camada de cima, só reveladas aqui. Avança sozinho a cada 5,5s,
+     com quatro motivos de pausa combinados (nunca um só booleano):
+     reduzido, pausa manual, interação (hover/foco) e aba oculta.
+     ========================================================= */
+  function initCarousel() {
+    var root = document.querySelector('[data-carousel]');
+    if (!root) return;
+
+    var track = root.querySelector('[data-carousel-track]');
+    var slides = Array.prototype.slice.call(track.querySelectorAll('.carousel__slide'));
+    if (!slides.length) return;
+
+    var controls = root.querySelector('[data-carousel-controls]');
+    var dotsWrap = root.querySelector('[data-carousel-dots]');
+    var prevBtn = root.querySelector('[data-carousel-prev]');
+    var nextBtn = root.querySelector('[data-carousel-next]');
+    var pauseBtn = root.querySelector('[data-carousel-pause]');
+    var pauseLabel = root.querySelector('[data-carousel-pause-label]');
+
+    var INTERVAL_MS = 5500;
+    var currentIndex = 0;
+    var manuallyPaused = false;
+    var interactionPaused = false;
+    var tabHidden = document.hidden;
+    var timer = null;
+    var dots = [];
+
+    // Posição de cada slide dentro do conteúdo rolável, calculada uma vez
+    // (e de novo no resize). Com várias cartas visíveis ao mesmo tempo (a
+    // tira mostra 3+ num desktop largo), um IntersectionObserver com
+    // limiar fixo é ambíguo — várias cartas cruzam 60% ao mesmo tempo, e
+    // "qual é a atual" vira loteria (medido: clique na bolinha 4 assentava
+    // na 5). Em vez disso, o índice "atual" é sempre o slide cuja posição
+    // está mais perto do scrollLeft real — determinístico mesmo com várias
+    // cartas visíveis.
+    var slideLefts = [];
+    var spacer = root.querySelector('[data-carousel-spacer]');
+    function measureSlideLefts() {
+      var trackRect = track.getBoundingClientRect();
+      slideLefts = slides.map(function (slide) {
+        var slideRect = slide.getBoundingClientRect();
+        return track.scrollLeft + (slideRect.left - trackRect.left);
+      });
+      // Dá ao último slide a mesma chance de virar "o da esquerda" que
+      // os outros têm: o espaçador vira a sobra exata (largura visível
+      // menos a largura de um card), senão o scroll trava antes de lá.
+      if (spacer) {
+        var lastWidth = slides[slides.length - 1].getBoundingClientRect().width;
+        var need = track.clientWidth - lastWidth;
+        spacer.style.width = Math.max(0, need) + 'px';
+      }
+    }
+
+    function nearestIndex() {
+      var pos = track.scrollLeft;
+      var best = 0;
+      var bestDist = Infinity;
+      slideLefts.forEach(function (left, i) {
+        var dist = Math.abs(left - pos);
+        if (dist < bestDist) { bestDist = dist; best = i; }
+      });
+      return best;
+    }
+
+    function scrollToIndex(index) {
+      var left = slideLefts[index];
+      if (left === undefined) return;
+      track.scrollTo({ left: left, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+    }
+
+    function setActive(index) {
+      currentIndex = index;
+      dots.forEach(function (dot, i) {
+        dot.setAttribute('aria-current', i === index ? 'true' : 'false');
+      });
+    }
+
+    function goTo(index) {
+      var clamped = (index + slides.length) % slides.length;
+      setActive(clamped);
+      scrollToIndex(clamped);
+    }
+
+    measureSlideLefts();
+    window.addEventListener('resize', measureSlideLefts);
+
+    // Varredura orgânica (gesto de toque/trackpad, fora dos nossos botões):
+    // sincroniza as bolinhas com o slide mais próximo, sem brigar com a
+    // navegação programática (goTo já ajustou currentIndex antes de rolar).
+    var scrollTicking = false;
+    track.addEventListener('scroll', function () {
+      if (scrollTicking) return;
+      scrollTicking = true;
+      window.requestAnimationFrame(function () {
+        scrollTicking = false;
+        var idx = nearestIndex();
+        if (idx !== currentIndex) setActive(idx);
+      });
+    }, { passive: true });
+
+    slides.forEach(function (slide, i) {
+      var dot = document.createElement('button');
+      dot.type = 'button';
+      dot.setAttribute('aria-label', 'Ir para o slide ' + (i + 1) + ' de ' + slides.length);
+      dot.setAttribute('aria-current', i === 0 ? 'true' : 'false');
+      dot.addEventListener('click', function () { goTo(i); });
+      dotsWrap.appendChild(dot);
+      dots.push(dot);
+    });
+
+    prevBtn.addEventListener('click', function () { goTo(currentIndex - 1); });
+    nextBtn.addEventListener('click', function () { goTo(currentIndex + 1); });
+
+    function isPlaying() {
+      return !prefersReducedMotion() && !manuallyPaused && !interactionPaused && !tabHidden;
+    }
+
+    function syncTimer() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      if (isPlaying()) {
+        timer = setInterval(function () { goTo(currentIndex + 1); }, INTERVAL_MS);
+      }
+    }
+
+    function setManuallyPaused(state) {
+      manuallyPaused = state;
+      pauseBtn.setAttribute('aria-pressed', state ? 'true' : 'false');
+      if (pauseLabel) {
+        pauseLabel.textContent = state ? 'Retomar avanço automático' : 'Pausar avanço automático';
+      }
+      syncTimer();
+    }
+
+    pauseBtn.addEventListener('click', function () { setManuallyPaused(!manuallyPaused); });
+
+    root.addEventListener('pointerenter', function () { interactionPaused = true; syncTimer(); });
+    root.addEventListener('pointerleave', function () { interactionPaused = false; syncTimer(); });
+    root.addEventListener('focusin', function () { interactionPaused = true; syncTimer(); });
+    root.addEventListener('focusout', function (event) {
+      if (!root.contains(event.relatedTarget)) {
+        interactionPaused = false;
+        syncTimer();
+      }
+    });
+
+    document.addEventListener('visibilitychange', function () {
+      tabHidden = document.hidden;
+      syncTimer();
+    });
+
+    function syncReducedUI() {
+      pauseBtn.hidden = prefersReducedMotion();
+      syncTimer();
+    }
+    reduceMotionQuery.addEventListener('change', syncReducedUI);
+
+    // Camada de cima: controles só aparecem depois que o JS liga.
+    controls.hidden = false;
+    dotsWrap.hidden = false;
+    syncReducedUI();
   }
 
   /* =========================================================
@@ -423,6 +596,7 @@
     initJourney();
     initRouteLine();
     initReveal();
+    initCarousel();
     initRateSimulator();
     initApplicationForm();
   }

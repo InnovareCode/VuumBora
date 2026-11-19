@@ -14,6 +14,7 @@
   /* Derivados do canvas, só para engenharia (véu, sombra, bordas) */
   --veil-base: 10, 17, 25;
   --canvas-rgb: 10, 17, 25;
+  --panel-rgb: 19, 30, 41;
 
   --font-display: 'Poppins', -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-body: 'Poppins', -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -248,6 +249,25 @@ summary:focus-visible,
     rgba(var(--veil-base), 0.58) 48%,
     rgba(var(--veil-base), 0.85) 66%,
     rgba(var(--veil-base), 0.95) 100%
+  );
+}
+
+/* O véu padrão foi calibrado para texto ancorado embaixo da faixa
+   (onde ele já fica bem escuro). A faixa 1 agora também carrega o
+   texto perto do TOPO em telas largas (hero de duas colunas, texto
+   alinhado ao início) — medido por pixel: sem reforço aqui, o corpo
+   do texto caía a ~1,5-2:1 contra o céu claro do amanhecer. Por
+   isso a faixa 1 recebe um véu mais escuro e mais uniforme, não só
+   pesado embaixo. */
+.faixa[data-faixa="1"] .faixa__veil {
+  background: linear-gradient(
+    180deg,
+    rgba(var(--veil-base), 0.68) 0%,
+    rgba(var(--veil-base), 0.72) 20%,
+    rgba(var(--veil-base), 0.78) 40%,
+    rgba(var(--veil-base), 0.86) 60%,
+    rgba(var(--veil-base), 0.92) 80%,
+    rgba(var(--veil-base), 0.97) 100%
   );
 }
 
@@ -601,6 +621,13 @@ input[type="range"] {
 .field input[type="tel"],
 .field input[type="email"],
 .field select {
+  /* Sem isso, a largura "intrínseca" do controle (~20ch, padrão da UA)
+     vaza pela cadeia flex/grid acima (tamanho mínimo automático do
+     flexbox) e estoura qualquer flex-basis/grid-column do ancestral —
+     foi o que achatou o flex-basis:380px do .hero-card para ~530px
+     com o form-row de 2 colunas. */
+  width: 100%;
+  min-width: 0;
   background: var(--canvas);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--radius-sm);
@@ -737,6 +764,294 @@ noscript .reveal[data-hidden="true"] {
   }
 }
 
+/* =========================================================
+   CABEÇALHO (logo fixa, sobre a jornada e sobre o resto)
+   ========================================================= */
+.site-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 70;
+  display: flex;
+  padding: var(--space-3) clamp(1.25rem, 4vw, 2.5rem);
+  background: linear-gradient(
+    180deg,
+    rgba(var(--canvas-rgb), 0.78) 0%,
+    rgba(var(--canvas-rgb), 0.4) 65%,
+    rgba(var(--canvas-rgb), 0) 100%
+  );
+  pointer-events: none;
+}
+.site-header__brand {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+}
+.site-header__logo {
+  display: block;
+  height: clamp(32px, 4.2vw, 44px);
+  width: auto;
+}
+
+.site-footer__logo {
+  display: block;
+  height: 40px;
+  width: auto;
+  margin-bottom: var(--space-3);
+}
+
+/* =========================================================
+   HERO: texto + cartão de candidatura lado a lado (faixa 1)
+   Base = empilhado (cabe em qualquer altura, cresce se precisar).
+   A partir de 900px (mesmo ponto em que o modo cinematográfico
+   liga): lado a lado, topo alinhado (ver memória
+   bug_align_items_center_vao_vazio_colunas_desiguais — colunas de
+   altura desigual pedem flex-start, não center/stretch).
+   ========================================================= */
+.hero-grid {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding: var(--space-6) clamp(1.25rem, 4vw, 2.5rem) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.hero-grid .faixa-text {
+  padding: 0;
+  margin-inline: 0;
+  max-width: 560px;
+}
+@media (min-width: 900px) {
+  .hero-grid {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding-block: var(--space-5);
+  }
+  .hero-grid .faixa-text {
+    flex: 1 1 480px;
+    padding-top: var(--space-2);
+  }
+  .hero-grid .hero-card {
+    flex: 0 0 380px;
+  }
+}
+
+/* Cartão de candidatura em vidro fosco sobre a foto do amanhecer.
+   @supports garante um plano B sólido onde backdrop-filter não existe. */
+.hero-card.application {
+  background: rgba(var(--panel-rgb), 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.65);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .hero-card.application {
+    background: rgba(var(--panel-rgb), 0.56);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+  }
+}
+.hero-card .section-heading {
+  font-size: 1.15rem;
+  margin-bottom: var(--space-3);
+}
+.hero-card #application-form {
+  gap: var(--space-2);
+}
+.hero-card .form-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+}
+@media (min-width: 480px) {
+  .hero-card .form-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.hero-card .legal-notice {
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   CARROSSEL de artes (5 cards). Base = lista rolável com
+   scroll-snap, funciona sem JS. Setas/pausa/bolinhas são a
+   camada de cima, só reveladas depois que o JS liga (ver
+   memória feedback_carrossel_autoplay_acessivel).
+   ========================================================= */
+.carousel__viewport {
+  position: relative;
+}
+.carousel__track {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-block: var(--space-1);
+  padding-inline: var(--space-1);
+}
+.carousel__slide {
+  flex: 0 0 auto;
+  width: min(80vw, 300px);
+  scroll-snap-align: start;
+}
+/* Sem isto, o último card nunca consegue chegar à borda esquerda quando
+   mais de um card cabe na tela por vez (o navegador trava o scroll no
+   fim do conteúdo, antes do ponto de encaixe do último slide) — o
+   scrollLeft fica preso perto do penúltimo card mesmo pedindo o último.
+   JS mede e ajusta a largura real (ver measureSlideLefts); sem JS fica
+   0 e inofensivo, é só o scroll nativo normal. */
+.carousel__spacer {
+  flex: 0 0 auto;
+  width: 0;
+  scroll-snap-align: none;
+}
+@media (min-width: 640px) {
+  .carousel__slide { width: 300px; }
+}
+@media (min-width: 1024px) {
+  .carousel__slide { width: 320px; }
+}
+
+.carousel-card {
+  position: relative;
+  height: 100%;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--panel);
+}
+.carousel-card__media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 900 / 975;
+}
+.carousel-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: var(--panel);
+  font-size: 0;
+  color: transparent;
+}
+.carousel-card__veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(var(--veil-base), 0) 36%,
+    rgba(var(--veil-base), 0.64) 64%,
+    rgba(var(--veil-base), 0.94) 100%
+  );
+}
+.carousel-card__text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: var(--space-3) var(--space-3) var(--space-4);
+}
+.carousel-card__title {
+  margin-top: var(--space-1);
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.22;
+  font-size: clamp(1.05rem, 0.95rem + 0.5vw, 1.3rem);
+  color: var(--text-primary);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.55), 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+.carousel-card__title em {
+  font-style: italic;
+  color: var(--accent);
+}
+.carousel-card__body {
+  margin-top: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Regra de autor (display:flex) bate regra da UA ([hidden]{display:none})
+   mesmo com especificidade igual — origem de autor sempre vence a da UA.
+   Sem isto, o atributo `hidden` (usado para só revelar os controles
+   depois que o JS liga) fica sem efeito visual: medido sem JS, as setas
+   e as bolinhas apareciam mesmo com `hidden` presente no elemento. */
+.carousel__controls[hidden],
+.carousel__dots[hidden] {
+  display: none;
+}
+
+.carousel__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.carousel__arrow,
+.carousel__pause {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--text-primary);
+  padding: 0;
+}
+.carousel__arrow:hover,
+.carousel__pause:hover {
+  border-color: var(--accent);
+}
+.carousel__arrow svg,
+.carousel__pause svg {
+  width: 20px;
+  height: 20px;
+}
+.carousel__pause .icon-play { display: none; }
+.carousel__pause[aria-pressed="true"] .icon-pause { display: none; }
+.carousel__pause[aria-pressed="true"] .icon-play { display: block; }
+
+.carousel__dots {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+}
+/* O alvo de toque real é o botão inteiro (44x44), não o truque de
+   aumentar só a área visual: ver memória
+   bug_touch_target_hitslop_insuficiente — getBoundingClientRect do
+   elemento clicável precisa medir 44px, não só "parecer" clicável. */
+.carousel__dots button {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.carousel__dots button::after {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+}
+.carousel__dots button[aria-current="true"]::after {
+  background: var(--accent);
+}
+
 /* ---------------------------------------------------------------
    A candidatura e a acao unica da pagina, entao ela fica centrada.
    Medido a 1440px antes desta regra: o formulario ocupava 45% da
@@ -752,4 +1067,35 @@ noscript .reveal[data-hidden="true"] {
 .application > .container > .section-heading {
   max-width: 640px;
   margin-inline: auto;
+}
+
+/* ---------------------------------------------------------------
+   O cartao da candidatura usa `backdrop-filter` (o vidro fosco que
+   o dono pediu). Esse filtro arrasta a pagina para uma camada de
+   composicao, e o navegador rasteriza junto o texto VIZINHO: o
+   titulo do hero sai borrado mesmo estando longe do cartao, e mesmo
+   sem filter nenhum na propria cadeia dele.
+
+   Provado por teste A/B no mesmo navegador, a 1440px: com o vidro,
+   titulo borrado; tirando so o `backdrop-filter`, titulo nitido;
+   devolvendo o vidro e promovendo o texto para a propria camada,
+   titulo nitido COM o vidro. Os dois convivem, desde que o texto
+   tenha camada propria.
+
+   `translateZ(0)` e o que cria essa camada. Nao ha `will-change`
+   permanente aqui de proposito: ele reserva memoria o tempo todo e
+   o ganho nao aparece na medicao.
+   --------------------------------------------------------------- */
+.faixa-text {
+  transform: translateZ(0);
+}
+.journey.is-cinematic .faixa[data-faixa="1"] .faixa-text {
+  transform: translateY(22px) translateZ(0);
+}
+.journey.is-cinematic .faixa[data-faixa="2"] .faixa-text {
+  transform: translateX(34px) translateZ(0);
+}
+.journey.is-cinematic .faixa[data-active="true"] .faixa-text,
+.journey.is-cinematic .faixa[data-settled="true"] .faixa-text {
+  transform: translateZ(0);
 }
