@@ -20,12 +20,19 @@ out
 .env.example
 
 # Apps/pacotes que o site não usa (evita copiar peso e vazar código não
-# relacionado para a imagem — o Dockerfile faz COPY explícito do que precisa)
+# relacionado para a imagem — o Dockerfile faz COPY explícito do que precisa).
+#
+# ATENÇÃO: esta lista e os COPY de apps/site/Dockerfile são DOIS lados da
+# mesma decisão e precisam concordar. Em 19/11/2026 `packages/api-client` e
+# `packages/domain` estavam aqui, o site passou a importá-los, e o deploy
+# quebrou duas vezes: na primeira o Dockerfile nem copiava os pacotes; na
+# segunda copiava, e o Docker recusou porque este arquivo os excluía do
+# contexto ("CopyIgnoredFile ... excluded by .dockerignore"). Antes de
+# excluir um pacote aqui, confira que nenhum COPY do Dockerfile o pede —
+# `npm run check:docker-context` faz essa conferência.
 apps/passenger
 apps/driver
 packages/ui
-packages/domain
-packages/api-client
 
 # Material de trabalho pesado, não usado em build nenhum
 Imagens

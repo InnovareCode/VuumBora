@@ -18,7 +18,8 @@
     "api": "npm run dev --workspace @vuumbora/api",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "check:boundaries": "node scripts/check-boundaries.mjs",
-    "check": "npm run check:boundaries && npm run typecheck"
+    "check:docker-context": "node scripts/check-docker-context.mjs",
+    "check": "npm run check:boundaries && npm run check:docker-context && npm run typecheck"
   },
   "devDependencies": {
     "typescript": "~6.0.3"
