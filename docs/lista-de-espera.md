@@ -1,24 +1,36 @@
-# Lista de espera — como rodar, publicar, exportar e excluir
+# Lista de espera e pré-cadastro de motorista — como rodar, publicar, exportar e excluir
 
 Esta é a primeira peça real de backend do VuumBora (`apps/api`). Até aqui
 tudo no projeto era simulado (`mock`) nos apps; este serviço grava de
 verdade, num banco de verdade.
 
-**Aprovado pelo dono em 18/11/2026, com uma condição que ainda não foi
-cumprida — ver a seção "Por que o formulário não vai ao ar ainda", no fim.**
-Este documento serve para rodar, publicar e operar o serviço mesmo assim:
-nada aqui depende da condição pendente.
+**Aprovado pelo dono em 18/11/2026.** Este documento serve para rodar,
+publicar e operar o serviço, incluindo a ampliação de 19/11/2026 que
+acrescentou o pré-cadastro de motorista (ver `docs/decisoes-do-dono.md` →
+"DECISÃO: duas etapas").
 
 ## O que este serviço faz (e o que não faz)
 
-Um único endpoint público: recebe e-mail e, opcionalmente, perfil
-(`passenger` ou `driver`), e grava numa tabela. Não pede CPF, telefone,
-endereço nem documento — para avisar do lançamento, e-mail basta (decisão do
-dono, `docs/decisoes-do-dono.md` → "Lista de espera").
+Dois endpoints públicos, duas tabelas, dois públicos diferentes:
+
+1. **`POST /v1/waitlist`** — lista de espera simples do **passageiro**: só
+   e-mail (perfil sempre `'passenger'`). Avisa quando o app lançar, nada
+   mais.
+2. **`POST /v1/driver-applications`** — candidatura de pré-cadastro do
+   **motorista**, etapa 1 de 2 (`docs/decisoes-do-dono.md` → "DECISÃO: duas
+   etapas", 19/11/2026): nome completo, telefone (WhatsApp), e-mail, cidade,
+   UF, e duas perguntas opcionais de elegibilidade. O dono **avalia cada
+   candidatura** — não é inscrição automática.
+
+Em nenhum dos dois se pede CPF, CNH, documento do veículo nem foto — isso é
+a etapa 2 do cadastro de motorista, que só existe depois da aprovação e de
+existir processo de verificação e guarda segura (decisão 9,
+`docs/decisoes-do-dono.md`). Endereço residencial também não é coletado
+antes da aprovação, pelo mesmo motivo.
 
 Não tem painel administrativo. Exportar e excluir são comandos de linha de
 comando (seções abaixo) — a decisão aqui foi não construir uma superfície
-de administração pra uma única tabela.
+de administração pra duas tabelas pequenas.
 
 ## Arquitetura em uma frase
 
@@ -82,6 +94,11 @@ curl -X POST http://localhost:3000/v1/waitlist \
   -H "Content-Type: application/json" \
   -d '{"email":"teste@exemplo.com","profile":"passenger"}'
 # {"ok":true}
+
+curl -X POST http://localhost:3000/v1/driver-applications \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Maria Silva","phone":"(84) 99999-8888","email":"maria@exemplo.com","city":"Natal","state":"RN"}'
+# {"ok":true}
 ```
 
 ## 2. Publicar no Easypanel (`vuumbora-backend`)
@@ -109,6 +126,8 @@ aqui é o mesmo painel, outro serviço).
    - `PORT` — `3000` (ou deixe no padrão; o `Dockerfile` já expõe 3000).
    - Opcionais, só se quiser mudar o padrão: `WAITLIST_RATE_LIMIT_MAX`
      (padrão `5`), `WAITLIST_RATE_LIMIT_WINDOW_MINUTES` (padrão `10`),
+     `DRIVER_APPLICATION_RATE_LIMIT_MAX` (padrão `5`),
+     `DRIVER_APPLICATION_RATE_LIMIT_WINDOW_MINUTES` (padrão `10`),
      `LOG_LEVEL` (padrão `info`).
 4. **Domínio:** se o backend vai ter domínio próprio (ex.
    `api.vuumbora.com.br`), configure na aba Domínios do serviço, igual ao
@@ -160,11 +179,39 @@ excluiu, ou se não havia nada com esse e-mail. Diferente da resposta da
 API pública, este comando **pode** confirmar existência — é uma ação
 administrativa que só o dono executa, não uma resposta a quem se inscreveu.
 
+## 4b. Candidaturas de motorista — exportar e excluir
+
+Mesmo padrão da lista de espera, em comandos próprios (tabela própria,
+`driver_applications`):
+
+```bash
+# dentro do contêiner, ou localmente com o atalho do workspace
+node scripts/export-driver-applications.mjs > candidaturas.csv
+npm run driver-applications:export --workspace @vuumbora/api > candidaturas.csv
+
+node scripts/delete-driver-application.mjs --email=pessoa@exemplo.com
+npm run driver-applications:delete --workspace @vuumbora/api -- --email=pessoa@exemplo.com
+```
+
+O CSV exportado traz todas as colunas: `name, email, phone, city, state,
+already_drives_for_app, has_own_vehicle, status, source, created_at`. A
+exclusão apaga a candidatura **inteira** — todos os campos, não só o
+e-mail — pelo mesmo motivo da lista de espera (direito de exclusão, LGPD).
+
+**Sobre a coluna `status`:** toda candidatura nasce `'pending'`. Não existe,
+nesta entrega, nenhum endpoint ou script para mudar isso — é uma decisão
+deliberada (ver "Por que existe uma coluna `status` sem fluxo de aprovação"
+mais abaixo). Mudar para `'approved'`/`'rejected'` hoje é manual, via SQL
+direto no banco.
+
 ## 5. Contrato HTTP (para o site consumir)
 
 Tipos e adaptador prontos em `packages/api-client/src/waitlist`
-(`WaitlistPort`, `createWaitlistHttpAdapter`) — quem for ligar o formulário
-do site deveria importar daí, não reimplementar o `fetch` à mão.
+(`WaitlistPort`, `createWaitlistHttpAdapter`) e em
+`packages/api-client/src/driver-applications` (`DriverApplicationPort`,
+`createDriverApplicationHttpAdapter`) — quem for ligar qualquer um dos dois
+formulários do site deveria importar daí, não reimplementar o `fetch` à
+mão.
 
 ### `POST /v1/waitlist`
 
@@ -205,6 +252,52 @@ implementar a tela) e a Íris (quem testa):
 - **Falha (`503`/erro de rede):** mensagem de "não foi possível agora,
   tente novamente" — nunca "e-mail inválido" nem nada que sugira que o
   problema é do dado digitado.
+
+### `POST /v1/driver-applications`
+
+Corpo (JSON):
+
+```json
+{
+  "name": "Maria Silva",
+  "phone": "(84) 99999-8888",
+  "email": "maria@exemplo.com",
+  "city": "Natal",
+  "state": "RN",
+  "alreadyDrivesForApp": true,
+  "hasOwnVehicle": false
+}
+```
+
+| Campo | Obrigatório | Normalização no servidor |
+|---|---|---|
+| `name` | sim | trim; mínimo 2, máximo 120 caracteres |
+| `phone` | sim | qualquer formato que a pessoa digite (com/sem DDI, parênteses, espaço, hífen, com/sem o 9º dígito) é aceito e **normalizado para E.164** (`+55DDXXXXXXXXX`) antes de gravar |
+| `email` | sim | trim, minúsculas |
+| `city` | sim | trim; mínimo 2, máximo 120 caracteres |
+| `state` | sim | sigla de UF (2 letras), maiúsculas; qualquer uma das 27 UFs brasileiras é aceita — o dono filtra por região (RN/Grande Natal) depois, isto não é regra de negócio do servidor |
+| `alreadyDrivesForApp` | não | booleano |
+| `hasOwnVehicle` | não | booleano |
+
+| Situação | HTTP | Corpo |
+|---|---|---|
+| Sucesso (e-mail novo **ou** já candidatado — sempre igual, de propósito) | `200` | `{"ok":true}` |
+| Um ou mais campos inválidos (TODOS reportados de uma vez, não só o primeiro) | `400` | `{"ok":false,"error":{"code":"validation_failed","message":"Verifique os campos destacados.","fields":{"name":"Informe o nome completo.","phone":"Celular inválido — informe um número de WhatsApp válido com DDD."}}}` — `fields` tem uma chave por campo inválido, valor é a mensagem em português daquele campo |
+| Corpo da requisição malformado (JSON inválido, vazio, não é objeto, maior que 10 KB) | `400` | `{"ok":false,"error":{"code":"invalid_body","message":"Corpo da requisição inválido."}}` — sem `fields`: não há um campo específico para apontar |
+| Limite de requisições atingido (padrão: 5 por IP a cada 10 min nesta rota) | `429` | `{"ok":false,"error":{"code":"rate_limited","message":"Muitas requisições. Tente novamente em alguns minutos."}}` |
+| Banco fora do ar / erro interno ao gravar | `503` | `{"ok":false,"error":{"code":"unavailable","message":"Serviço temporariamente indisponível. Tente novamente em alguns minutos."}}` |
+| Origem (domínio) não autorizada | — | bloqueado pelo navegador via CORS, mesmo mecanismo da lista de espera |
+
+**O que o formulário deve mostrar em cada caso** (para a Lyra e a Íris):
+- **Sucesso:** mensagem de candidatura recebida — nunca "aprovada": o dono
+  ainda vai avaliar.
+- **Campo(s) inválido(s):** erro inline em cada campo apontado em
+  `error.fields`, um por campo — o formulário pode mostrar todos de uma vez
+  numa única submissão.
+- **Celular inválido:** mensagem pede DDD e número reais de WhatsApp — não
+  é só "formato errado", é "isto não parece um celular brasileiro válido".
+- **Limite atingido / falha de serviço:** mesmo tratamento da lista de
+  espera (mensagem genérica de "tente de novo depois").
 
 ### `GET /healthz`
 
@@ -260,35 +353,69 @@ esta API em nome de visitantes dele. Em produção, só
 `https://www.vuumbora.com.br` deveria estar na lista.
 
 ### Por que Fastify + `pg` direto, sem ORM
-Uma tabela, uma consulta de escrita e duas de leitura/exclusão — um ORM
-inteiro (Prisma, TypeORM) seria peso desproporcional ao problema agora.
-Quando a Fase 5 trouxer corridas, pagamentos e mais tabelas relacionadas,
-vale reconsiderar.
+Duas tabelas pequenas, uma consulta de escrita e duas de leitura/exclusão
+cada — um ORM inteiro (Prisma, TypeORM) seria peso desproporcional ao
+problema agora. Quando a Fase 5 trouxer corridas, pagamentos e mais tabelas
+relacionadas, vale reconsiderar.
 
-## 7. Por que o formulário não vai ao ar ainda
+### Por que `driver_applications` é uma tabela separada de `waitlist_signups`
+São dois públicos e dois fluxos diferentes desde 19/11/2026: o passageiro
+continua com inscrição simples (um campo, sem avaliação); o motorista
+virou candidatura avaliada pelo dono (seis campos, com resultado). Juntar
+os dois na mesma tabela exigiria todas as colunas novas aceitando `NULL`
+pra sempre no caso do passageiro, e mais cedo ou mais tarde confundiria
+"lista de espera" com "candidatura em análise" — dois conceitos que o
+próprio site já separa em dois formulários e duas portas distintas
+(`WaitlistPort` vs. `DriverApplicationPort`).
 
-A LGPD exige que a pessoa saiba **para quem** está entregando o e-mail, e
+### Por que o celular é normalizado para E.164 no servidor
+Uma pessoa digita o próprio WhatsApp de formas bem diferentes: com ou sem
+`+55`, com ou sem parênteses/espaço/hífen, às vezes sem o 9º dígito (quem
+decorou o número antes da universalização de 2016/2017). Aceitar qualquer
+um desses formatos no campo e normalizar tudo para `+55DDXXXXXXXXX` antes
+de gravar (`src/domain/phone.ts`) evita duas filas de erro: a pessoa não vê
+"formato inválido" por causa de um hífen, e quem analisa a candidatura
+depois sempre vê o número no mesmo formato, pronto pra discar ou abrir o
+WhatsApp direto.
+
+### Por que existe uma coluna `status` sem fluxo de aprovação
+A candidatura de motorista tem um resultado possível (aprovada ou
+recusada) desde que nasceu — o dono avalia cada uma. Criar a coluna
+`status` agora (sempre `'pending'`, por `DEFAULT` do banco — ver migração
+0002) evita uma migração dolorosa quando o fluxo de aprovação existir.
+**Deliberadamente, nada mais foi construído:** nenhum endpoint, script ou
+tela lê ou altera esse valor nesta entrega. Quem analisa as candidaturas,
+em quanto tempo e com qual critério continua sendo pendência do dono
+(`docs/decisoes-do-dono.md` → "Campos do pré-cadastro de motorista",
+"Pendência que isso cria") — construir um fluxo de aprovação antes dessa
+resposta seria inventar processo que pode não bater com o real.
+
+## 7. Privacidade — o que falta para os formulários irem ao ar
+
+A LGPD exige que a pessoa saiba **para quem** está entregando os dados, e
 para onde escrever se quiser pedir exclusão depois. O aviso de privacidade
-do formulário precisa cobrir as duas coisas.
+de cada formulário precisa cobrir as duas coisas — e, desde 19/11/2026,
+**citar os campos reais que aquele formulário coleta**, não só "seu
+e-mail" (`docs/decisoes-do-dono.md` → "Campos do pré-cadastro de
+motorista", item 2 da lista de responsabilidades).
 
-**Controlador — resolvido em 19/11/2026:** a empresa é **Innovare Code**,
-CNPJ **09.813.446/0001-00**. É esse nome e CNPJ que o aviso de privacidade
-do formulário deve citar como quem controla os dados (ver
-`docs/decisoes-do-dono.md` → "Lista de espera: aprovada em 18/11/2026, com
-condições", item 1).
+**Controlador e canal de exclusão — resolvidos em 19/11/2026:**
+- Controlador: **Innovare Code**, CNPJ **09.813.446/0001-00**.
+- Canal de exclusão: **contato@vuumbora.com.br**.
 
-**Ainda pendente (19/11/2026): canal de contato para pedido de exclusão.**
-Não existe, até agora, um e-mail ou canal definido para quem quiser pedir
-a remoção do próprio e-mail da lista. Sem isso, o aviso de privacidade não
-tem "para onde escrever" — e o item 2 da decisão do dono (aviso mínimo)
-exige exatamente essa informação. **Isto continua bloqueando a publicação
-do formulário no site.** O mecanismo de exclusão em si já existe e funciona
-(seção 4, acima, `scripts/delete-waitlist.mjs`) — o que falta é só o
-endereço para a pessoa pedir, não a capacidade técnica de atender o pedido.
+Os dois avisos mínimos (texto exato em `apps/site`, não deste repositório
+de backend) já citam ambos. Nenhuma pendência de dado bloqueia mais a
+publicação:
 
-**Isto bloqueia só a publicação do formulário no site, não o backend.**
-Este serviço pode (e deve) ser publicado, testado e ficar no ar — só não
-deve ser linkado/exposto no formulário público do `apps/site` até:
-1. o dono passar o canal de contato para exclusão (pendência acima), e
-2. o aviso de privacidade mínimo (controlador + finalidade + "não vende
-   nem repassa" + canal de exclusão) entrar junto do campo no formulário.
+| Formulário | O que o aviso precisa citar | Mecanismo de exclusão |
+|---|---|---|
+| Lista de espera (passageiro) | só e-mail, finalidade única (avisar do lançamento) | `scripts/delete-waitlist.mjs` (seção 4) |
+| Candidatura (motorista) | nome, telefone, e-mail, cidade, UF — e, se respondidas, as duas perguntas de elegibilidade | `scripts/delete-driver-application.mjs` (seção 4b) |
+
+**Nome e telefone tornam a base da candidatura identificável de verdade** —
+diferente de um e-mail solto, nome + telefone juntos permitem contatar a
+pessoa fora do VuumBora, o que torna um eventual vazamento mais grave. Isso
+não é motivo para não coletar (a finalidade — avaliar quem pode dirigir —
+exige esses dados), mas é motivo para o canal de contato
+(contato@vuumbora.com.br) **ser lido de fato**, porque agora existe gente
+esperando resposta, não só um e-mail promocional futuro.

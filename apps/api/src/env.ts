@@ -38,6 +38,10 @@ const schema = z.object({
 
   WAITLIST_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
   WAITLIST_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(10),
+
+  /** Rota separada (`/v1/driver-applications`) — limite próprio, mesmo padrão da lista de espera. */
+  DRIVER_APPLICATION_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
+  DRIVER_APPLICATION_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(10),
 });
 
 export type Env = Readonly<z.infer<typeof schema>>;

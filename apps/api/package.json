@@ -12,7 +12,9 @@
     "typecheck": "tsc -p . --noEmit",
     "migrate": "node scripts/migrate.mjs",
     "waitlist:export": "node scripts/export-waitlist.mjs",
-    "waitlist:delete": "node scripts/delete-waitlist.mjs"
+    "waitlist:delete": "node scripts/delete-waitlist.mjs",
+    "driver-applications:export": "node scripts/export-driver-applications.mjs",
+    "driver-applications:delete": "node scripts/delete-driver-application.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",

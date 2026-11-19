@@ -4,6 +4,7 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import { env } from './env.js';
+import { registerDriverApplicationRoute } from './routes/driver-application-route.js';
 import { registerHealthRoute } from './routes/health-route.js';
 import { registerWaitlistRoute } from './routes/waitlist-route.js';
 
@@ -40,6 +41,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerHealthRoute(app);
   registerWaitlistRoute(app);
+  registerDriverApplicationRoute(app);
 
   app.setNotFoundHandler((_request, reply) => {
     reply.code(404).send({ ok: false, error: { code: 'not_found', message: 'Rota não encontrada.' } });
