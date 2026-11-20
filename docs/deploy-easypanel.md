@@ -355,6 +355,33 @@ Sem isso, o navegador bloqueia o próprio painel por CORS — o sintoma parece
 "o sistema caiu", não "faltou um domínio numa variável" (mesmo alerta já
 registrado em `docs/decisoes-do-dono.md` §7).
 
+**Aconteceu de verdade em 20/11/2026**, no primeiro acesso ao painel
+publicado. Mensagem exata no console do navegador, que serve de assinatura
+do problema:
+
+```
+Access to fetch at 'https://api.vuumbora.com.br/v1/admin/me'
+from origin 'https://admin.vuumbora.com.br' has been blocked by CORS
+policy: No 'Access-Control-Allow-Origin' header is present
+```
+
+⚠️ **Formato, onde a correção certa deixa de funcionar:** `env.ts` separa por
+vírgula e **apara espaços**, mas **não normaliza barra no fim**. O navegador
+envia a origem sempre **sem** barra, e a comparação é exata — então
+`https://admin.vuumbora.com.br/` (com barra) **não casa** e o painel continua
+bloqueado, com o mesmo sintoma de antes. Escreva sem barra, com `https://`.
+
+Depois de salvar, **confirme que o serviço reiniciou**: variável de ambiente
+só vale no processo novo. Para checar sem depender da tela do painel:
+
+```
+curl -i -H "Origin: https://admin.vuumbora.com.br" https://api.vuumbora.com.br/healthz
+```
+
+Se vier o cabeçalho `access-control-allow-origin` com o endereço do painel,
+está resolvido. Se não vier, a variável não chegou ao processo — é reinício,
+não é o valor.
+
 **Por que o cookie de sessão continua funcionando:** `admin.vuumbora.com.br`
 e `api.vuumbora.com.br` são subdomínios do mesmo `vuumbora.com.br` — para o
 navegador, é cross-**origin** (por isso precisa do CORS com credenciais,
