@@ -2351,3 +2351,121 @@ noscript .reveal[data-hidden="true"] {
 .journey.is-cinematic .faixa[data-settled="true"] .faixa-text {
   transform: translateZ(0);
 }
+
+/* =========================================================
+   Categorias de veículo: "meu carro serve?"
+   Reusa o visual de painel dos cartões de motivo, mas sem o
+   pino nem o fecho amarelo — a seção inteira já gasta duas
+   marcas amarelas (olho e fecho do H2), e cinco cartões com
+   fecho passariam do limite de seis por tela.
+   ========================================================= */
+.requisitos {
+  margin-bottom: 40px;
+  padding: 24px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.requisitos__titulo {
+  margin: 0 0 16px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.requisitos__lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  margin: 0;
+  list-style: none;
+}
+
+.requisitos__lista li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+/* Tique desenhado em CSS: duas bordas de um quadrado girado. Evita um
+   SVG repetido cinco vezes e acompanha a cor do texto sozinho. */
+.requisitos__tique {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 8px;
+  border-left: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: rotate(-45deg);
+  margin-top: -4px;
+}
+
+/*
+  São cinco cartões, e cinco é um número ruim para grade automática: com
+  colunas estreitas o navegador escolhia quatro e deixava o "Pet" sozinho
+  numa linha, o que lê como sobra. Com a coluna mínima maior, cabem três
+  por linha e a quebra vira 3 + 2, que é equilibrado.
+*/
+.categorias__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  list-style: none;
+}
+
+.categoria-card {
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  background: var(--panel);
+  transition: border-color 0.24s ease, transform 0.24s ease;
+}
+
+/* Só onde há mouse de verdade: no toque, nada se mexe. */
+@media (hover: hover) and (pointer: fine) {
+  .categoria-card:hover {
+    border-color: rgba(255, 204, 0, 0.28);
+    transform: translateY(-4px);
+  }
+}
+
+.categoria-card__label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 0.6875rem;
+}
+
+.categoria-card__titulo {
+  margin: 0 0 10px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.categoria-card__body {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+/* A moto fica fora do lançamento, e isso é dito em voz baixa de
+   propósito: é informação honesta, não um anúncio. */
+.categorias__nota {
+  margin: 28px 0 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 640px) {
+  .requisitos {
+    padding: 20px;
+  }
+  .requisitos__lista {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
