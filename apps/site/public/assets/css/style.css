@@ -1967,17 +1967,80 @@ noscript .reveal[data-hidden="true"] {
    camada de cima, só reveladas depois que o JS liga (ver
    memória feedback_carrossel_autoplay_acessivel).
    ========================================================= */
+/*
+  O carrossel sai do container e vai de ponta a ponta da janela.
+
+  Por quê, medido a 1920px: os cards tinham 320px dentro de um container
+  de 1180px, então as fotos ocupavam cerca de um terço da tela e sobravam
+  370px de vazio de cada lado. Foto de gente é o que dá presença a esta
+  página; espremida num terço da largura ela vira ilustração de apoio.
+
+  `overflow-x: clip` no pai é o que torna a técnica segura: a conta com
+  `50vw` ignora a barra de rolagem vertical e sobra cerca de 17px, que
+  sem isso viram rolagem horizontal na página inteira. `clip` corta sem
+  criar área rolável (diferente de `hidden`, que criaria).
+*/
+.carousel {
+  overflow-x: clip;
+}
+
 .carousel__viewport {
   position: relative;
+  margin-inline: calc(50% - 50vw);
 }
+
 .carousel__track {
   display: flex;
   gap: var(--space-4);
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   padding-block: var(--space-1);
-  padding-inline: var(--space-1);
+
+  /*
+    A barra de rolagem some, a rolagem fica.
+
+    O dono pediu, e o motivo é de desenho: aqui ela é redundante — há
+    setas, bolinhas de progresso e avanço automático dizendo a mesma
+    coisa, com mais clareza. Esconder a barra NÃO tira nada: arrastar
+    com o dedo, girar a roda do mouse, Tab e as setas do teclado
+    continuam funcionando, porque o elemento segue rolável.
+  */
+  scrollbar-width: none;           /* Firefox */
+  -ms-overflow-style: none;        /* Edge antigo */
 }
+.carousel__track::-webkit-scrollbar {
+  display: none;                   /* Chrome, Safari */
+}
+
+/*
+  O recuo que mantém o primeiro card alinhado com o título da seção, mesmo
+  com o carrossel saindo de ponta a ponta da janela.
+
+  O seletor é duplo de propósito. O reset deste projeto tem
+  `ul[class], ol[class] { padding: 0 }`, que vale (0,1,1) — elemento mais
+  atributo. Um `.carousel__track` sozinho vale (0,1,0) e PERDE, então o
+  shorthand do reset zerava o recuo inteiro. Medido em 20/11/2026: a
+  declaração existia na folha, resolvia para 410px quando aplicada no
+  elemento, e computava 0px pela cascata.
+
+  Lição que vale além daqui: num projeto com reset baseado em `[class]`,
+  qualquer regra de uma classe só perde para o reset em elementos que o
+  reset alcança. Não é preciso `!important`, basta uma classe a mais.
+*/
+.carousel__viewport .carousel__track {
+  padding-inline: calc((100vw - min(1180px, 100vw)) / 2 + clamp(1.25rem, 4vw, 2.5rem));
+
+  /*
+    O mesmo recuo precisa ser dito DE NOVO ao scroll-snap. `scroll-snap-align:
+    start` encaixa o slide na borda do container de rolagem, e o padding não
+    conta para isso: medido aqui, pedir `scrollLeft = 0` parava em 410 e o
+    card ia para a beirada da janela, desalinhado do título por exatamente a
+    largura do recuo. `scroll-padding-inline` é o que faz o ponto de encaixe
+    cair onde o conteúdo começa.
+  */
+  scroll-padding-inline: calc((100vw - min(1180px, 100vw)) / 2 + clamp(1.25rem, 4vw, 2.5rem));
+}
+
 .carousel__slide {
   flex: 0 0 auto;
   width: min(80vw, 300px);
@@ -1994,11 +2057,20 @@ noscript .reveal[data-hidden="true"] {
   width: 0;
   scroll-snap-align: none;
 }
+/*
+  Com o carrossel de ponta a ponta, o card cresce junto. Os valores são
+  frações da janela, não números fixos: em qualquer largura sobram três
+  cards e meio visíveis, e o meio card da direita é o que diz "tem mais
+  coisa aqui" agora que a barra de rolagem saiu.
+*/
 @media (min-width: 640px) {
-  .carousel__slide { width: 300px; }
+  .carousel__slide { width: min(46vw, 420px); }
 }
 @media (min-width: 1024px) {
-  .carousel__slide { width: 320px; }
+  .carousel__slide { width: min(30vw, 520px); }
+}
+@media (min-width: 1600px) {
+  .carousel__slide { width: min(26vw, 620px); }
 }
 
 .carousel-card {
