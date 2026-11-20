@@ -2428,17 +2428,65 @@ noscript .reveal[data-hidden="true"] {
 .categorias__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  /*
+    Sem isto, cada linha da grade se ajusta ao cartão mais alto DELA, e as
+    linhas saem com alturas diferentes — medido: 267px em cima, 243px
+    embaixo. É o comportamento normal do CSS, mas lê como desalinho.
+    `1fr` em todas as linhas iguala a mais alta.
+  */
+  grid-auto-rows: 1fr;
   gap: var(--space-4);
   margin: 0;
   list-style: none;
 }
 
 .categoria-card {
+  /* Coluna para o ícone assentar acima do rótulo. */
+  display: flex;
+  flex-direction: column;
   padding: 24px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius);
   background: var(--panel);
   transition: border-color 0.24s ease, transform 0.24s ease;
+}
+
+/*
+  Ícone da categoria: chip quadrado de cantos arredondados, do mesmo
+  tamanho nos seis. O SVG usa `currentColor`, então trocar a cor do chip
+  troca o desenho junto.
+
+  Nenhum nasce amarelo de propósito. Seis marcas amarelas iguais aqui
+  seriam o mesmo erro apontado nos cartões de motivo, onde a cor virava
+  enfeite em vez de sinal. Aqui o amarelo aparece no hover, que é
+  interação — e some no toque, onde hover não existe.
+*/
+.categoria-card__icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 18px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text-primary);
+  transition: color 0.24s ease, border-color 0.24s ease, background-color 0.24s ease;
+}
+
+.categoria-card__icone svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .categoria-card:hover .categoria-card__icone {
+    color: var(--accent);
+    border-color: rgba(255, 204, 0, 0.32);
+    background: rgba(255, 204, 0, 0.08);
+  }
 }
 
 /* Só onde há mouse de verdade: no toque, nada se mexe. */
