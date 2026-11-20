@@ -1,9 +1,73 @@
 ---
 name: vuumbora-deploy-easypanel
-description: Empacotamento Docker e deploy do site institucional (apps/site) no Easypanel do dono — monorepo, serviços já existentes no painel, achado de segurança do painel.
+description: Empacotamento Docker e deploy do site institucional e do painel admin no Easypanel do dono — monorepo, serviços já existentes no painel, achados de segurança e de build por workspace isolado.
 metadata:
   type: project
 ---
+
+## Sessão 20/11/2026 — `apps/admin` (React + Vite) no serviço `vuumbora-admin`
+
+Dockerfile em `apps/admin/Dockerfile`, contexto = raiz do monorepo (mesmo
+padrão do site e da API). Dois achados que não apareceriam sem simular o
+build fora de contêiner — guardar para o próximo Dockerfile de um workspace
+com estágio de compilação de verdade (TS + bundler), diferente do site
+(sem build) e da API (sem Vite):
+
+- **Bug real, não só armadilha de Docker:** `apps/admin/vite.config.ts` usa
+  `process.cwd()`, que precisa de `@types/node` para tipar. O projeto
+  funcionava no monorepo inteiro só porque `@types/node` está declarado em
+  `apps/api/package.json` e o npm faz *hoist* dele para a raiz — `tsc` do
+  admin resolvia por acidente, via um workspace que não tem nada a ver com
+  ele. Isso quebra assim que o workspace é isolado (exatamente o que o
+  Dockerfile faz, copiando só `apps/admin/package.json`): erro
+  `TS2591 Cannot find name 'process'`. Corrigido na fonte, não só no
+  Dockerfile: `@types/node` entrou como devDependency direto de
+  `apps/admin/package.json` (+ `npm install --package-lock-only` pra
+  sincronizar o lockfile). **Lição geral:** `npm run check` passando no
+  monorepo inteiro NÃO prova que um workspace builda isolado — só provar
+  copiando exatamente os arquivos que o Dockerfile copia, num diretório
+  limpo, prova isso. Vale conferir em qualquer workspace novo que ganhe
+  Dockerfile próprio.
+- **Vite 8 deste projeto usa Rolldown (Rust), não esbuild** — por isso
+  `npm ci --ignore-scripts` É seguro aqui (confirmado rodando o build com e
+  sem a flag): os binários nativos por plataforma (ex.
+  `lightningcss-linux-x64-musl` dentro do Alpine) vêm via
+  `optionalDependencies` resolvidas pelo próprio npm, sem script de
+  pós-instalação. `esbuild` existe no `package-lock.json` da raiz (é o único
+  pacote do monorepo, junto de `fsevents`, com `hasInstallScript: true`),
+  mas pertence à árvore de outro workspace — não aparece quando só
+  `apps/admin/package.json` é copiado. Não assumir que "Vite = esbuild":
+  conferir a árvore de dependências instalada antes de decidir
+  `--ignore-scripts` sim/não.
+- **Vite grava `VITE_API_MODE`/`VITE_API_BASE_URL` dentro do bundle em tempo
+  de BUILD**, não de execução — por isso são `ARG` do Dockerfile (com
+  `--build-arg` no Easypanel), nunca Variável de Ambiente do serviço. Prova:
+  simulação do build sem Docker, grep no JS gerado confirmando a URL
+  presente, e confirmação de que sem os dois args o build falha com o erro
+  da guarda `fail-build-on-mock-api` (apontada pelo Órion) — guarda que
+  existe para nunca publicar o admin em modo demonstração sem ninguém notar,
+  e que **não deve ser contornada**.
+- **Nginx do admin precisa de duas coisas que o do site não precisa:**
+  fallback de SPA (`try_files $uri $uri/ /index.html`, porque o React
+  Router resolve rotas como `/driver-applications` no cliente, sem arquivo
+  correspondente no disco) e cache diferenciado — `assets/` do Vite tem
+  hash de conteúdo no nome (cache longo e imutável), mas `index.html` não
+  pode ter cache longo (ele referencia o hash da vez).
+- **Endereço do admin: `admin.vuumbora.com.br`**, decidido pelo dono — **não
+  confundir com `painel.vuumbora.com.br`**, que é o painel do próprio
+  Easypanel (passo 0 de `docs/deploy-easypanel.md`, ainda pendente). Os dois
+  nomes pareciam a mesma divergência numa auditoria do Órion, mas eram duas
+  coisas diferentes — ver `docs/decisoes-do-dono.md` §7. `ALLOWED_ORIGINS`
+  da API ganhou `https://admin.vuumbora.com.br` (`apps/api/.env.example`
+  corrigido). Cookie de sessão continua `SameSite=Lax` porque os dois
+  subdomínios são o mesmo site para o navegador (cross-origin, não
+  cross-site).
+- `scripts/check-docker-context.mjs` tem uma lista fixa (`DOCKERFILES`) dos
+  Dockerfiles que ele conhece — um Dockerfile novo não entra na guarda
+  sozinho. Acrescentei `apps/admin/Dockerfile` ali.
+- Sem Docker nesta máquina, de novo — mesma limitação da sessão do site.
+  Simulação fora de contêiner prova conteúdo/pipeline, não o
+  Dockerfile/Nginx dentro de um contêiner real.
 
 Sessão 18/11/2026: empacotei `apps/site` (Next.js, `output: 'export'`) para
 publicação no Easypanel do dono. Projeto `vuumbora` no painel dele já tinha

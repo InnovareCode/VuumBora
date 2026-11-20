@@ -650,7 +650,7 @@ papéis` abaixo, para o dono cortar ou aprovar.
 
 **Decidido:** **mesmo servidor** que já roda a API e o site.
 
-**Consequência técnica, e é boa:** `painel.vuumbora.com.br` e
+**Consequência técnica, e é boa:** `admin.vuumbora.com.br` e
 `api.vuumbora.com.br` são, para o navegador, **o mesmo site** (ambos sob
 `vuumbora.com.br`). O cookie `SameSite=Lax` implementado continua válido — a
 chamada é cross-origin (precisa do CORS com credenciais, já ligado) mas não
@@ -760,17 +760,31 @@ no `apps/admin`, com os tokens do design system como tema CSS-first. Portar
 um padrão escrito em Tailwind para CSS Modules à mão seria lento e cheio de
 erro; como só existe uma tela, a troca sai barata agora.
 
-**Endereço do painel: resolvido na seção 7, logo abaixo.** A documentação
-citava dois nomes; o dono escolheu `painel.vuumbora.com.br` e os documentos
-foram corrigidos.
+**Endereço do painel: resolvido na seção 7, logo abaixo.**
 
-### 7. Endereço do painel: `painel.vuumbora.com.br` ✅ (20/11/2026)
+### 7. Endereço do painel: `admin.vuumbora.com.br` ✅ (20/11/2026)
 
-**Decidido pelo dono.** Encerra a divergência que o Órion encontrou na
-auditoria (a documentação citava dois nomes). Os documentos foram corrigidos
-para esse nome único.
+**Decidido pelo dono**, depois de um erro meu que vale ficar registrado.
 
-**O que precisa acontecer por causa disso:** `painel.vuumbora.com.br` tem de
-entrar em `ALLOWED_ORIGINS` da API em produção. Se o endereço publicado não
-estiver na lista, o navegador bloqueia o painel legítimo — e o sintoma parece
-"o sistema caiu", não "faltou um nome numa variável".
+**O que aconteceu:** o Órion relatou, na auditoria, que a documentação citava
+dois nomes para o painel (`admin.` e `painel.`) e pediu que fosse um só. Eu
+tratei como divergência e uniformizei para `painel.vuumbora.com.br` — **sem
+ler o que o segundo documento realmente dizia**. Os dois textos estavam
+certos: falavam de **coisas diferentes**.
+
+**Os dois nomes coexistem, e não são intercambiáveis:**
+
+| Endereço | O que é |
+|---|---|
+| **`admin.vuumbora.com.br`** | **o nosso painel administrativo** (serviço `vuumbora-admin`) |
+| `painel.vuumbora.com.br` | o painel do **próprio Easypanel**, que controla o servidor inteiro — passo 0 de `docs/deploy-easypanel.md`, ainda pendente |
+
+**O que precisa acontecer por causa disso:** `https://admin.vuumbora.com.br`
+tem de entrar em `ALLOWED_ORIGINS` da API em produção. Se o endereço
+publicado não estiver na lista, o navegador bloqueia o painel legítimo — e o
+sintoma parece "o sistema caiu", não "faltou um nome numa variável".
+
+**A lição, que é mais larga que este caso:** relatório de agente aponta o
+sintoma ("há dois nomes"), não necessariamente a causa. Uniformizar dois
+textos que discordam, sem abrir os dois, troca uma inconsistência visível por
+um erro silencioso — e este teria aparecido só na hora de apontar o DNS.

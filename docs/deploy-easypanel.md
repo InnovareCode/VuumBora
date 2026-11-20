@@ -268,6 +268,103 @@ pode levar até 24-48h. Não é preciso esperar o prazo máximo "por garantia" �
   para confirmar que aparece uma página de erro 404 normal, não uma tela em
   branco.
 
+## 9. Publicar o painel administrativo (serviço `vuumbora-admin`)
+
+Esta seção cobre o serviço `vuumbora-admin` (React + Vite), que o dono já
+criou no painel do Easypanel. Mesmo esqueleto do site (Dockerfile, contexto
+na raiz), com duas diferenças que importam: o admin **tem** um estágio de
+compilação de verdade (TypeScript + Vite), e a URL da API entra em **tempo
+de build**, não em tempo de execução — ver a seção de Argumentos de Build,
+abaixo, antes de clicar em qualquer coisa.
+
+### Fonte
+
+- Repositório: `InnovareCode/VuumBora`, branch `main` (mesma autorização do
+  Github já usada pelo `vuumbora-frontend` e pelo `vuumbora-backend` —
+  não precisa reconectar).
+
+### Build
+
+- **Método de build:** Dockerfile (não Nixpacks/detecção automática — o
+  motivo é o mesmo do site: monorepo com `npm workspaces`, sem script
+  `build` genérico na raiz).
+- **Caminho do Dockerfile:** `apps/admin/Dockerfile`
+- **Caminho de build / contexto:** a raiz do repositório (`/`) — **não**
+  `apps/admin`. O build precisa alcançar `tsconfig.base.json` e
+  `VuumBora_Claude_Design_System/tokens/vuumbora.tokens.json`, que ficam fora
+  da pasta do admin.
+
+### Argumentos de build (⚠️ a armadilha nº 1 deste serviço)
+
+`VITE_API_MODE` e `VITE_API_BASE_URL` são **Argumentos de Build**
+("Build Args" — campo separado das Variáveis de Ambiente, geralmente na
+mesma aba de Build), **não** Variáveis de Ambiente de execução. O motivo é
+técnico e não tem como contornar: o Vite grava o valor dessas variáveis
+dentro do JavaScript já compilado, no momento do `vite build`. Preencher
+uma Variável de Ambiente comum no serviço depois de publicado **não muda
+nada** — é preciso um novo build, com um novo Argumento de Build, e um novo
+deploy.
+
+| Argumento de Build | Valor em produção |
+|---|---|
+| `VITE_API_MODE` | `http` |
+| `VITE_API_BASE_URL` | `https://api.vuumbora.com.br` (endereço do serviço `vuumbora-backend` — ver `docs/publicar-o-backend.md` §4) |
+
+Se esses dois argumentos não forem preenchidos (ou vier `VITE_API_MODE`
+diferente de `http`), **o build falha de propósito** — é
+`apps/admin/vite.config.ts` recusando compilar o painel em modo
+demonstração. Isso é esperado e correto: não queremos publicar o admin
+servindo dado fabricado sem ninguém notar. Se o build falhar com uma
+mensagem citando "VITE_API_MODE resolveu para 'mock'", a causa é sempre
+Argumento de Build faltando ou errado — não é bug do Dockerfile.
+
+### Porta e domínio
+
+- **Porta do contêiner:** `80` (Nginx servindo o `dist/` do Vite — ver
+  `apps/admin/nginx.conf`).
+- **Domínio:** `https://admin.vuumbora.com.br` (decisão do dono, registrada
+  em `docs/decisoes-do-dono.md` §7 — **não confundir** com
+  `painel.vuumbora.com.br`, que é o painel do próprio Easypanel, passo 0
+  deste documento). Mesmo passo a passo de DNS/certificado da seção 6/7,
+  trocando `www` por `admin`.
+
+### Depois de publicar: liberar a origem na API
+
+O painel só funciona se a API aceitar chamadas vindas dele. No serviço
+`vuumbora-backend`, variável `ALLOWED_ORIGINS`, **acrescentar**
+`https://admin.vuumbora.com.br` à lista existente (ver
+`docs/publicar-o-backend.md` §3) — não substituir, é lista fechada separada
+por vírgula:
+
+```
+ALLOWED_ORIGINS=https://www.vuumbora.com.br,https://vuumbora.com.br,https://admin.vuumbora.com.br
+```
+
+Sem isso, o navegador bloqueia o próprio painel por CORS — o sintoma parece
+"o sistema caiu", não "faltou um domínio numa variável" (mesmo alerta já
+registrado em `docs/decisoes-do-dono.md` §7).
+
+**Por que o cookie de sessão continua funcionando:** `admin.vuumbora.com.br`
+e `api.vuumbora.com.br` são subdomínios do mesmo `vuumbora.com.br` — para o
+navegador, é cross-**origin** (por isso precisa do CORS com credenciais,
+já ligado), mas não é cross-**site**. O cookie `SameSite=Lax` da sessão de
+admin continua válido sem mudar nada. Isso deixaria de ser verdade só se o
+painel um dia for publicado num domínio totalmente diferente.
+
+### O que eu NÃO consegui provar (sem Docker nesta máquina)
+
+Não há Docker nesta máquina para rodar `docker buildx build` de verdade.
+Simulei o pipeline completo fora de contêiner (copiando só os arquivos que
+o Dockerfile realmente copia, para um diretório temporário): `npm ci`,
+depois `npm run build --workspace @vuumbora/admin` com os dois Argumentos de
+Build, gerando `dist/index.html` + `assets/*.js|css` com hash, servidos por
+`python -m http.server` com 200 em `/` e no asset com hash — e confirmei que
+a URL da API fica de fato gravada dentro do JavaScript gerado. Também
+confirmei que **sem** os Argumentos de Build o `vite build` falha com o
+erro esperado da guarda. É prova do conteúdo e do pipeline de build, não do
+`Dockerfile`/Nginx dentro de um contêiner real — o primeiro build no
+Easypanel ainda pode revelar algo que essa simulação não captura.
+
 ## Serviços reservados para depois (não é deste deploy)
 
 `vuumbora-banco` e `vuumbora-redis` já existem no painel, criados junto com

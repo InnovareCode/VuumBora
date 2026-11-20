@@ -5,4 +5,4 @@
 - [VuumBora: arquitetura do monorepo e convenções de infra](vuumbora-projeto.md) — estrutura, guarda de fronteiras, fonte única de tokens fora dos pacotes.
 - [Expo CLI não sobe diretório para achar .env num monorepo](expo-monorepo-env-raiz.md) — corrigir em metro.config.js com `@expo/env`, nunca assumir que `.env` na raiz "simplesmente funciona".
 - [@rnmapbox/maps não tem suporte web de verdade](rnmapbox-maps-sem-web.md) — usar mapbox-gl direto em `.web.tsx`; peer dependency não prova suporte.
-- [VuumBora: empacotamento e deploy do site no Easypanel](vuumbora-deploy-easypanel.md) — Dockerfile em apps/site com contexto na raiz, root sem script `build` (ambíguo no monorepo), achado de segurança do painel sem HTTPS.
+- [VuumBora: empacotamento e deploy no Easypanel (site + admin)](vuumbora-deploy-easypanel.md) — Dockerfiles com contexto na raiz; admin: ARG de build do Vite, @types/node escondido por hoisting, Rolldown ≠ esbuild, admin. vs painel. no domínio.

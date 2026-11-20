@@ -193,7 +193,7 @@ documento, mapa ao vivo. Não precisa de SEO nem de renderização no servidor.
 (candidaturas, usuários, tarifas), dá para usar um framework de admin sobre o
 próprio Vite (Refine ou React-Admin) nessa mesma opção; isso é escolha de
 implementação da Lyra, não muda o contrato. Mora em `apps/admin`, servido em
-`painel.vuumbora.com.br`, atrás de login com segundo fator obrigatório.
+`admin.vuumbora.com.br`, atrás de login com segundo fator obrigatório.
 
 ### 4.3 Backend
 

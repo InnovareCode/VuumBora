@@ -17,7 +17,7 @@ toda leitura. Migrações `0003`–`0007`.
 **Decisões do dono que entraram:** papéis por setor (`dono`, `operacao`,
 `revisor_documentos`, `financeiro`, `suporte` — matriz em
 `docs/decisoes-do-dono.md`); painel no mesmo servidor, em
-**`painel.vuumbora.com.br`**; casca no padrão do painel do ModaShop com a
+**`admin.vuumbora.com.br`**; casca no padrão do painel do ModaShop com a
 paleta e a tipografia do VuumBora.
 
 **Só leitura.** Aprovar e recusar candidatura é a fatia seguinte, com motivo
@@ -39,7 +39,7 @@ obrigatório, auditoria e token de CSRF.
 - **Infra (Vulcano):** separar a credencial de banco e revogar alteração e
   exclusão em `admin_audit_log` — hoje a trilha é inviolável pelo código, não
   pelo banco; HTTPS no painel do Easypanel; backup externo testado; criar o
-  admin de produção; `painel.vuumbora.com.br` em `ALLOWED_ORIGINS`.
+  admin de produção; `admin.vuumbora.com.br` em `ALLOWED_ORIGINS`.
 - **Segundo fator** de autenticação e **token de CSRF** (este último junto da
   primeira ação que aprova ou recusa alguém).
 - Saneamento de `err.message` no log de requisição rejeitada.
