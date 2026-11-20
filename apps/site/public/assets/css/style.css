@@ -285,6 +285,24 @@ summary:focus-visible,
   align-items: flex-end;
 }
 
+/*
+  A faixa 1 é a única que carrega o formulário inteiro, então é muito mais
+  alta que as outras — e o `align-items: flex-end` acima, que existe para o
+  texto das faixas 2 e 3 assentar no rodapé da foto, aqui vira vão.
+
+  Medido em 20/11/2026, a 1920x1080: o H1 nascia a 472px do topo (44% da
+  tela), com 392px vazios acima dele. A 720px de altura o conteúdo quase
+  preenche a faixa e o problema some, que é por que isso só aparece em tela
+  grande e passou despercebido.
+
+  Centralizar reparte a sobra entre cima e baixo em vez de empilhar tudo de
+  um lado. As faixas 2 e 3 continuam com `flex-end`, que é o efeito
+  cinematográfico pretendido.
+*/
+.faixa[data-faixa="1"] {
+  align-items: center;
+}
+
 .faixa__media {
   position: absolute;
   inset: 0;
