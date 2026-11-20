@@ -5,8 +5,13 @@ Estado do projeto entre sessões. Atualizar ao fim de cada marco.
 ## Admin v0 — ENTREGUE E APROVADO (20/11/2026)
 
 Primeira fatia do painel da plataforma (fase **S2** do plano). Commits
-`f4aece3` e `1f74b3a`, publicados. **Veredito da Íris: APROVADO**, provado
+`f4aece3` a `f79b0fe`, publicados. **Veredito da Íris: APROVADO**, provado
 com API real e papéis reais — não com dado de demonstração.
+
+**No ar em `https://admin.vuumbora.com.br`**, publicado pelo Easypanel a
+partir de `apps/admin/Dockerfile` (serviço `vuumbora-admin`). Login no padrão
+premium do ModaShop, com a logomarca oficial e a paleta só-escura do VuumBora
+(decisão 8 em `docs/decisoes-do-dono.md`).
 
 **O que existe agora:** `apps/admin` (React + Vite + Tailwind v4) com login,
 lista e detalhe das candidaturas de motorista vindas do site, busca, filtro e
