@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Gerado por `npm run tokens:css` a partir do JSON — ver scripts/generate-tokens-css.mjs.
+src/styles/tokens.css

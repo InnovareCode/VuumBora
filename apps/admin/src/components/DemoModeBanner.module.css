@@ -1,0 +1,25 @@
+/* Mesma linguagem visual do MockBadge dos apps RN (packages/ui/src/MockBadge.tsx):
+   chip neutro, borda tracejada, glifo "!" — nunca amarelo (não compete com o CTA). */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px dashed var(--role-border-control);
+  background: var(--role-surface);
+  color: var(--role-text-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+}
+
+.glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  border-radius: var(--radius-pill);
+  border: 1px dashed var(--role-border-control);
+  font-weight: var(--font-weight-bold);
+  flex-shrink: 0;
+}

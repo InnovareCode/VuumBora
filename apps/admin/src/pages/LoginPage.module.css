@@ -1,0 +1,89 @@
+.wrap {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+}
+
+.card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-7);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--role-border);
+  background: var(--role-surface);
+}
+
+.title {
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-bold);
+}
+
+.subtitle {
+  color: var(--role-text-secondary);
+  font-size: var(--font-size-small);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--role-text-secondary);
+}
+
+.input {
+  min-height: var(--layout-input-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--role-border-control);
+  background: var(--role-input);
+  color: var(--role-text-primary);
+}
+
+.input:focus-visible {
+  border-color: var(--role-cta-background);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--role-danger);
+}
+
+.error {
+  color: var(--role-danger);
+  font-size: var(--font-size-small);
+}
+
+.submit {
+  min-height: var(--layout-button-height);
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--role-cta-background);
+  color: var(--role-cta-text);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--role-cta-background-pressed);
+}
+
+.submit:disabled {
+  background: var(--role-border-control);
+  color: var(--role-text-muted);
+  cursor: not-allowed;
+}

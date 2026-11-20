@@ -1,2 +1,5 @@
 - [Lista de espera + candidatura motorista (apps/api)](project_lista_de_espera.md) — 2 endpoints/tabelas separados; checar apps/site antes de estender contrato
 - [Fastify setErrorHandler x statusCode](feedback_fastify_error_handler_statuscode.md) — bug real: handler genérico vira 500 pra 4xx/429; checar sempre com curl
+- [Admin v0 — login e leitura de candidaturas](project_admin_v0.md) — admin_users/admin_audit_log/admin_sessions, papéis+requireAdminRole, teto absoluto de sessão, contrato {ok,data}
+- [Cursor de paginação perde linha por precisão de timestamp](feedback_cursor_pagination_timestamp_precision.md) — Date do JS trunca microssegundo do Postgres; testar sempre com 2+ linhas no mesmo INSERT
+- [Logger Fastify grava querystring inteira](feedback_fastify_logger_querystring_pii.md) — serializer req padrão loga query com PII; sempre registrar serializers.req custom no serviço inteiro

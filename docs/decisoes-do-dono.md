@@ -622,3 +622,155 @@ endereço, bairro, CEP, documentos (CNH, documento do veículo, seguro). Só
 existe quando houver processo de verificação (decisão 9) e guarda segura.
 
 O endereço residencial **não é coletado** de quem ainda não foi aprovado.
+
+---
+
+## Decisões do dono — 20/11/2026 (noite)
+
+Cinco respostas dadas de uma vez, em cima das perguntas do
+`docs/plano-sistema.md` §14. Registradas aqui com a leitura que fiz de cada
+uma e **o que ainda falta** para virar regra implementável.
+
+### 1. Controle de acesso por setor e competência ✅
+
+**Decidido:** a empresa terá **vários usuários**, com acesso por setor —
+suporte, financeiro, operação, revisão de documentos, dono. O papel é o que
+limita o que a pessoa vê e faz.
+
+**Consequência:** o Admin v0 nasceu com uma conta de dono e leitura de
+candidaturas. Antes de entrar gente da empresa, ele precisa de **gestão de
+usuários e papéis** (criar, desativar, trocar papel) e de verificação de
+permissão em cada rota. Vira a próxima fatia do painel, não um detalhe
+posterior: colocar gente dentro sem isso é dar acesso total a todo mundo.
+
+**Falta definir:** a lista de permissões por setor. Proposta em `§ Proposta de
+papéis` abaixo, para o dono cortar ou aprovar.
+
+### 2. Onde o painel roda ✅
+
+**Decidido:** **mesmo servidor** que já roda a API e o site.
+
+**Consequência técnica, e é boa:** `painel.vuumbora.com.br` e
+`api.vuumbora.com.br` são, para o navegador, **o mesmo site** (ambos sob
+`vuumbora.com.br`). O cookie `SameSite=Lax` implementado continua válido — a
+chamada é cross-origin (precisa do CORS com credenciais, já ligado) mas não
+é cross-site. Se um dia o painel mudar de domínio, isso vira `SameSite=None`
+mais proteção de CSRF.
+
+**Consequência operacional:** um servidor só passa a concentrar site, API,
+banco e painel. Isso aumenta o peso de duas pendências que já estavam na
+lista: **backup externo testado** e **HTTPS no painel do Easypanel**.
+
+### 3. Taxa da plataforma: 20% a 25%, variável por mérito ✅ (com lacunas)
+
+**Decidido:** a taxa começa entre **20% e 25%**, variando por **tempo de
+plataforma**, **quantidade de corridas concluídas** e **nota** do motorista.
+
+**Leitura que fiz, e que precisa de um "sim" antes de virar código:** quanto
+melhor o motorista, **menor** a taxa (chega a 20%); motorista novo ou com
+nota baixa fica no topo da faixa (25%). É o que "quanto melhor o motorista,
+mais ele ganha" significa.
+
+**Consequência:** a taxa deixa de ser número e vira **regra versionada com
+faixas**. Cada corrida precisa gravar **qual faixa foi aplicada e por quê** —
+sem isso não há como explicar ao motorista por que ele recebeu o que recebeu,
+nem auditar depois. Isso muda o modelo de dados: `trip_price_components` passa
+a guardar a faixa, e nasce um histórico de faixa por motorista.
+
+**Falta definir — e isto bloqueia publicar as regras, que por sua vez bloqueia
+abrir o cadastro de motoristas:**
+- os cortes exatos: quantos dias, quantas corridas e qual nota levam a cada
+  percentual;
+- de quanto em quanto tempo a faixa é recalculada (a cada corrida? semanal?);
+- se a faixa pode **piorar** (nota caiu → taxa sobe) e com quanto aviso;
+- o que vale para o motorista recém-aprovado.
+
+⚠️ **Consequência de comunicação:** até hoje o site podia dizer "taxa menor"
+sem número (ver `docs/revisao-copy-fase-1.md`). No dia em que as regras forem
+publicadas, o número vira público e vira compromisso cobrável. Publicar é um
+passo deliberado, não um efeito colateral de ter decidido.
+
+### 4. Login dos apps: e-mail/ID + senha ✅
+
+**Decidido:** cada motorista tem **login único e intransferível**, por e-mail
+(ou ID) e senha. Isso fecha a decisão em aberto do plano (D-07): **não** será
+código por WhatsApp.
+
+**O que vem junto, e precisa existir:** recuperação de senha, política mínima
+de senha, proteção contra tentativa em massa, e verificação do e-mail no
+cadastro (senão ninguém recupera o acesso).
+
+⚠️ **"Irrevogável" tem limite legal.** Leio como **intransferível e não
+reutilizável** — ninguém herda o login de outro, e o identificador não volta a
+circular. Não pode significar "não pode ser apagado": a LGPD dá ao titular o
+direito de exclusão e as duas lojas **exigem** um caminho de exclusão de conta
+para aprovar o app.
+
+**Falta definir:** o **passageiro** também entra por e-mail e senha, ou só o
+motorista?
+
+### 5. Pagamento com split ✅ (provedor ainda aberto)
+
+**Decidido:** o provedor **tem** de ter split nativo.
+
+**Ainda aberto: qual provedor** — e continua sendo a decisão de maior impacto
+financeiro do projeto, porque a diferença entre Pix percentual e Pix de taxa
+fixa muda o custo em cerca de dez vezes no ticket que o VuumBora vai ter.
+
+**A decisão 3 acrescentou um requisito à escolha:** com taxa variável por
+motorista, o split precisa aceitar **percentual diferente a cada transação**.
+Nem todo provedor faz isso bem — isso passa a ser critério de eliminação na
+comparação, não detalhe.
+
+---
+
+## Proposta de papéis (para o dono cortar ou aprovar)
+
+Nasce de `docs/plano-sistema.md` §5 (rotas de admin já desenhadas com o papel
+exigido entre colchetes). O princípio é **menor privilégio**: ninguém vê dado
+sensível que o trabalho dele não exige.
+
+| Papel | Vê e faz | **Não** vê |
+|---|---|---|
+| **Dono** | tudo, inclusive tarifas, papéis e auditoria | — |
+| **Operação** | candidaturas, corridas ao vivo, cancelar corrida, bloquear usuário, sinais de risco | documento de motorista, dado bancário |
+| **Revisor de documentos** | documentos do motorista, aprovar/recusar/pedir correção | financeiro, corridas ao vivo |
+| **Financeiro** | ledger, estorno, ajuste com motivo, conciliação, repasses | documento de motorista, suporte |
+| **Suporte** | chamados, dados de contato da corrida, histórico | **documento de motorista**, financeiro, tarifas |
+
+Três regras que valem para todos: toda ação de escrita grava em auditoria com
+motivo; **toda abertura de documento de motorista é registrada**; e ninguém
+cria o próprio usuário — conta nasce por quem tem o papel de dono.
+
+### 6. Layout do painel: padrão ModaShop, paleta VuumBora ✅ (20/11/2026)
+
+**Decidido:** a casca do painel administrativo segue o padrão do painel
+master/admin do **ModaShop** (`C:/Projetos/Web/Moda Shop`) — barra lateral
+escura com grupos recolhíveis e contadores, gaveta no celular, paleta de
+comandos, cabeçalho de página com selo de ícone, título e uma linha de
+propósito.
+
+**A paleta e a tipografia continuam as do VuumBora** — confirmado pelo dono
+quando perguntei diretamente ("pode manter nossa paleta mesmo"). Copia-se a
+**anatomia**, não as cores: o design system do VuumBora segue sendo a fonte
+de verdade.
+
+**Decisão técnica que veio junto (minha, não do dono):** adotar Tailwind v4
+no `apps/admin`, com os tokens do design system como tema CSS-first. Portar
+um padrão escrito em Tailwind para CSS Modules à mão seria lento e cheio de
+erro; como só existe uma tela, a troca sai barata agora.
+
+**Endereço do painel: resolvido na seção 7, logo abaixo.** A documentação
+citava dois nomes; o dono escolheu `painel.vuumbora.com.br` e os documentos
+foram corrigidos.
+
+### 7. Endereço do painel: `painel.vuumbora.com.br` ✅ (20/11/2026)
+
+**Decidido pelo dono.** Encerra a divergência que o Órion encontrou na
+auditoria (a documentação citava dois nomes). Os documentos foram corrigidos
+para esse nome único.
+
+**O que precisa acontecer por causa disso:** `painel.vuumbora.com.br` tem de
+entrar em `ALLOWED_ORIGINS` da API em produção. Se o endereço publicado não
+estiver na lista, o navegador bloqueia o painel legítimo — e o sintoma parece
+"o sistema caiu", não "faltou um nome numa variável".

@@ -1,0 +1,1 @@
+- [Admin v0 — segurança](project_admin_v0_seguranca.md) — auditoria 2026-11-20: sem crítico; pendências RBAC/role de banco para audit log/2FA antes da próxima fatia

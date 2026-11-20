@@ -511,6 +511,16 @@ responder (D-09 na §14). Suposição silenciosa em categoria com implicação l
 
 Onde há recomendação, é **só** recomendação.
 
+### Respondidas em 20/11/2026 (detalhe em [`decisoes-do-dono.md`](decisoes-do-dono.md))
+
+| Tema | Resposta | O que ainda falta |
+|---|---|---|
+| **Papéis no painel** | Vários usuários da empresa, acesso **por setor e competência** (suporte, financeiro, operação, revisão de documentos, dono) | A lista de permissões por setor — proposta escrita, aguarda corte do dono |
+| **Onde o painel roda** | **Mesmo servidor** da API e do site | Nada técnico: `SameSite=Lax` continua válido por serem subdomínios do mesmo domínio |
+| **Taxa da plataforma** (decisão 7) | **20% a 25%**, variável por tempo de plataforma, corridas concluídas e nota — melhor motorista, menor taxa | **Os cortes exatos**, a frequência de recálculo, se a faixa pode piorar e o que vale para motorista novo. **Enquanto isso não existir, as regras não podem ser publicadas — e o cadastro de motorista não abre** |
+| **Login dos apps** (D-07) | **E-mail/ID + senha**, login único e intransferível. Não será código por WhatsApp | Se o passageiro usa o mesmo método; recuperação de senha e verificação de e-mail |
+| **Split no pagamento** (D-03) | **Sim, split nativo é exigência** | **Qual provedor** — agora com requisito novo: precisa aceitar percentual diferente por transação |
+
 ### Travam fase inteira
 
 | # | Decisão | Trava | A considerar |

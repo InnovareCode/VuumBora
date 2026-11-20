@@ -66,6 +66,26 @@ const schema = z.object({
   /** Rota separada (`/v1/driver-applications`) — limite próprio, mesmo padrão da lista de espera. */
   DRIVER_APPLICATION_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
   DRIVER_APPLICATION_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(10),
+
+  /**
+   * Limite estrito de tentativas de login do admin, por IP (mesmo padrão
+   * em memória das outras rotas — ver `@fastify/rate-limit` em `app.ts`).
+   * Default agressivo de propósito: é a porta de entrada para dado
+   * pessoal de gente real.
+   */
+  ADMIN_LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
+  ADMIN_LOGIN_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
+
+  /** Expiração deslizante da sessão de admin (cookie httpOnly) — renovada a cada requisição autenticada. */
+  ADMIN_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(12),
+
+  /**
+   * Teto absoluto da sessão de admin, independente de uso — fixado no
+   * login e nunca avançado (ver migração 0007). Sem isto, a expiração
+   * deslizante acima sozinha deixa um cookie roubado e usado de vez em
+   * quando válido para sempre. Default 7 dias.
+   */
+  ADMIN_SESSION_ABSOLUTE_TTL_HOURS: z.coerce.number().int().positive().default(24 * 7),
 });
 
 export type Env = Readonly<z.infer<typeof schema>>;

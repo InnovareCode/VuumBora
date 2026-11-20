@@ -1,0 +1,29 @@
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.pending {
+  background: color-mix(in srgb, var(--role-warning) 18%, transparent);
+  color: var(--role-warning);
+  border-color: color-mix(in srgb, var(--role-warning) 45%, transparent);
+}
+
+.approved {
+  background: color-mix(in srgb, var(--role-success) 18%, transparent);
+  color: var(--role-success);
+  border-color: color-mix(in srgb, var(--role-success) 45%, transparent);
+}
+
+.rejected {
+  background: color-mix(in srgb, var(--role-danger) 18%, transparent);
+  color: var(--role-danger);
+  border-color: color-mix(in srgb, var(--role-danger) 45%, transparent);
+}

@@ -1,0 +1,3 @@
+- [Ambiente de teste do Admin v0 (sem Docker)](project_admin_v0_ambiente_de_teste.md) — subir Postgres local com os binários do PG 18, apontar API/SPA pra ele
+- [Rate limit do login não reseta sozinho](feedback_rate_limit_login_reseta_so_reiniciando_api.md) — reaproveitar cookie entre testes, reiniciar API pra zerar contador
+- [Bug: PII vaza no log via querystring da busca](project_admin_v0_vazamento_pii_log_querystring.md) — `q=` da busca de candidaturas aparece em texto puro no log da API

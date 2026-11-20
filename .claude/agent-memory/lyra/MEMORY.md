@@ -39,3 +39,8 @@
 - [Modificador de 1 classe perde para seletor pai de 2 classes em qualquer largura](bug_form_row_city_perdeu_para_hero_card_form_row.md) — especificidade não respeita media query; UF nunca ficava em 136px.
 - [Padrão `data-armed` para animação de entrada ao rolar](feedback_padrao_data_armed_animacao_scroll.md) — helper único reaproveitado em QUEM SOMOS/ONDE ESTAMOS/motivos, 20/11/2026.
 - [Pino não centralizado na coluna desalinha marcador por %](bug_pino_nao_centralizado_na_coluna_desalinha_linha.md) — linha do tempo ONDE ESTAMOS: "HOJE" caía em cima do pino errado até centralizar os pinos.
+- [apps/admin — SPA React+Vite (login + pré-cadastro de motorista)](project_apps_admin_vite_react_spa.md) — único app web puro do monorepo, tokens→CSS gerado, api-client próprio, DemoModeBanner.
+- [Vite CSS Modules exige `styles['x']`, não `styles.x`](feedback_vite_css_modules_no_property_access_index_signature.md) — `noPropertyAccessFromIndexSignature` do tsconfig.base.json pega todo `.module.css`.
+- [Mock de auth sem sessionStorage desloga a cada reload](feedback_mock_adapter_sessao_sobrevive_reload.md) — sessão mock em closure some em qualquer navegação dura/Playwright `page.goto()`.
+- [apps/admin — casca padrão ModaShop (Tailwind v4)](project_apps_admin_shell_moda_shop.md) — sidebar/gaveta/paleta de comandos/PageHeader, layout route com Outlet, guarda de build contra mock, 20/11/2026.
+- [Tailwind v4 @theme: mesmo nome do token não é loop](feedback_tailwind_v4_theme_alias_mesmo_nome_do_token.md) — unlayered sempre vence layer "theme"; armadilha irmã do @import de fonte depois do @import tailwindcss.
