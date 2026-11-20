@@ -4,6 +4,7 @@ import { LogOut, Menu, Search, Shield, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../context/ApiContext';
 import { useDriverApplicationsSummary } from '../hooks/useDriverApplicationsSummary';
+import { BrandLogo } from './BrandLogo';
 import { DemoModeBanner } from './DemoModeBanner';
 import { NavGroupCollapsible } from './nav/NavGroupCollapsible';
 import { NavLink } from './nav/NavLink';
@@ -110,11 +111,8 @@ export function AppShell() {
       <div className="flex flex-1">
         {/* ── Sidebar desktop ────────────────────────────────────────── */}
         <aside className="sticky top-0 hidden max-h-screen w-[272px] shrink-0 flex-col overflow-y-auto bg-navy lg:flex">
-          <div className="flex h-20 shrink-0 items-center gap-2 border-b border-white/10 px-6">
-            <span className="text-xl" aria-hidden="true">
-              ●
-            </span>
-            <span className="text-subtitle font-bold text-white">VuumBora Admin</span>
+          <div className="flex h-20 shrink-0 items-center border-b border-white/10 px-6">
+            <BrandLogo className="h-7" />
           </div>
 
           <div className="px-6 py-5">

@@ -4,3 +4,5 @@
 - [Gaveta mobile sem focus trap / sem Escape](project_admin_v0_gaveta_mobile_sem_focus_trap.md) — CORRIGIDO 20/11/2026 (useFocusTrap), revalidado nos dois sentidos
 - [Testar focus trap nos dois sentidos](feedback_focus_trap_testar_os_dois_sentidos.md) — Tab E Shift+Tab, nas duas superfícies, sempre
 - [tsx watch pode falhar restart com EADDRINUSE](feedback_tsx_watch_eaddrinuse_restart_falho.md) — processo antigo continua no ar; cuidado em teste de mutação
+- [Login premium sem oráculo de conta](project_admin_v0_login_premium_oraculo_ok.md) — mesma mensagem/cor pras 3 causas de 401, 429 dispara mesmo com credencial certa
+- [Logomarca oficial no admin](project_admin_v0_logomarca_oficial.md) — 3 lugares, sem texto residual, nitidez 2x medida por naturalWidth/renderedWidth

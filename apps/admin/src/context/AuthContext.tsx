@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useApi } from './ApiContext';
-import { onUnauthorized, type AdminLoginInput, type AdminUser, type DataOrigin } from '../api';
+import { errorMessage, onUnauthorized, type AdminLoginInput, type AdminUser, type DataOrigin } from '../api';
 
 /**
  * Estado GLOBAL de propósito: "quem está logado" é lido por toda tela (barra
@@ -12,7 +12,9 @@ interface AuthState {
   readonly status: 'checking' | 'signedOut' | 'signedIn';
   readonly admin: AdminUser | null;
   readonly origin: DataOrigin | null;
-  readonly login: (input: AdminLoginInput) => Promise<{ ok: true } | { ok: false; message: string }>;
+  readonly login: (
+    input: AdminLoginInput,
+  ) => Promise<{ ok: true } | { ok: false; message: string; kind: 'credentials' | 'blocked' }>;
   readonly logout: () => Promise<void>;
 }
 
@@ -57,8 +59,17 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     async (input) => {
       const result = await api.auth.login(input);
       if (!result.ok) {
+        // Limite de tentativas (429) e falhas de infraestrutura (rede,
+        // indisponibilidade) são um estado DIFERENTE de "credenciais erradas"
+        // e dizem isso na tela — mas nunca junto com detalhe sobre qual conta
+        // existe. Qualquer outro erro (401 de e-mail inexistente, senha
+        // errada OU usuário desativado) cai na MESMA mensagem genérica —
+        // nunca revelar qual dos três aconteceu (auditoria de segurança).
+        if (result.error.kind === 'rate_limited' || result.error.kind === 'network' || result.error.kind === 'unavailable') {
+          return { ok: false, message: errorMessage(result.error), kind: 'blocked' };
+        }
         const message = result.error.kind === 'unknown' ? result.error.message : 'E-mail ou senha incorretos.';
-        return { ok: false, message };
+        return { ok: false, message, kind: 'credentials' };
       }
       setAdmin(result.data);
       setOrigin(result.origin);

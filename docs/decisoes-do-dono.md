@@ -788,3 +788,27 @@ sintoma parece "o sistema caiu", não "faltou um nome numa variável".
 sintoma ("há dois nomes"), não necessariamente a causa. Uniformizar dois
 textos que discordam, sem abrir os dois, troca uma inconsistência visível por
 um erro silencioso — e este teria aparecido só na hora de apontar o DNS.
+
+### 8. Login do painel: padrão premium, em escala só-escura ✅ (20/11/2026)
+
+**Decidido:** a tela de login do painel segue a **anatomia** da tela de login
+do ModaShop — duas colunas, lado da marca com título e itens, lado do
+formulário com selo, campos rotulados com ícone e revelar senha.
+
+**O conflito, e como foi resolvido:** no ModaShop o lado do formulário é
+**branco**. A paleta do VuumBora é **só escura** — não existe tom claro de
+uso geral nos tokens, e o único valor claro que existe (`gradient.searchLight`)
+é documentado como reservado a **um** elemento por tela. Em vez de inventar
+uma cor fora do design system, a hierarquia foi traduzida para dentro da
+escala de escuros: **navy** (marca) → **surface** (coluna do formulário) →
+**elevated com borda** (o cartão). Mesma leitura de "marca de um lado, ação
+do outro", sem cor nova.
+
+**O dono aprovou** quando perguntei diretamente ("pode, está bom"). Portanto:
+**não acrescentar um tom claro ao design system** para imitar o ModaShop. Se
+um dia isso voltar à mesa, é decisão de design system, não de tela.
+
+**O que NÃO foi copiado da referência, de propósito:** login com Google,
+autocadastro e "esqueci minha senha". Conta de administrador nasce por
+script (decisão de segurança), e não existe fluxo de recuperação — link que
+não leva a lugar nenhum é pior que a ausência dele.

@@ -6,8 +6,9 @@ metadata:
 ---
 
 **O que mudou:** a casca ao redor da tela de pré-cadastro (que continua
-intocada — `DriverApplicationsListPage`/`DriverApplicationDetailPage`/
-`LoginPage` seguem CSS Modules, sem mudança de contrato/lógica), seguindo
+intocada — `DriverApplicationsListPage`/`DriverApplicationDetailPage` seguem
+CSS Modules, sem mudança de contrato/lógica — `LoginPage` SAIU dessa lista em
+20/11/2026, ver atualização no fim deste arquivo), seguindo
 anatomia pedida pelo dono a partir do painel do ModaShop (`C:/Projetos/Web/Moda
 Shop/frontend/src/components/painel/*`): sidebar escura com grupos
 recolhíveis, gaveta no celular, paleta de comandos (Ctrl+K), cabeçalho de
@@ -68,3 +69,33 @@ Ver [[feedback_tailwind_v4_theme_alias_mesmo_nome_do_token]] (setup do tema) e
   hook `src/nav/useFocusTrap.ts` — ver
   [[bug_overlay_sem_focus_trap_escapa_para_fundo]] pela causa raiz e o
   padrão a repetir em qualquer overlay novo.
+
+**Atualização 20/11/2026 — login reformado no mesmo padrão, Tailwind:**
+`LoginPage.tsx` deixou de usar `LoginPage.module.css` (removido) e virou
+split-screen (hero escuro + cartão do formulário), anatomia portada do login
+do ModaShop mas adaptada à paleta só-escura do VuumBora — ver
+[[feedback_painel_dark_only_sem_tom_claro_geral]] pela causa raiz dessa
+adaptação. Peças novas: `src/components/auth/AuthSplitLayout.tsx` (casca de
+duas colunas, reutilizável para futura tela de auth) e
+`src/components/auth/LabeledIconInput.tsx` (campo rotulado com ícone à
+esquerda). `AuthContext.login()` agora distingue DOIS tipos de falha no
+retorno (`kind: 'credentials' | 'blocked'`): `credentials` é a mensagem
+genérica de sempre ("E-mail ou senha incorretos.", igual para e-mail
+inexistente/senha errada/usuário desativado — não mudar isso); `blocked`
+cobre 429 (limite de tentativas) e falhas de rede/indisponibilidade, com a
+mensagem de `errorMessage()` (`src/api/result.ts`) e visual de AVISO (âmbar),
+não de erro (vermelho) — são estados de infraestrutura, não "senha errada".
+
+**Atualização 20/11/2026 — logomarca de verdade no lugar do texto "VuumBora
+Admin":** `src/components/BrandLogo.tsx` (novo) renderiza a imagem oficial
+(`src/assets/brand/logo-vuumbora.png`, copiada de
+`apps/site/public/assets/img/logo-vuumbora.png` — ver
+[[feedback_logomarca_copiada_para_dentro_do_workspace]] pelo porquê de ter
+que ser cópia física e não import cruzando workspace). Substituiu o texto nos
+TRÊS lugares onde ele existia: hero escuro e cabeçalho compacto mobile de
+`AuthSplitLayout.tsx`, e sidebar desktop de `AppShell.tsx`. O cabeçalho
+compacto mobile da própria `AppShell` (o `header` com `lg:hidden`) nunca teve
+o texto — só um `●` decorativo — então não mudou. O PNG tem "Vuum" em branco
+sem fundo opaco: funciona em qualquer tom da escala só-escura do design
+system, nunca sobre um fundo claro (que este app não tem, ver
+[[feedback_painel_dark_only_sem_tom_claro_geral]]).
