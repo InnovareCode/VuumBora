@@ -2,6 +2,48 @@
 
 Estado do projeto entre sessões. Atualizar ao fim de cada marco.
 
+## Admin v0 — ENTREGUE E APROVADO (20/11/2026)
+
+Primeira fatia do painel da plataforma (fase **S2** do plano). Commits
+`f4aece3` e `1f74b3a`, publicados. **Veredito da Íris: APROVADO**, provado
+com API real e papéis reais — não com dado de demonstração.
+
+**O que existe agora:** `apps/admin` (React + Vite + Tailwind v4) com login,
+lista e detalhe das candidaturas de motorista vindas do site, busca, filtro e
+paginação; e no `apps/api` o login de administrador por cookie httpOnly,
+cinco papéis com autorização por rota, teto absoluto de sessão e auditoria de
+toda leitura. Migrações `0003`–`0007`.
+
+**Decisões do dono que entraram:** papéis por setor (`dono`, `operacao`,
+`revisor_documentos`, `financeiro`, `suporte` — matriz em
+`docs/decisoes-do-dono.md`); painel no mesmo servidor, em
+**`painel.vuumbora.com.br`**; casca no padrão do painel do ModaShop com a
+paleta e a tipografia do VuumBora.
+
+**Só leitura.** Aprovar e recusar candidatura é a fatia seguinte, com motivo
+obrigatório, auditoria e token de CSRF.
+
+### Três bugs reais encontrados e corrigidos (causa, não sintoma)
+- **Dado pessoal vazando no log:** o pino gravava a query string inteira, e a
+  busca é por nome/e-mail/telefone de candidato. Corrigido no nível do
+  serviço — nenhuma query futura é segura por padrão. A Íris provou por
+  mutação: removeu a correção, viu vazar de novo, recolocou.
+- **Paginação perdia linha** quando duas candidaturas tinham `created_at`
+  idêntico ao microssegundo (`Date` do JS trunca para milissegundo).
+- **Foco escapava das sobreposições:** a gaveta do celular era desenhada
+  antes de `header`+`main`, e **quem decide a ordem do Tab é a ordem do
+  documento**, não a posição visual. A paleta de comandos tinha o mesmo
+  defeito pelo Shift+Tab — só apareceu porque se testou os dois sentidos.
+
+### Pendente antes de abrir documentos e financeiro
+- **Infra (Vulcano):** separar a credencial de banco e revogar alteração e
+  exclusão em `admin_audit_log` — hoje a trilha é inviolável pelo código, não
+  pelo banco; HTTPS no painel do Easypanel; backup externo testado; criar o
+  admin de produção; `painel.vuumbora.com.br` em `ALLOWED_ORIGINS`.
+- **Segundo fator** de autenticação e **token de CSRF** (este último junto da
+  primeira ação que aprova ou recusa alguém).
+- Saneamento de `err.message` no log de requisição rejeitada.
+
 ## Plano do sistema real — escrito em 20/11/2026
 
 O site de pré-lançamento está no ar e a Fase 1 dele está fechada. O passo
