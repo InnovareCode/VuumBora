@@ -436,18 +436,27 @@
         var slideRect = slide.getBoundingClientRect();
         return track.scrollLeft + (slideRect.left - trackRect.left);
       });
-      // Dá ao último slide a mesma chance de virar "o da esquerda" que
-      // os outros têm: o espaçador vira a sobra exata (largura visível
-      // menos a largura de um card), senão o scroll trava antes de lá.
-      if (spacer) {
-        var lastWidth = slides[slides.length - 1].getBoundingClientRect().width;
-        var need = track.clientWidth - lastWidth;
-        spacer.style.width = Math.max(0, need) + 'px';
-      }
+      // O espaçador existia para o último card conseguir chegar à borda
+      // esquerda, quando o encaixe era pelo início. Agora o card ativo fica
+      // CENTRALIZADO, e quem dá esse espaço é o padding do track (ver
+      // `.carousel__viewport .carousel__track` no CSS), calculado como
+      // metade da sobra entre a janela e um card.
+      //
+      // Mantido esticando a zero, e não removido do HTML, porque o JS pode
+      // não rodar: sem ele o layout continua correto, e com ele o valor
+      // antigo (que chegava a meia tela de vazio no fim) nunca volta.
+      if (spacer) spacer.style.width = '0px';
+    }
+
+    // O recuo da esquerda do track. `slideLefts` mede a partir da borda do
+    // track, que fica ANTES do padding; o scroll precisa descontá-lo para o
+    // card parar onde o `scroll-snap-align: start` encaixa.
+    function recuoInicial() {
+      return parseFloat(getComputedStyle(track).paddingLeft) || 0;
     }
 
     function nearestIndex() {
-      var pos = track.scrollLeft;
+      var pos = track.scrollLeft + recuoInicial();
       var best = 0;
       var bestDist = Infinity;
       slideLefts.forEach(function (left, i) {
@@ -460,7 +469,10 @@
     function scrollToIndex(index) {
       var left = slideLefts[index];
       if (left === undefined) return;
-      track.scrollTo({ left: left, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+      track.scrollTo({
+        left: left - recuoInicial(),
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      });
     }
 
     function setActive(index) {

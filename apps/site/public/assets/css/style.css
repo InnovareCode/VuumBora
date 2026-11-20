@@ -1981,8 +1981,15 @@ noscript .reveal[data-hidden="true"] {
   criar área rolável (diferente de `hidden`, que criaria).
 */
 .carousel {
+  /* A largura do card mora aqui, e não na regra do slide, porque o recuo
+     do track precisa da mesma medida para centralizar o primeiro e o
+     último. Uma fonte só evita os dois saírem de sincronia. */
+  --slide-w: min(80vw, 300px);
   overflow-x: clip;
 }
+@media (min-width: 640px)  { .carousel { --slide-w: min(46vw, 420px); } }
+@media (min-width: 1024px) { .carousel { --slide-w: min(30vw, 520px); } }
+@media (min-width: 1600px) { .carousel { --slide-w: min(26vw, 620px); } }
 
 .carousel__viewport {
   position: relative;
@@ -2027,23 +2034,44 @@ noscript .reveal[data-hidden="true"] {
   qualquer regra de uma classe só perde para o reset em elementos que o
   reset alcança. Não é preciso `!important`, basta uma classe a mais.
 */
-.carousel__viewport .carousel__track {
-  padding-inline: calc((100vw - min(1180px, 100vw)) / 2 + clamp(1.25rem, 4vw, 2.5rem));
+/*
+  O recuo é a MARGEM DA PÁGINA, e não o recuo até o container.
 
-  /*
-    O mesmo recuo precisa ser dito DE NOVO ao scroll-snap. `scroll-snap-align:
-    start` encaixa o slide na borda do container de rolagem, e o padding não
-    conta para isso: medido aqui, pedir `scrollLeft = 0` parava em 410 e o
-    card ia para a beirada da janela, desalinhado do título por exatamente a
-    largura do recuo. `scroll-padding-inline` é o que faz o ponto de encaixe
-    cair onde o conteúdo começa.
-  */
-  scroll-padding-inline: calc((100vw - min(1180px, 100vw)) / 2 + clamp(1.25rem, 4vw, 2.5rem));
+  Primeiro tentei alinhar o primeiro card com o título da seção, o que a
+  1920px exige 410px de recuo de cada lado. Isso é bonito no começo e
+  péssimo no fim: o scroll termina com o último card a 434px da borda, e
+  o dono viu meia tela vazia à direita. Centralizar o card ativo tampouco
+  resolve — medido, deixa 718px vazios do lado direito no último.
+
+  A conta é simples: o vazio no fim é sempre igual ao recuo da direita.
+  Então o recuo tem que ser pequeno. Com a margem da página, o último card
+  para a 40px da borda, que lê como respiro em vez de erro.
+
+  O preço é o primeiro card não alinhar com o título, e é um preço justo:
+  o pedido foi as fotos ocuparem a largura toda, e é isso que elas fazem.
+
+  O seletor é duplo de propósito. O reset deste projeto tem
+  `ul[class], ol[class] { padding: 0 }`, que vale (0,1,1) — elemento mais
+  atributo. Um `.carousel__track` sozinho vale (0,1,0) e PERDE, então o
+  shorthand do reset zerava o recuo inteiro. Medido em 20/11/2026: a
+  declaração existia na folha, resolvia certo quando aplicada direto no
+  elemento, e computava 0px pela cascata.
+
+  Lição que vale além daqui: num projeto com reset baseado em `[class]`,
+  qualquer regra de uma classe só perde para o reset nos elementos que o
+  reset alcança. Não é preciso `!important`, basta uma classe a mais.
+
+  O `scroll-padding-inline` repete a conta porque o scroll-snap não enxerga
+  o padding do elemento: sem ele, o ponto de encaixe ignora o recuo.
+*/
+.carousel__viewport .carousel__track {
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+  scroll-padding-inline: clamp(1.25rem, 4vw, 2.5rem);
 }
 
 .carousel__slide {
   flex: 0 0 auto;
-  width: min(80vw, 300px);
+  width: var(--slide-w);
   scroll-snap-align: start;
 }
 /* Sem isto, o último card nunca consegue chegar à borda esquerda quando
