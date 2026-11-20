@@ -310,13 +310,24 @@ deploy.
 | `VITE_API_MODE` | `http` |
 | `VITE_API_BASE_URL` | `https://api.vuumbora.com.br` (endereço do serviço `vuumbora-backend` — ver `docs/publicar-o-backend.md` §4) |
 
-Se esses dois argumentos não forem preenchidos (ou vier `VITE_API_MODE`
-diferente de `http`), **o build falha de propósito** — é
-`apps/admin/vite.config.ts` recusando compilar o painel em modo
-demonstração. Isso é esperado e correto: não queremos publicar o admin
-servindo dado fabricado sem ninguém notar. Se o build falhar com uma
-mensagem citando "VITE_API_MODE resolveu para 'mock'", a causa é sempre
-Argumento de Build faltando ou errado — não é bug do Dockerfile.
+**Na prática, você não precisa preencher nada** (atualizado em 20/11/2026,
+depois do primeiro build real): os dois `ARG` do `apps/admin/Dockerfile`
+já têm **o valor de produção como padrão**. O que aconteceu no primeiro
+deploy foi que o Easypanel passou **só** `--build-arg GIT_SHA=...` — não
+entregou estes dois —, `VITE_API_MODE` chegou vazio, e a guarda abortou o
+build corretamente, mas por uma causa que estava fora do repositório.
+Depender de alguém preencher um campo, num painel, toda vez que o serviço
+for recriado, é passo que falha calado meses depois.
+
+Preencher os dois no painel **continua funcionando** e sobrescreve o
+padrão — é o caminho para um ambiente que não seja produção (homologação,
+por exemplo, apontando para outra API).
+
+Se o build falhar com uma mensagem citando "VITE_API_MODE resolveu para
+'mock'", é `apps/admin/vite.config.ts` recusando compilar o painel em modo
+demonstração — esperado e correto, não é bug do Dockerfile. Com o padrão de
+produção no lugar, isso só acontece se alguém **pedir** modo demonstração
+explicitamente.
 
 ### Porta e domínio
 

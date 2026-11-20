@@ -62,8 +62,27 @@ COPY tsconfig.base.json ./
 COPY VuumBora_Claude_Design_System/tokens VuumBora_Claude_Design_System/tokens
 COPY apps/admin apps/admin
 
-ARG VITE_API_MODE
-ARG VITE_API_BASE_URL
+# Valores gravados DENTRO do JavaScript na hora de compilar — por isso são
+# argumento de build, e não variável de execução: trocar depois, no painel,
+# não muda nada no arquivo já gerado.
+#
+# POR QUE TÊM VALOR PADRÃO DE PRODUÇÃO (20/11/2026)
+# O primeiro build real no Easypanel passou apenas `--build-arg GIT_SHA=...`:
+# o painel não entregou estes dois, `VITE_API_MODE` chegou vazio e a guarda
+# do `vite.config.ts` abortou o build — corretamente, mas por uma causa que
+# estava fora do repositório e que ninguém enxerga lendo o código.
+#
+# Depender de alguém preencher um campo certo, num painel, toda vez que
+# criar o serviço, é o tipo de passo que falha calado meses depois. O
+# endereço da API não é segredo (ele vai dentro do JavaScript que qualquer
+# visitante baixa), então o padrão aqui é o de produção, e quem precisar de
+# outro ambiente sobrescreve com `--build-arg`.
+#
+# A guarda continua valendo: ela existe para impedir publicar o painel em
+# modo demonstração, e com este padrão isso deixa de depender de memória
+# humana. Para construir em modo demonstração é preciso pedir, explicitamente.
+ARG VITE_API_MODE=http
+ARG VITE_API_BASE_URL=https://api.vuumbora.com.br
 ENV VITE_API_MODE=$VITE_API_MODE
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
