@@ -133,7 +133,7 @@ candidatura que não vai ser gravada.
 ## 5. Ligar o formulário
 
 Com o endereço no ar, falta uma linha, em
-`site-cine/public/assets/js/config.js`:
+`apps/site/public/assets/js/config.js`:
 
 ```js
 window.VUUMBORA_CONFIG = { apiBaseUrl: 'https://api.vuumbora.com.br' };

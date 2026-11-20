@@ -24,7 +24,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DESTINO = join(RAIZ, 'site-cine', 'public', 'assets', 'js', 'version.js');
+const DESTINO = join(RAIZ, 'apps', 'site', 'public', 'assets', 'js', 'version.js');
 
 const pkg = JSON.parse(readFileSync(join(RAIZ, 'package.json'), 'utf8'));
 

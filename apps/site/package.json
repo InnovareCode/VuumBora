@@ -2,27 +2,8 @@
   "name": "@vuumbora/site",
   "version": "0.0.0",
   "private": true,
-  "description": "Site público do VuumBora (institucional, Next.js com exportação estática).",
+  "description": "Site público do VuumBora — HTML, CSS e JS puros, sem build. O que está em public/ é o que vai ao ar.",
   "scripts": {
-    "dev": "node scripts/generate-tokens-css.mjs && next dev",
-    "build": "node scripts/generate-tokens-css.mjs && next build",
-    "start": "next start",
-    "typecheck": "tsc --noEmit -p .",
-    "lint": "eslint ."
-  },
-  "dependencies": {
-    "@vuumbora/api-client": "*",
-    "@vuumbora/tokens": "*",
-    "next": "^16.4.6",
-    "react": "19.3.0",
-    "react-dom": "19.3.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.2",
-    "@types/react": "~19.3.0",
-    "@types/react-dom": "~19.3.0",
-    "eslint": "^9.17.0",
-    "eslint-config-next": "^16.4.6",
-    "typescript": "~6.0.3"
+    "dev": "npx -y http-server public -p 4300 -c-1 --silent"
   }
 }

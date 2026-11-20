@@ -30,7 +30,7 @@ Estado do projeto entre sessões. Atualizar ao fim de cada marco.
 | 7 | Qualidade | Íris | 5, 6 | Etapa D: testes, a11y, telas pequenas |
 | 8 | Contrato de backend | Nova + Cronos + Vega | respostas de produto | Etapa E: API HTTP, modelo de dados |
 
-## Site de pré-lançamento (`site-cine/public`, decisões já tomadas)
+## Site de pré-lançamento (`apps/site/public`, decisões já tomadas)
 
 Reforma do formulário de candidatura e das seções pós-jornada
 (`docs/especificacao-formulario-e-secoes.md`, Apolo → Lyra, 19/11/2026).

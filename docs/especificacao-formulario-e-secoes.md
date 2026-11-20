@@ -1,7 +1,7 @@
 # Especificação: formulário de candidatura e seções depois da jornada
 
 Autor: Apolo (direção de arte). Data: 19/11/2026.
-Alvo: `site-cine/public/` (index.html, assets/css/style.css, assets/js/main.js).
+Alvo: `apps/site/public/` (index.html, assets/css/style.css, assets/js/main.js).
 Motivo: o dono reprovou a página pela quinta vez: "as imagens estão ótimas, mas o
 restante do layout está muito feio e fraco, os elementos do formulário estão
 amadores demais".
