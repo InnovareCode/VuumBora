@@ -717,6 +717,33 @@
     });
   }
 
+  /**
+   * Assinatura do rodapé: a versão que está no ar.
+   *
+   * O número vem de `version.js`, gerado no build a partir do
+   * `package.json` da raiz (ver scripts/gerar-versao.mjs). Se esse arquivo
+   * não tiver carregado, o trecho continua escondido: um rodapé sem versão
+   * é honesto, um rodapé com versão errada manda o suporte caçar um bug no
+   * build errado.
+   *
+   * A data da compilação entra no `title` e num texto para leitor de tela,
+   * respondendo "v1.0.0 de quando?" sem poluir a linha.
+   */
+  function initAppVersion() {
+    var alvo = document.querySelector('[data-app-version]');
+    if (!alvo) return;
+
+    var info = window.VUUMBORA_VERSION;
+    if (!info || !info.versao) return;
+
+    alvo.textContent = 'v' + info.versao;
+    if (info.compiladoEm) {
+      alvo.setAttribute('title', 'Compilado em ' + info.compiladoEm);
+      alvo.setAttribute('aria-label', 'Versão ' + info.versao + ', compilada em ' + info.compiladoEm);
+    }
+    alvo.hidden = false;
+  }
+
   function boot() {
     initJourney();
     initHeaderScroll();
@@ -726,6 +753,7 @@
     initCarousel();
     initRateSimulator();
     initApplicationForm();
+    initAppVersion();
   }
 
   if (document.readyState === 'loading') {

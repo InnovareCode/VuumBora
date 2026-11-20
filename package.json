@@ -1,7 +1,7 @@
 {
   "name": "vuumbora",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "VuumBora — monorepo dos apps Passageiro e Motorista (Expo + React Native + TypeScript).",
   "workspaces": [
     "apps/*",

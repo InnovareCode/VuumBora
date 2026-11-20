@@ -445,19 +445,47 @@
       <div>
         <h3>Empresa</h3>
         <ul>
-          <li>Desenvolvido por Innovare Code</li>
+          <!--
+            Só o nome da empresa aqui: o "Desenvolvido por" completo, com a
+            versão, vive na assinatura do rodapé inferior. Ter a mesma
+            frase nos dois lugares era repetição, e ainda quebrava em duas
+            linhas — medido no navegador: 47px de altura numa coluna de
+            235px, contra 23px de uma linha.
+
+            O `span` existe porque o `li` desta lista é flex com gap,
+            desenhado para "ícone + texto": sem ele, cada pedaço vira um
+            item flex com 10px de distância entre si.
+          -->
+          <li>
+            <span>
+              <a href="https://innovarecode.com.br" target="_blank" rel="noopener noreferrer">Innovare Code</a>
+            </span>
+          </li>
           <li>CNPJ 09.813.446/0001-00</li>
         </ul>
       </div>
     </div>
     <div class="site-footer__bottom">
       <span>© 2026 VuumBora</span>
+      <!--
+        Assinatura do sistema: qual build está no ar e quem o desenvolveu.
+        A versão nasce escondida de propósito e só aparece quando o
+        version.js carregou: mostrar um número errado é pior que não
+        mostrar número nenhum, porque é dele que o suporte depende para
+        saber o que o usuário estava usando.
+      -->
+      <span class="site-footer__signature">
+        <span class="site-footer__version" data-app-version hidden></span>
+        Desenvolvido por
+        <a href="https://innovarecode.com.br" target="_blank" rel="noopener noreferrer">Innovare Code</a>
+      </span>
       <span>As imagens são ilustrativas.</span>
     </div>
   </div>
 </footer>
 
 <script src="assets/js/config.js"></script>
+<script src="assets/js/version.js"></script>
 <script src="assets/js/main.js" defer></script>
 </body>
 </html>

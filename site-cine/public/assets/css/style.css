@@ -1245,6 +1245,37 @@ input[type="range"]:focus-visible::-moz-range-thumb {
   justify-content: space-between;
 }
 
+/* Assinatura do sistema: versão no ar + quem desenvolveu. */
+.site-footer__signature {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* `tabular-nums` para o número não dançar quando a versão muda de dígito. */
+.site-footer__version {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+  /* O título explica o número ao passar o mouse; a seta avisa que há o quê. */
+  cursor: help;
+}
+
+.site-footer__signature a {
+  font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.site-footer__signature a:hover,
+.site-footer__signature a:focus-visible {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 /* =========================================================
    Revelação ao rolar (fora da jornada): padrão seguro:
    visível por padrão; só esconde antes de aparecer quando

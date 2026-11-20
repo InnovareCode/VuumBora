@@ -12,6 +12,18 @@
 # "Dockerfile Path". Localmente:
 #   docker build -f site-cine/Dockerfile -t vuumbora-cine .   (rodar da raiz)
 
+# ---------- Estágio 1: a versão que vai ao ar ----------
+# O único passo "de build" desta página, e ele não compila nada: lê o
+# `version` do package.json da raiz e escreve o version.js com ele mais a
+# data de HOJE. Assim o rodapé mostra a data real da imagem no ar, em vez
+# da data em que alguém lembrou de editar um arquivo à mão.
+FROM node:22-alpine AS versao
+WORKDIR /gen
+COPY package.json ./
+COPY scripts/gerar-versao.mjs ./scripts/gerar-versao.mjs
+RUN node scripts/gerar-versao.mjs --stdout > version.js
+
+# ---------- Estágio 2: servir ----------
 FROM nginx:1.27-alpine
 
 COPY site-cine/nginx.conf /etc/nginx/conf.d/default.conf
@@ -20,6 +32,10 @@ COPY site-cine/nginx.conf /etc/nginx/conf.d/default.conf
 # vários megabytes, fica de fora por estar no .gitignore e por não ser
 # copiada aqui: material de revisão nunca entra na imagem.
 COPY site-cine/public/ /usr/share/nginx/html/
+
+# Depois do public/, de propósito: sobrescreve o version.js versionado no
+# git (que existe para o desenvolvimento local) pelo gerado neste build.
+COPY --from=versao /gen/version.js /usr/share/nginx/html/assets/js/version.js
 
 EXPOSE 80
 
