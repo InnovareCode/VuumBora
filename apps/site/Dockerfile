@@ -17,16 +17,26 @@
 # package.json da raiz). Localmente:
 #   docker build -f apps/site/Dockerfile -t vuumbora-site .   (rodar da raiz)
 
-# ---------- Estágio 1: a versão que vai ao ar ----------
-# O único passo "de build" desta página, e ele não compila nada: lê o
-# `version` do package.json da raiz e escreve o version.js com ele mais a
-# data de HOJE. Assim o rodapé mostra a data real da imagem no ar, em vez
-# da data em que alguém lembrou de editar um arquivo à mão.
-FROM node:22-alpine AS versao
+# ---------- Estágio 1: preparar o que vai ao ar ----------
+# Não compila a página: ela já está pronta. Faz duas coisas sobre uma
+# CÓPIA dela, para o repositório continuar limpo:
+#
+#   1. Escreve o version.js com a versão do package.json e a data de hoje,
+#      para o rodapé mostrar a data real da imagem no ar.
+#   2. Carimba os links de CSS e JS com o hash do próprio conteúdo.
+#      Sem isso, uma correção publicada pode levar até 4 horas para
+#      aparecer: a Cloudflare sobrescreve o `max-age=300` do nginx por
+#      `max-age=14400` nos arquivos estáticos. Medido em 20/11/2026, com
+#      uma correção de CSS presa no cache enquanto o servidor já servia a
+#      nova. Ver scripts/carimbar-assets.mjs.
+FROM node:22-alpine AS preparar
 WORKDIR /gen
 COPY package.json ./
 COPY scripts/gerar-versao.mjs ./scripts/gerar-versao.mjs
-RUN node scripts/gerar-versao.mjs --stdout > version.js
+COPY scripts/carimbar-assets.mjs ./scripts/carimbar-assets.mjs
+COPY apps/site/public ./public
+RUN node scripts/gerar-versao.mjs --stdout > public/assets/js/version.js \
+ && node scripts/carimbar-assets.mjs public
 
 # ---------- Estágio 2: servir ----------
 FROM nginx:1.27-alpine
@@ -36,11 +46,10 @@ COPY apps/site/nginx.conf /etc/nginx/conf.d/default.conf
 # Só o conteúdo de public/. A pasta `revisao/`, com os PNG originais de
 # vários megabytes, fica de fora por estar no .gitignore e por não ser
 # copiada aqui: material de revisão nunca entra na imagem.
-COPY apps/site/public/ /usr/share/nginx/html/
-
-# Depois do public/, de propósito: sobrescreve o version.js versionado no
-# git (que existe para o desenvolvimento local) pelo gerado neste build.
-COPY --from=versao /gen/version.js /usr/share/nginx/html/assets/js/version.js
+# A cópia já preparada no estágio anterior: com o version.js deste build e
+# os links de CSS/JS carimbados. A pasta `revisao/`, com os PNG originais
+# de vários megabytes, não entra: está no .gitignore e não é copiada.
+COPY --from=preparar /gen/public/ /usr/share/nginx/html/
 
 EXPOSE 80
 
