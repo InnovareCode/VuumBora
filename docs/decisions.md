@@ -101,9 +101,15 @@ Os contratos são **propostas** até a especificação de backend.
 
 Seguem a spec e entram quando a primeira tela precisar, não antes: TanStack Query (estado remoto), Zustand (estado local, só se Context não bastar), React Hook Form + Zod (formulários), `expo-font` + Inter (OFL), Lucide (`lucide-react-native`) para ícones, Jest + React Native Testing Library. E2E (Maestro ou Detox) a decidir pela Íris.
 
-## D-11 — SDK de mapa — Em aberto
+## D-11 — SDK de mapa — Aceita (Mapbox, 18/11/2026)
 
-Google Maps (`react-native-maps`) × Mapbox. Depende de custo por volume, termos de uso e estilo escuro customizável. No protótipo, o mapa entra atrás de uma porta com implementação estática (sem SDK). Não bloqueia a Fase 1.
+Google Maps (`react-native-maps`) × Mapbox. Dependia de custo por volume, termos de uso e estilo escuro customizável.
+
+**Escolha: Mapbox**, decidida pelo dono em 18/11/2026 (`docs/decisoes-do-dono.md`, decisão 1). Conta criada por ele, token público no `.env` local — **nunca no repositório**.
+
+**Consequências:** rota e matriz são calculadas **no servidor**, com cache, para o token do app não pagar a conta de chamadas indevidas (risco R14 do `plano-sistema.md`). No protótipo, o mapa continua atrás de uma porta com implementação estática (sem SDK), então a Fase 1 segue sem depender disto.
+
+**Pendência aberta desde 18/11:** restringir o token no painel do Mapbox por URL e por identificador de app.
 
 ---
 

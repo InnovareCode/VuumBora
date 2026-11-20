@@ -2,6 +2,35 @@
 
 Estado do projeto entre sessões. Atualizar ao fim de cada marco.
 
+## Plano do sistema real — escrito em 20/11/2026
+
+O site de pré-lançamento está no ar e a Fase 1 dele está fechada. O passo
+seguinte — **o sistema de verdade** (os dois apps, o painel admin, o backend
+transacional e a infra) — foi planejado de ponta a ponta e vive em:
+
+> **[`docs/plano-sistema.md`](docs/plano-sistema.md)** — plano consolidado,
+> **fonte de verdade**: escopo MVP × pós-MVP, arquitetura e stack justificada,
+> modelo de dados, contratos de API, fases S0 a S9 com critério de aceite,
+> matriz de funcionalidades por perfil, riscos, custo e decisões em aberto.
+
+Anexos com o detalhe: [`docs/plano-sistema-arquitetura.md`](docs/plano-sistema-arquitetura.md)
+(Nova) e [`docs/plano-sistema-dados.md`](docs/plano-sistema-dados.md) (Cronos).
+
+**O `PLANO.md` continua valendo** para o protótipo navegável (fases 1 a 3) e
+roda em paralelo até a fase S4, quando os apps trocam o adaptador `mock` pelo
+`http`. Onde os dois falarem do mesmo assunto, vale o `plano-sistema.md`.
+
+**Começo recomendado: S0** (congelar contratos). Nada foi implementado.
+
+**Novidades de produto de 20/11/2026, já incorporadas ao plano:** as cinco
+categorias de lançamento (VuumBora, Conforto, Motorista mulher, Entrega, Pet;
+moto fora, sem data) e a funcionalidade **motorista favorito** — o passageiro
+escolhe um favorito, que recebe oferta exclusiva de 15 s antes de a corrida ir
+para a fila normal.
+
+**Pendente no site, pedido pelo dono e ainda não feito:** acrescentar o cartão
+de *motorista favorito* na seção de categorias e criar os ícones dos cartões.
+
 ## Estado atual (2026-11-18)
 
 **Fase 0 — Fundação: scaffold criado, sem dependências instaladas.**
@@ -109,6 +138,11 @@ Duas decisões do dono, resolvidas, não reabrir:
   site — removida. Ficou só "As imagens são ilustrativas." na barra inferior.
 
 ## Decisões em aberto (dependem do dono)
+
+**Lista atualizada e priorizada: [`docs/plano-sistema.md`](docs/plano-sistema.md) §14**
+— separa as que travam uma fase inteira (orçamento, prazo, gateway, cidade,
+agendamento, tarifa) das que só decidem desenho. O que está abaixo é o registro
+anterior, mantido por histórico.
 
 Lista completa em `docs/decisions.md` → "Ambiguidades de produto". As que mais pesam para o MVP:
 - Login por código (celular) ou senha.

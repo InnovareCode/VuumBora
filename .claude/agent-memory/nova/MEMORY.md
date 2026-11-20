@@ -1,2 +1,3 @@
 - [Arquitetura base VuumBora](project_arquitetura_base.md) — Expo Router, npm workspaces, 2 apps, tokens do JSON, portas mock/http (2026-11-18)
 - [Provar scaffold sem install](feedback_provar_sem_install.md) — usar tsc de outro projeto local + scripts só-Node
+- [Sistema real VuumBora](project_sistema_real.md) — monólito modular, Redis efêmero, despacho sequencial, categorias, favorito, S0-S9 (2026-11-20)

@@ -1,0 +1,1 @@
+- [VuumBora — modelo de dados](vuumbora-modelo-de-dados.md) — trade-offs (PostGIS, posição em tempo real, tarifa versionada), categorias/elegibilidade, favorito, pendências do dono
