@@ -1891,7 +1891,24 @@ noscript .reveal[data-hidden="true"] {
   width: 100%;
   max-width: var(--container-max);
   margin-inline: auto;
-  padding: var(--space-6) clamp(1.25rem, 4vw, 2.5rem) var(--space-6);
+  /*
+    O recuo de cima precisa caber o cabeçalho, que é fixo e fica numa
+    camada acima (z-index 70, contra 3 daqui). Medido a 390x844: o
+    cabeçalho terminava em 64px e o olho do hero começava em 48px, ou
+    seja, nascia ATRÁS dele e saía cortado — na primeira tela do celular,
+    que é a mais vista.
+
+    Aparece só no celular: lá o conteúdo preenche a faixa inteira e não
+    sobra folga, enquanto em tela larga o hero centraliza e o olho nasce
+    bem abaixo do cabeçalho (medido a 1440: olho em 150px, cabeçalho
+    terminando em 76px).
+
+    O `max()` garante o mínimo de 88px — os 64 do cabeçalho mais 24 de
+    folga — sem encolher o respiro onde ele já era maior. Vale no celular;
+    a partir de 960px a regra de `padding-block` logo abaixo assume, e lá
+    não há o que corrigir.
+  */
+  padding: max(var(--space-6), 88px) clamp(1.25rem, 4vw, 2.5rem) var(--space-6);
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
