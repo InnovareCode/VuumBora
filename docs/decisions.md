@@ -136,3 +136,41 @@ O protótipo segue com dados de demonstração sinalizados; cada item abaixo pre
 17. **Cidade(s) de lançamento**, que definem regulação e SDK de mapa.
 18. **Identificadores de loja** (`com.vuumbora.*` é provisório) e nomes nas lojas.
 19. **Ícone e splash** de cada app a partir da logomarca aprovada (Apolo).
+
+## D-12 — Paginação do painel: por página, não por cursor — Aceita (20/11/2026)
+
+Reverte, **só para as listas do painel administrativo**, a escolha feita na
+primeira fatia do Admin v0.
+
+**Contexto.** A lista de candidaturas nasceu com paginação por cursor
+("Carregar mais"). O dono pediu o padrão do painel do ModaShop: contador
+"mostrando 1–24 de 24" e a opção de escolher quantos registros por página.
+Cursor **não sabe o total** e não permite pular para uma página — por
+desenho, não por limitação de implementação.
+
+| | Cursor (keyset) | Por página (offset + total) |
+|---|---|---|
+| Total de registros | não tem | tem |
+| Pular para a página N | não | sim |
+| Escolher quantos por página | funciona, mas sem contexto de quanto falta | é o ponto |
+| Linha pulada ou repetida quando chega registro novo durante a navegação | **nunca** | possível |
+| Custo da contagem | zero | um `COUNT` por consulta |
+
+**Escolha: por página**, com `COUNT` e ordenação com critério de desempate
+estável (`created_at DESC, id DESC`).
+
+**O que estamos trocando, dito com todas as letras:** a garantia de que
+nenhuma linha é pulada. Essa garantia custou um bug real — paginação perdia
+registro quando duas candidaturas tinham o mesmo instante até o
+microssegundo (`feedback_cursor_pagination_timestamp_precision`) — e foi
+provada percorrendo 27 registros em 6 páginas. Num volume de lista
+administrativa, o efeito de offset é raro e pequeno; saber **quantas**
+candidaturas existem é informação usada toda vez que a tela abre.
+
+**Onde NÃO vale:** qualquer lista que vire fonte de conferência financeira ou
+de exportação completa volta a ser cursor. Perder uma linha num extrato é
+outra categoria de problema.
+
+**Consequência de desenho:** a paginação entra como **peça reutilizável**,
+não como código da tela de candidaturas — a próxima lista (documentos,
+financeiro, suporte) herda, em vez de inventar a sua.

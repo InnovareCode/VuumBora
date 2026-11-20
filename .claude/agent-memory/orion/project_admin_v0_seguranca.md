@@ -29,47 +29,86 @@ confirmar que não regrediram):
   filtro+contagem, nunca a lista de PII (boa minimização).
 - Erro handler genérico nunca ecoa `err.message` do Fastify pro cliente.
 
-**Pendências confirmadas (abertas, para entrar no board antes da próxima
-fatia que mexe em documento/financeiro/mutação):**
+**Rodada 2 (2026-11-20, mesma data): RESOLVIDOS e reconfirmados sem
+regressão** — RBAC por papel (`requireAdminRole`, 5 papéis definitivos
+`dono|operacao|revisor_documentos|financeiro|suporte`, migração 0006 com
+CHECK constraint e preservação de dado, `create-admin.mjs` validando a
+mesma lista); PII de querystring no log (serializer corta a partir de `?`
+em `app.ts`); teto absoluto de sessão (`absolute_expires_at`, migração
+0007, nunca avançado por `touchAdminSession`, exigido junto com `expires_at`
+na query de sessão ativa); guarda de build (`apps/admin/vite.config.ts`
+aborta `vite build` em modo mock). Nota de correção: o nome do domínio do
+painel oscilou entre rodadas — o nome CORRETO e definitivo (decisão do
+dono, `docs/decisoes-do-dono.md` §7, 2026-11-20) é **`admin.vuumbora.com.br`**;
+`painel.vuumbora.com.br` é o painel do PRÓPRIO Easypanel, coisa diferente.
+Não confundir de novo.
 
-1. **Sem RBAC por papel** — `requireAdmin` (`hooks/require-admin.ts`) só
-   valida sessão, nunca `request.admin.role`. O plano
-   (`docs/plano-sistema.md:208`) já prevê granularidade por área
-   (documentos, financeiro, auditoria com papel próprio) mas não existe
-   NENHUM middleware de papel construído ainda. Risco real: a primeira
-   rota de documento sensível que copiar o padrão `preHandler:
-   requireAdmin` fica acessível a qualquer um dos três papéis
-   (`support`/`finance`/`superadmin`). Construir `requireAdminRole(...)`
-   ANTES dessa próxima rota, não depois.
-2. **`admin_audit_log` adulterável em nível de banco** — confirmado pelo
-   próprio comentário da migração 0004: hoje só existe uma role/conexão
-   Postgres (mesma `DATABASE_URL` para migração e runtime), sem
-   `REVOKE UPDATE, DELETE` para uma role de aplicação separada. Append-only
-   é hoje uma disciplina de CÓDIGO, não uma garantia de BANCO — vazamento
-   de credencial ou bug futuro de injeção poderia alterar a trilha sem
-   deixar rastro. Resolver antes de a auditoria carregar peso real de
-   accountability (aprovação/rejeição, financeiro).
-3. **Sem 2FA** — `docs/plano-sistema-arquitetura.md:196` já diz que o
-   domínio do admin fica "atrás de login com segundo fator obrigatório";
-   Admin v0 é só e-mail+senha. Aceitável para esta fatia (só leitura),
-   mas entra como requisito antes de abrir documento/financeiro.
-4. **Sessão sem teto absoluto** — TTL deslizante (`ADMIN_SESSION_TTL_HOURS`)
-   nunca expira enquanto a sessão for usada. Um cookie vazado e usado
-   esporadicamente nunca força reautenticação.
-5. **CORS/SameSite=Lax**: correto para o domínio real de produção — painel
-   e API são subdomínios do MESMO domínio registrável (`vuumbora.com.br`),
-   então é tráfego same-site, e Lax protege contra CSRF cross-site
-   genuíno (cookie não viaja em POST cross-site). Resíduo: Lax não protege
-   contra um subdomínio-irmão comprometido (same-site não é restringido
-   por Lax) — hoje sem impacto prático (só login/logout mutam estado), mas
-   antes de aprovar/rejeitar virar mutação real, vale token CSRF de defesa
-   em profundidade. Also achei inconsistência de nome de domínio do
-   painel entre docs (`admin.vuumbora.com.br` vs `painel.vuumbora.com.br`)
-   — checar `ALLOWED_ORIGINS` real em produção usa o domínio certo.
-6. Fastify loga `url` (com query string) por padrão em toda requisição —
-   o parâmetro de busca livre `q` em `/v1/admin/driver-applications` pode
-   carregar PII de candidato digitada pelo admin, e isso vai pro log de
-   aplicação (fora do controle de acesso que protege `admin_audit_log`).
+**Rodada 3 (2026-11-20, mutação real: aprovar/recusar candidatura) —
+achado novo, IMPORTANTE, ainda sem correção quando esta nota foi escrita:**
+
+**CSRF — token sincronizador (`csrfToken`) tem gap real pela borda que
+`ALLOWED_ORIGINS` precisa manter aberta.** Desenho: token aleatório de 32
+bytes por sessão (`admin-auth-service.ts::loginAdmin`), nunca em cookie, só
+no CORPO de `POST /v1/admin/auth/login` e `GET /v1/admin/me`
+(`admin-auth-route.ts:83,114`), conferido em tempo constante
+(`hooks/require-admin.ts::requireCsrfToken`, `timingSafeEqual`). A premissa
+documentada no código ("origem fora de `ALLOWED_ORIGINS` nunca recebe o
+token") é verdadeira, MAS `ALLOWED_ORIGINS` precisa conter
+`www.vuumbora.com.br` (site público, formulário de candidatura/lista de
+espera) pelo MESMO motivo que precisa conter `admin.vuumbora.com.br` — e o
+CORS é registrado uma vez só, globalmente, em `app.ts:58-71`, com
+`credentials: true` para TODA origem da lista, em TODA rota (não há
+segregação entre rotas públicas e `/v1/admin/*`). Cookie de sessão do admin
+é host-only pra `api.vuumbora.com.br`, mas `SameSite=Lax` não bloqueia o
+envio porque `www.vuumbora.com.br` e `api.vuumbora.com.br` são o MESMO SITE
+(mesmo domínio registrável) — exatamente o cenário que o próprio comentário
+do código em `hooks/require-admin.ts:85-103` descreve como ameaça
+("subdomínio-irmão comprometido, inclusive por XSS"), só que o subdomínio
+mais exposto a XSS de todos (site público, formulário de terceiro,
+dependências de marketing) é precisamente o que TEM que ficar na lista.
+Caminho de ataque: XSS em `www.vuumbora.com.br` → `fetch('.../v1/admin/me',
+{credentials:'include'})` → cookie vai sozinho (same-site) → CORS reflete
+`www.vuumbora.com.br` com `Access-Control-Allow-Credentials: true` → JS lê
+`data.csrfToken` do corpo → CSRF completo contra `/approve`/`/reject`.
+Pré-requisito (XSS no site público) impede classificar como crítico
+isolado, mas a defesa inteira depende de uma premissa que já nasce falsa
+num ponto concreto — não é teórico. Correção sugerida (não escrevi código,
+é auditoria): `@fastify/cors` com `credentials:true` só no contexto
+encapsulado de `/v1/admin/*` e lista de origem restrita a
+`admin.vuumbora.com.br`; rotas públicas sem `credentials` (não usam
+cookie), lista própria com `www.vuumbora.com.br`/`vuumbora.com.br`.
+
+**Confirmado funcionando sem problema (rodada 3):** autorização das rotas
+de mutação (`requireAdminRole('dono','operacao')` seguido de
+`requireCsrfToken`, nesta ordem, `admin-driver-application-route.ts:52-56`);
+idempotência+concorrência resolvidas numa UPDATE atômica só
+(`WHERE id = $1 AND status = 'pending'`,
+`admin-driver-application-repository.ts:208-217` — sem SELECT FOR UPDATE
+separado, o WHERE faz o papel do lock); toda decisão grava em
+`admin_audit_log` com `before`/`after`/motivo (`admin-driver-application-
+service.ts:153-162`), nunca duplicado em replay; motivo de recusa (texto
+de uma pessoa) só vai para `admin_audit_log`/`driver_applications.decision_
+reason` (ambas access-controlled) — varrido todo `request.log`/`console.*`
+do serviço, nenhum log de aplicação grava o texto do motivo.
+
+**Pendências que seguem abertas (reavaliadas em peso na rodada 3, agora
+que existe mutação real com efeito na vida de alguém):**
+
+1. **`admin_audit_log` adulterável em nível de banco** — mesma
+   `DATABASE_URL`/role pra migração e runtime, sem `REVOKE UPDATE, DELETE`
+   numa role de aplicação separada. PESO SUBIU: antes protegia só trilha
+   de LEITURA; agora é o único registro de quem aprovou/recusou uma pessoa
+   real, e appendonly-por-código não resiste a uma credencial vazada ou bug
+   de injeção futuro. Resolver antes do próximo deploy real (é
+   infra/DevOps — Vulcano/Cronos, não rota de API).
+2. **Sem 2FA** — e-mail+senha só, papéis `dono`/`operacao` já conseguem
+   decidir vida real de candidato. PESO SUBIU: antes o risco de conta
+   comprometida era "ver dado"; agora é "ver E DECIDIR". Vira requisito
+   para liberar a mutação em produção, não só para "antes de abrir
+   financeiro".
+3. **CSRF**: item novo acima SUBSTITUI a pendência antiga "resíduo de
+   SameSite=Lax" — a lacuna concreta agora tem nome (origem pública
+   necessariamente na lista de CORS com credentials).
 
 Ver também [[fonte-vem-do-dono]] e [[vuumbora-contexto]] (memórias de
 outros agentes) para contexto geral do produto.

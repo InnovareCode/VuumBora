@@ -13,6 +13,7 @@ import {
 
 const BCRYPT_COST = 12;
 const SESSION_TOKEN_BYTES = 32;
+const CSRF_TOKEN_BYTES = 32;
 
 /**
  * Hash válido, mas de uma senha aleatória que nunca autentica ninguém —
@@ -32,7 +33,14 @@ function sessionExpiry(ttlHours: number): Date {
 }
 
 export type LoginOutcome =
-  | { readonly ok: true; readonly admin: AdminUser; readonly rawToken: string; readonly expiresAt: Date }
+  | {
+      readonly ok: true;
+      readonly admin: AdminUser;
+      readonly rawToken: string;
+      readonly expiresAt: Date;
+      /** Token sincronizador de CSRF desta sessão nova — ver migração 0009. Sai só aqui e em `resolveAdminSession`, nunca em cookie. */
+      readonly csrfToken: string;
+    }
   | { readonly ok: false };
 
 export interface LoginContext {
@@ -60,6 +68,7 @@ export async function loginAdmin(pool: Pool, email: string, password: string, co
   }
 
   const rawToken = randomBytes(SESSION_TOKEN_BYTES).toString('base64url');
+  const csrfToken = randomBytes(CSRF_TOKEN_BYTES).toString('base64url');
   const expiresAt = sessionExpiry(context.ttlHours);
   // Fixado agora, uma única vez — nenhuma renovação deslizante depois disso avança este valor.
   const absoluteExpiresAt = sessionExpiry(context.absoluteTtlHours);
@@ -68,6 +77,7 @@ export async function loginAdmin(pool: Pool, email: string, password: string, co
     tokenHash: hashSessionToken(rawToken),
     expiresAt,
     absoluteExpiresAt,
+    csrfToken,
     ipAddress: context.ipAddress,
     userAgent: context.userAgent,
   });
@@ -77,7 +87,14 @@ export async function loginAdmin(pool: Pool, email: string, password: string, co
     admin: { id: record.id, name: record.name, email: record.email, role: record.role },
     rawToken,
     expiresAt,
+    csrfToken,
   };
+}
+
+export interface ResolvedAdminSession {
+  readonly admin: AdminUser;
+  /** `null` para sessão criada antes da migração 0009 — força o admin a logar de novo para mutar algo. */
+  readonly csrfToken: string | null;
 }
 
 /**
@@ -86,13 +103,13 @@ export async function loginAdmin(pool: Pool, email: string, password: string, co
  * toda resolução bem-sucedida empurra `expires_at` para a frente — sessão
  * em uso não expira no meio do trabalho.
  */
-export async function resolveAdminSession(pool: Pool, rawToken: string, ttlHours: number): Promise<AdminUser | null> {
+export async function resolveAdminSession(pool: Pool, rawToken: string, ttlHours: number): Promise<ResolvedAdminSession | null> {
   const tokenHash = hashSessionToken(rawToken);
   const session = await findActiveAdminSessionByTokenHash(pool, tokenHash);
   if (!session) return null;
 
   await touchAdminSession(pool, session.sessionId, sessionExpiry(ttlHours));
-  return session.admin;
+  return { admin: session.admin, csrfToken: session.csrfToken };
 }
 
 /**

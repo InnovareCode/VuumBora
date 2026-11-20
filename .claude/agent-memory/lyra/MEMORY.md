@@ -47,3 +47,4 @@
 - [Overlay sem armadilha de foco escapa pro fundo](bug_overlay_sem_focus_trap_escapa_para_fundo.md) — gaveta e paleta de comandos do admin; hook `useFocusTrap` compartilhado, testar os DOIS sentidos de Tab.
 - [Painel só-escuro: sem tom claro de uso geral](feedback_painel_dark_only_sem_tom_claro_geral.md) — login do admin portado do ModaShop; "lado claro" virou navy→surface→elevated, não um tom novo.
 - [Asset de marca tem que morar dentro do workspace com Dockerfile](feedback_logomarca_copiada_para_dentro_do_workspace.md) — logomarca do admin copiada de apps/site para apps/admin, por que import cruzado quebra só no Docker.
+- [apps/admin — decisão de candidatura (aprovar/recusar)](project_admin_driver_application_decision.md) — diálogos, CSRF real (minha 1ª assunção estava errada), bug de badge, create-admin.mjs bloqueado p/ Lyra, 409 só verificado por leitura.

@@ -34,9 +34,17 @@ function setSessionCookie(reply: FastifyReply, rawToken: string, expiresAt: Date
   });
 }
 
+/**
+ * Caminhos RELATIVOS ao prefixo `/v1/admin` — aplicado uma vez em
+ * `app.ts` (`{ prefix: '/v1/admin' }`), não mais escrito por extenso em
+ * cada rota. Precisou virar prefixo de registro (não só convenção de
+ * string) para o `@fastify/cors` do contexto admin não colidir com o da
+ * API pública na rota de preflight que ele cria sozinho (`OPTIONS *`) —
+ * ver o comentário em `app.ts`.
+ */
 export function registerAdminAuthRoutes(app: FastifyInstance): void {
   app.post(
-    '/v1/admin/auth/login',
+    '/auth/login',
     {
       config: {
         rateLimit: {
@@ -76,11 +84,15 @@ export function registerAdminAuthRoutes(app: FastifyInstance): void {
       });
 
       request.log.info({ event: 'admin_login_succeeded', adminId: outcome.admin.id });
-      reply.code(200).send({ ok: true, data: outcome.admin });
+      // `csrfToken` sai aqui (corpo da resposta, nunca cookie) — ver
+      // justificativa completa em `hooks/require-admin.ts::requireCsrfToken`.
+      // O painel guarda em memória e reenvia em `X-CSRF-Token` em toda
+      // chamada que muta estado.
+      reply.code(200).send({ ok: true, data: { ...outcome.admin, csrfToken: outcome.csrfToken } });
     },
   );
 
-  app.post('/v1/admin/auth/logout', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.post('/auth/logout', async (request: FastifyRequest, reply: FastifyReply) => {
     const rawToken = request.cookies[ADMIN_SESSION_COOKIE];
     if (rawToken) {
       const admin = await logoutAdmin(pool, rawToken);
@@ -101,7 +113,12 @@ export function registerAdminAuthRoutes(app: FastifyInstance): void {
     reply.code(200).send({ ok: true, data: {} });
   });
 
-  app.get('/v1/admin/me', { preHandler: requireAdmin }, async (request: FastifyRequest, reply: FastifyReply) => {
-    reply.code(200).send({ ok: true, data: request.admin });
+  app.get('/me', { preHandler: requireAdmin }, async (request: FastifyRequest, reply: FastifyReply) => {
+    // Também devolve `csrfToken` — é como o painel RECUPERA o token depois
+    // de um F5 (ele só vivia em memória no browser, nunca em cookie/
+    // localStorage). Sessão criada antes da migração 0009 devolve `null`;
+    // o painel deve tratar isso como "sem token ainda" (mutação vai falhar
+    // com 403 até logar de novo), não quebrar a leitura do perfil.
+    reply.code(200).send({ ok: true, data: { ...request.admin, csrfToken: request.adminCsrfToken ?? null } });
   });
 }

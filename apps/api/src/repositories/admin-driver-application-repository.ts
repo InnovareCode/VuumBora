@@ -9,6 +9,11 @@ import type { DecodedCursor } from '../domain/pagination.js';
 
 export type DriverApplicationStatusFilter = 'pending' | 'approved' | 'rejected';
 
+export interface DriverApplicationDecidedBy {
+  readonly id: string;
+  readonly name: string;
+}
+
 export interface DriverApplicationListItem {
   readonly id: string;
   readonly name: string;
@@ -21,6 +26,10 @@ export interface DriverApplicationListItem {
   readonly status: string;
   readonly source: string;
   readonly createdAt: string;
+  /** `null` enquanto `status === 'pending'`. Migração 0008. */
+  readonly decidedAt: string | null;
+  readonly decidedBy: DriverApplicationDecidedBy | null;
+  readonly decisionReason: string | null;
 }
 
 interface DriverApplicationRow {
@@ -35,6 +44,10 @@ interface DriverApplicationRow {
   status: string;
   source: string;
   created_at: string;
+  decided_at: string | null;
+  decided_by_id: string | null;
+  decided_by_name: string | null;
+  decision_reason: string | null;
   /**
    * `created_at` com precisão de microssegundo, como TEXTO — nunca passa
    * por `Date` do JS (que só guarda milissegundo). Usada SÓ para montar o
@@ -55,11 +68,18 @@ interface DriverApplicationRow {
   created_at_cursor: string;
 }
 
+// `da` (driver_applications) e `d` (admin_users do decisor) precisam de
+// alias — as duas tabelas têm coluna `id`/`name`, e sem alias o resultado
+// colidiria silenciosamente. LEFT JOIN (não INNER): candidatura `pending`
+// tem `decided_by` NULL e ainda assim precisa aparecer na lista/detalhe.
 const SELECT_COLUMNS = `
-  id, name, email, phone, city, state,
-  already_drives_for_app, has_own_vehicle, status, source, created_at,
-  to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_cursor
+  da.id, da.name, da.email, da.phone, da.city, da.state,
+  da.already_drives_for_app, da.has_own_vehicle, da.status, da.source, da.created_at,
+  da.decided_at, da.decision_reason,
+  d.id AS decided_by_id, d.name AS decided_by_name,
+  to_char(da.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_cursor
 `;
+const FROM_WITH_DECIDER_JOIN = `driver_applications da LEFT JOIN admin_users d ON d.id = da.decided_by`;
 
 function mapRow(row: DriverApplicationRow): DriverApplicationListItem {
   return {
@@ -74,6 +94,9 @@ function mapRow(row: DriverApplicationRow): DriverApplicationListItem {
     status: row.status,
     source: row.source,
     createdAt: new Date(row.created_at).toISOString(),
+    decidedAt: row.decided_at ? new Date(row.decided_at).toISOString() : null,
+    decidedBy: row.decided_by_id && row.decided_by_name ? { id: row.decided_by_id, name: row.decided_by_name } : null,
+    decisionReason: row.decision_reason,
   };
 }
 
@@ -106,13 +129,13 @@ export async function listDriverApplications(
 
   if (filter.status) {
     params.push(filter.status);
-    conditions.push(`status = $${params.length}`);
+    conditions.push(`da.status = $${params.length}`);
   }
 
   if (filter.q) {
     params.push(`%${filter.q}%`);
     const paramIndex = params.length;
-    conditions.push(`(name ILIKE $${paramIndex} OR email ILIKE $${paramIndex} OR phone ILIKE $${paramIndex} OR city ILIKE $${paramIndex})`);
+    conditions.push(`(da.name ILIKE $${paramIndex} OR da.email ILIKE $${paramIndex} OR da.phone ILIKE $${paramIndex} OR da.city ILIKE $${paramIndex})`);
   }
 
   if (filter.cursor) {
@@ -120,7 +143,7 @@ export async function listDriverApplications(
     const createdAtIndex = params.length;
     params.push(filter.cursor.id);
     const idIndex = params.length;
-    conditions.push(`(created_at, id) < ($${createdAtIndex}::timestamptz, $${idIndex}::uuid)`);
+    conditions.push(`(da.created_at, da.id) < ($${createdAtIndex}::timestamptz, $${idIndex}::uuid)`);
   }
 
   params.push(filter.limit + 1);
@@ -130,9 +153,9 @@ export async function listDriverApplications(
 
   const result = await pool.query<DriverApplicationRow>(
     `SELECT ${SELECT_COLUMNS}
-     FROM driver_applications
+     FROM ${FROM_WITH_DECIDER_JOIN}
      ${where}
-     ORDER BY created_at DESC, id DESC
+     ORDER BY da.created_at DESC, da.id DESC
      LIMIT $${limitIndex}`,
     params,
   );
@@ -149,11 +172,65 @@ export async function listDriverApplications(
 
 export async function getDriverApplicationById(pool: Pool, id: string): Promise<DriverApplicationListItem | null> {
   const result = await pool.query<DriverApplicationRow>(
-    `SELECT ${SELECT_COLUMNS} FROM driver_applications WHERE id = $1`,
+    `SELECT ${SELECT_COLUMNS} FROM ${FROM_WITH_DECIDER_JOIN} WHERE da.id = $1`,
     [id],
   );
   const row = result.rows[0];
   return row ? mapRow(row) : null;
+}
+
+export type DriverApplicationDecisionAction = 'approved' | 'rejected';
+
+export interface ApplyDriverApplicationDecisionInput {
+  readonly id: string;
+  readonly action: DriverApplicationDecisionAction;
+  readonly decidedBy: string;
+  readonly decisionReason: string | null;
+  readonly idempotencyKey: string;
+}
+
+interface DecisionRow {
+  status: string;
+  decided_at: string;
+  decision_reason: string | null;
+}
+
+/**
+ * `UPDATE ... WHERE status = 'pending'` é a defesa real de concorrência e
+ * idempotência: duas requisições simultâneas (dois cliques, um retry
+ * automático) só deixam UMA mudar a linha — a outra recebe 0 linhas
+ * afetadas (`null` aqui) e o SERVIÇO decide, a partir do estado atual, se
+ * é um retry com a MESMA `Idempotency-Key` (replay: devolve a mesma
+ * resposta de sucesso) ou uma transição inválida de verdade (409). Nenhum
+ * `SELECT ... FOR UPDATE` + `UPDATE` separado é necessário — o `WHERE` já
+ * faz o papel do lock, numa query só.
+ */
+export async function updateDriverApplicationStatus(pool: Pool, input: ApplyDriverApplicationDecisionInput): Promise<DecisionRow | null> {
+  const result = await pool.query<DecisionRow>(
+    `UPDATE driver_applications
+     SET status = $2, decided_by = $3, decided_at = now(), decision_reason = $4, decision_idempotency_key = $5
+     WHERE id = $1 AND status = 'pending'
+     RETURNING status, decided_at, decision_reason`,
+    [input.id, input.action, input.decidedBy, input.decisionReason, input.idempotencyKey],
+  );
+  return result.rows[0] ?? null;
+}
+
+export interface DriverApplicationDecisionState {
+  readonly exists: boolean;
+  readonly status: string;
+  readonly decisionIdempotencyKey: string | null;
+}
+
+/** Só para o serviço decidir, após um `updateDriverApplicationStatus` que não afetou nenhuma linha, se é 404, replay idempotente ou 409. Nunca exposto por rota — não é o formato público. */
+export async function getDriverApplicationDecisionState(pool: Pool, id: string): Promise<DriverApplicationDecisionState | null> {
+  const result = await pool.query<{ status: string; decision_idempotency_key: string | null }>(
+    `SELECT status, decision_idempotency_key FROM driver_applications WHERE id = $1`,
+    [id],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return { exists: true, status: row.status, decisionIdempotencyKey: row.decision_idempotency_key };
 }
 
 export interface DriverApplicationStatusCounts {

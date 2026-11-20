@@ -8,16 +8,22 @@ export interface CreateAdminSessionInput {
   readonly expiresAt: Date;
   /** Teto absoluto, fixado aqui e nunca avançado por `touchAdminSession` — ver migração 0007. */
   readonly absoluteExpiresAt: Date;
+  /**
+   * Token sincronizador de CSRF desta sessão (migração 0009) — guardado em
+   * TEXTO, não hash: ver justificativa completa na própria migração. Nunca
+   * viaja em cookie; só sai no corpo de `admin.login`/`GET /v1/admin/me`.
+   */
+  readonly csrfToken: string;
   readonly ipAddress: string | null;
   readonly userAgent: string | null;
 }
 
 export async function createAdminSession(pool: Pool, input: CreateAdminSessionInput): Promise<string> {
   const result = await pool.query<{ id: string }>(
-    `INSERT INTO admin_sessions (admin_id, token_hash, expires_at, absolute_expires_at, ip_address, user_agent)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO admin_sessions (admin_id, token_hash, expires_at, absolute_expires_at, csrf_token, ip_address, user_agent)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id`,
-    [input.adminId, input.tokenHash, input.expiresAt, input.absoluteExpiresAt, input.ipAddress, input.userAgent],
+    [input.adminId, input.tokenHash, input.expiresAt, input.absoluteExpiresAt, input.csrfToken, input.ipAddress, input.userAgent],
   );
   // INSERT sem ON CONFLICT: a linha é criada agora, sempre existe uma result.rows[0].
   return result.rows[0]!.id;
@@ -26,6 +32,8 @@ export async function createAdminSession(pool: Pool, input: CreateAdminSessionIn
 export interface ActiveAdminSession {
   readonly sessionId: string;
   readonly admin: AdminUser;
+  /** `null` para sessão criada antes da migração 0009 — `requireCsrfToken` sempre recusa `null`. */
+  readonly csrfToken: string | null;
 }
 
 interface SessionRow {
@@ -34,6 +42,7 @@ interface SessionRow {
   name: string;
   email: string;
   role: string;
+  csrf_token: string | null;
 }
 
 /**
@@ -46,7 +55,7 @@ interface SessionRow {
  */
 export async function findActiveAdminSessionByTokenHash(pool: Pool, tokenHash: string): Promise<ActiveAdminSession | null> {
   const result = await pool.query<SessionRow>(
-    `SELECT s.id AS session_id, u.id, u.name, u.email, u.role
+    `SELECT s.id AS session_id, u.id, u.name, u.email, u.role, s.csrf_token
      FROM admin_sessions s
      JOIN admin_users u ON u.id = s.admin_id
      WHERE s.token_hash = $1
@@ -61,6 +70,7 @@ export async function findActiveAdminSessionByTokenHash(pool: Pool, tokenHash: s
   return {
     sessionId: row.session_id,
     admin: { id: row.id, name: row.name, email: row.email, role: row.role as AdminRole },
+    csrfToken: row.csrf_token,
   };
 }
 

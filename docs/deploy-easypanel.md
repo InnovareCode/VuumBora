@@ -341,15 +341,35 @@ explicitamente.
 
 ### Depois de publicar: liberar a origem na API
 
-O painel só funciona se a API aceitar chamadas vindas dele. No serviço
-`vuumbora-backend`, variável `ALLOWED_ORIGINS`, **acrescentar**
-`https://admin.vuumbora.com.br` à lista existente (ver
-`docs/publicar-o-backend.md` §3) — não substituir, é lista fechada separada
-por vírgula:
+O painel só funciona se a API aceitar chamadas vindas dele. São **duas
+listas separadas**, no serviço `vuumbora-backend`:
 
 ```
-ALLOWED_ORIGINS=https://www.vuumbora.com.br,https://vuumbora.com.br,https://admin.vuumbora.com.br
+ALLOWED_ORIGINS=https://www.vuumbora.com.br,https://vuumbora.com.br
+ADMIN_ALLOWED_ORIGINS=https://admin.vuumbora.com.br
 ```
+
+⚠️ **Esta instrução mudou em 20/11/2026, e a versão anterior era insegura.**
+Até aqui este guia mandava **acrescentar** o domínio do painel à mesma
+`ALLOWED_ORIGINS` do site — e foi o que se fez na primeira publicação. O
+Órion encontrou o problema ao auditar a primeira rota que muda estado: com as
+duas origens na mesma lista e credenciais ligadas para todas as rotas de uma
+vez, um XSS no **site público** (a maior superfície de ataque do sistema,
+porque tem formulário aberto a qualquer pessoa) conseguiria ler a resposta de
+`/v1/admin/me`, roubar o token de CSRF e aprovar ou recusar candidatura em
+nome de um administrador.
+
+**Ao atualizar o backend para a versão com as duas listas:**
+1. Crie `ADMIN_ALLOWED_ORIGINS` com **apenas** o domínio do painel. Ela é
+   **obrigatória** — a API não sobe sem ela, e o site cai junto, porque é a
+   mesma API que atende o formulário de candidatura. **Preencha antes de
+   publicar.**
+2. **Remova** `https://admin.vuumbora.com.br` de `ALLOWED_ORIGINS`. O painel
+   não é atendido por aquela lista, e deixar o domínio ali só reabre a
+   confusão que causou o problema.
+
+Nunca ponha o domínio do painel na lista pública, nem o do site na lista do
+painel.
 
 Sem isso, o navegador bloqueia o próprio painel por CORS — o sintoma parece
 "o sistema caiu", não "faltou um domínio numa variável" (mesmo alerta já

@@ -1,6 +1,7 @@
 import type { AdminLoginInput, AdminUser } from './types';
 import type { Result } from './result';
 import { createHttpRequester } from './client';
+import { clearCsrfToken, setCsrfToken } from './csrf';
 
 export interface AuthPort {
   login(input: AdminLoginInput): Promise<Result<AdminUser>>;
@@ -8,12 +9,46 @@ export interface AuthPort {
   logout(): Promise<Result<void>>;
 }
 
+/**
+ * Resposta real de login/`/me` (contrato fechado com a Vega, 20/11/2026):
+ * mesmos campos de `AdminUser` + `csrfToken` no MESMO objeto `data` — nunca
+ * em `Set-Cookie` (ver `src/api/csrf.ts` pelo porquê). Tipo só existe aqui
+ * dentro: quem consome a porta (`AuthContext`) nunca precisa saber de CSRF.
+ */
+interface AdminSessionResponse extends AdminUser {
+  /** `null` para sessão criada antes da migração 0009 — mutação falha com `csrf_invalid` até logar de novo (ver `src/api/result.ts`). */
+  readonly csrfToken: string | null;
+}
+
+/** Guarda o token em memória e devolve só os campos de `AdminUser` para o resto do app. */
+function captureCsrfToken(session: AdminSessionResponse): AdminUser {
+  const { csrfToken, ...admin } = session;
+  setCsrfToken(csrfToken);
+  return admin;
+}
+
 export function createHttpAuthAdapter(baseUrl: string): AuthPort {
   const request = createHttpRequester(baseUrl);
   return {
-    login: (input) => request<AdminUser>({ path: '/v1/admin/auth/login', method: 'POST', body: input }),
-    me: () => request<AdminUser>({ path: '/v1/admin/me' }),
-    logout: () => request<void>({ path: '/v1/admin/auth/logout', method: 'POST' }),
+    async login(input) {
+      const result = await request<AdminSessionResponse>({ path: '/v1/admin/auth/login', method: 'POST', body: input });
+      if (!result.ok) return result;
+      return { ...result, data: captureCsrfToken(result.data) };
+    },
+    async me() {
+      const result = await request<AdminSessionResponse>({ path: '/v1/admin/me' });
+      if (!result.ok) return result;
+      return { ...result, data: captureCsrfToken(result.data) };
+    },
+    async logout() {
+      const result = await request<void>({ path: '/v1/admin/auth/logout', method: 'POST' });
+      // Limpa sempre, mesmo se a chamada falhar — mesma política do
+      // AuthContext, que já zera admin/origin local independente do
+      // resultado (um token de sessão que a UI está abandonando não serve
+      // para a próxima, falhou ou não a chamada ao servidor).
+      clearCsrfToken();
+      return result;
+    },
   };
 }
 

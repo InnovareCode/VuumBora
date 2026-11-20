@@ -17,10 +17,49 @@ const schema = z.object({
   /** String de conexão do Postgres (serviço `vuumbora-banco` no Easypanel). */
   DATABASE_URL: z.string().min(1, 'DATABASE_URL é obrigatório'),
 
-  /** Lista separada por vírgula. Sem isso o CORS bloqueia o site. */
+  /**
+   * Lista separada por vírgula — origens do SITE PÚBLICO (`/v1/waitlist`,
+   * `/v1/driver-applications`). Sem isso o CORS bloqueia o site.
+   *
+   * Achado do Órion (auditoria de 20/11/2026, "Rodada 3"): até aqui esta
+   * variável também continha o domínio do painel admin, e um ÚNICO
+   * registro de `@fastify/cors` (global, `credentials:true`) valia para
+   * TODA rota — inclusive as públicas. Como o site é a superfície mais
+   * exposta a XSS de terceiro, um XSS ali conseguia `fetch('/v1/admin/me',
+   * {credentials:'include'})`: o cookie de sessão do admin viaja sozinho
+   * (same-site, `SameSite=Lax` não bloqueia), o CORS refletia a origem do
+   * site COM credenciais (porque ela precisava estar na lista por outro
+   * motivo legítimo), e o atacante lia `data.csrfToken` do corpo — CSRF
+   * completo contra `/approve`/`/reject` apesar do token sincronizador.
+   *
+   * Correção: esta variável e `ADMIN_ALLOWED_ORIGINS` (abaixo) agora
+   * alimentam DOIS registros SEPARADOS de `@fastify/cors`, em contextos
+   * encapsulados diferentes (`app.ts`) — rotas públicas nunca usam cookie
+   * e aqui NUNCA recebem `credentials:true`, não importa quem esteja
+   * nesta lista.
+   */
   ALLOWED_ORIGINS: z
     .string()
     .min(1, 'ALLOWED_ORIGINS é obrigatório (lista separada por vírgula)')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter((origin) => origin.length > 0),
+    ),
+
+  /**
+   * Lista separada por vírgula — origens do PAINEL ADMIN
+   * (`/v1/admin/*`), a ÚNICA família de rota com `credentials:true`
+   * (cookie de sessão httpOnly). NUNCA inclua aqui o domínio do site
+   * público, mesmo que pareça conveniente "unificar" — é exatamente essa
+   * mistura que o achado do Órion corrigiu. Produção:
+   * `https://admin.vuumbora.com.br`. Local: porta dev do `apps/admin`
+   * (ver `apps/admin/vite.config.ts`).
+   */
+  ADMIN_ALLOWED_ORIGINS: z
+    .string()
+    .min(1, 'ADMIN_ALLOWED_ORIGINS é obrigatório (lista separada por vírgula) — nunca reaproveite ALLOWED_ORIGINS aqui')
     .transform((value) =>
       value
         .split(',')

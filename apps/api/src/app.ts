@@ -55,15 +55,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   // `reply.setCookie`/`clearCookie`.
   await app.register(cookie);
 
-  await app.register(cors, {
-    origin: env.ALLOWED_ORIGINS,
-    methods: ['GET', 'POST'],
-    // Exigido pelo cookie httpOnly de sessão do admin: sem isso o navegador
-    // nunca manda nem aceita `Set-Cookie` em requisição cross-origin (o
-    // painel admin e esta API vivem em subdomínios diferentes).
-    credentials: true,
-  });
-
   // Limite global de defesa (além do limite mais estrito da rota de inscrição, abaixo).
   // IMPORTANTE: o plugin dá `throw` no retorno de `errorResponseBuilder` (ver
   // seu index.js) — por isso ele só precisa de `statusCode: 429`; o corpo
@@ -80,11 +71,71 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
   });
 
-  registerHealthRoute(app);
-  registerWaitlistRoute(app);
-  registerDriverApplicationRoute(app);
-  registerAdminAuthRoutes(app);
-  registerAdminDriverApplicationRoutes(app);
+  // Dois registros SEPARADOS de `@fastify/cors`, em dois contextos
+  // ENCAPSULADOS (cada `app.register(async (instance) => {...})` cria um
+  // filho isolado no Fastify) — achado do Órion (auditoria "Rodada 3",
+  // `.claude/agent-memory/orion/project_admin_v0_seguranca.md`): um único
+  // registro global com `credentials:true` valia para toda origem da
+  // lista EM TODA ROTA, inclusive as públicas. Isso deixava o site
+  // público (superfície mais exposta a XSS de terceiro, formulário aberto
+  // a qualquer um) carregar `credentials:true` só porque precisava estar
+  // em alguma lista de CORS — um XSS ali conseguiria `fetch('/v1/admin/me',
+  // {credentials:'include'})`, receber o cookie de sessão do admin (mesmo
+  // site, `SameSite=Lax` não bloqueia) E a resposta com credenciais,
+  // lendo `data.csrfToken` do corpo. A defesa de CSRF inteira
+  // (`hooks/require-admin.ts::requireCsrfToken`) dependia de uma premissa
+  // ("origem fora da lista nunca recebe o token") que já nascia falsa.
+  //
+  // Agora: rotas PÚBLICAS (`/v1/waitlist`, `/v1/driver-applications`,
+  // `/health`) nunca usam cookie — CORS aqui nunca tem `credentials:true`,
+  // não importa quem esteja em `ALLOWED_ORIGINS`. Rotas `/v1/admin/*` são
+  // as ÚNICAS com `credentials:true`, e só para origem em
+  // `ADMIN_ALLOWED_ORIGINS` — uma lista SEPARADA que nunca deve conter o
+  // domínio do site público.
+  await app.register(async function publicRoutes(instance) {
+    await instance.register(cors, {
+      origin: env.ALLOWED_ORIGINS,
+      methods: ['GET', 'POST'],
+      credentials: false,
+    });
+
+    registerHealthRoute(instance);
+    registerWaitlistRoute(instance);
+    registerDriverApplicationRoute(instance);
+  });
+
+  // `prefix: '/v1/admin'` não é só estética: `@fastify/cors` registra uma
+  // rota `OPTIONS *` própria para responder preflight (mesmo arquivo,
+  // `fastify.options('*', ...)`), e como o plugin é `fastify-plugin`
+  // (não cria um novo nível de encapsulamento sozinho), essa rota usa o
+  // PREFIXO do contexto em que foi chamado. Sem um prefixo aqui, as DUAS
+  // chamadas a `instance.register(cors, ...)` (pública e admin) tentariam
+  // registrar a MESMA rota `OPTIONS *` sem prefixo e o Fastify recusa o
+  // boot inteiro (`FST_ERR_DUPLICATED_ROUTE`) — só apareceu rodando de
+  // verdade, não no typecheck. Com o prefixo, a rota de preflight do
+  // admin vira `OPTIONS /v1/admin/*`, distinta da pública.
+  await app.register(async function adminRoutes(instance) {
+    await instance.register(cors, {
+      origin: env.ADMIN_ALLOWED_ORIGINS,
+      methods: ['GET', 'POST'],
+      // Única família de rota com cookie de sessão httpOnly — sem isso o
+      // navegador nunca manda nem aceita `Set-Cookie` em requisição
+      // cross-origin (o painel admin e esta API vivem em subdomínios
+      // diferentes). `env.ADMIN_ALLOWED_ORIGINS` é curta e fechada
+      // (só o domínio do painel), nunca a lista do site público.
+      credentials: true,
+      // Explícito, não o default (reflete de volta qualquer cabeçalho
+      // pedido no preflight) — `X-CSRF-Token`
+      // (`hooks/require-admin.ts::requireCsrfToken`) e `Idempotency-Key`
+      // (aprovar/recusar candidatura) precisam passar no preflight, e
+      // listar por nome documenta a intenção em vez de depender de um
+      // comportamento implícito do plugin.
+      allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'Idempotency-Key'],
+    });
+
+    registerAdminAuthRoutes(instance);
+    registerAdminDriverApplicationRoutes(instance);
+  }, { prefix: '/v1/admin' });
 
   app.setNotFoundHandler((_request, reply) => {
     reply.code(404).send({ ok: false, error: { code: 'not_found', message: 'Rota não encontrada.' } });

@@ -10,7 +10,10 @@ import { insertAuditLog } from '../repositories/admin-audit-repository.js';
 import {
   countDriverApplicationsByStatus,
   getDriverApplicationById,
+  getDriverApplicationDecisionState,
   listDriverApplications,
+  updateDriverApplicationStatus,
+  type DriverApplicationDecisionAction,
   type DriverApplicationListItem,
   type DriverApplicationStatusCounts,
   type DriverApplicationStatusFilter,
@@ -94,4 +97,120 @@ export async function getDriverApplicationForAdmin(
 /** Contagem agregada não lê dado pessoal individual — não precisa de entrada em admin_audit_log (só a regra de "leitura de candidatura" pede auditoria). */
 export async function getDriverApplicationSummary(pool: Pool): Promise<DriverApplicationStatusCounts> {
   return countDriverApplicationsByStatus(pool);
+}
+
+export interface DecisionContext extends AuditContext {
+  readonly adminName: string;
+  readonly idempotencyKey: string;
+}
+
+export interface DriverApplicationDecisionResult {
+  readonly id: string;
+  readonly status: DriverApplicationDecisionAction;
+  readonly decidedAt: string;
+  readonly decidedBy: { readonly id: string; readonly name: string };
+  readonly decisionReason: string | null;
+}
+
+export type DecideDriverApplicationOutcome =
+  | { readonly ok: true; readonly data: DriverApplicationDecisionResult; readonly replayed: boolean }
+  | { readonly ok: false; readonly reason: 'not_found' }
+  | { readonly ok: false; readonly reason: 'invalid_transition' };
+
+/**
+ * Núcleo comum de aprovar/recusar. `action`/`reason` já vêm validados pela
+ * rota (motivo obrigatório só para `rejected`). Idempotência e concorrência
+ * nascem da mesma query (`updateDriverApplicationStatus`, `WHERE status =
+ * 'pending'`) — ver o comentário lá. Esta função só interpreta o
+ * resultado:
+ *
+ * 1. Linha afetada → decisão aplicada agora. Audita e devolve `replayed:
+ *    false`.
+ * 2. Nenhuma linha afetada → candidatura não existe (404), OU já tinha
+ *    sido decidida. Se foi decidida com a MESMA `Idempotency-Key` e para o
+ *    MESMO `action` (retry de uma chamada cujo resultado o cliente não viu
+ *    — rede caiu, timeout), devolve a MESMA resposta de sucesso, sem gravar
+ *    auditoria nova (não houve decisão nova, só a confirmação de uma já
+ *    existente). Qualquer outro caso com a linha já decidida é 409 —
+ *    inclusive repetir a chamada com uma chave DIFERENTE, ou tentar a ação
+ *    contrária.
+ */
+async function decideDriverApplication(
+  pool: Pool,
+  id: string,
+  action: DriverApplicationDecisionAction,
+  reason: string | null,
+  context: DecisionContext,
+): Promise<DecideDriverApplicationOutcome> {
+  const applied = await updateDriverApplicationStatus(pool, {
+    id,
+    action,
+    decidedBy: context.adminId,
+    decisionReason: reason,
+    idempotencyKey: context.idempotencyKey,
+  });
+
+  if (applied) {
+    await insertAuditLog(pool, {
+      adminId: context.adminId,
+      action: action === 'approved' ? 'driver_application.approved' : 'driver_application.rejected',
+      targetType: 'driver_application',
+      targetId: id,
+      before: { status: 'pending' },
+      after: { status: action, reason },
+      ipAddress: context.ipAddress,
+    });
+
+    return {
+      ok: true,
+      replayed: false,
+      data: {
+        id,
+        status: action,
+        decidedAt: new Date(applied.decided_at).toISOString(),
+        decidedBy: { id: context.adminId, name: context.adminName },
+        decisionReason: applied.decision_reason,
+      },
+    };
+  }
+
+  const state = await getDriverApplicationDecisionState(pool, id);
+  if (!state) return { ok: false, reason: 'not_found' };
+
+  const isSameDecisionReplay = state.status === action && state.decisionIdempotencyKey === context.idempotencyKey;
+  if (!isSameDecisionReplay) return { ok: false, reason: 'invalid_transition' };
+
+  // Replay: busca a linha completa (já decidida) para devolver a MESMA
+  // resposta de sucesso — sem tocar em `admin_audit_log` de novo.
+  const existing = await getDriverApplicationById(pool, id);
+  if (!existing || !existing.decidedAt || !existing.decidedBy) {
+    // Defensivo: `state.status !== 'pending'` já implica `decidedAt`/`decidedBy`
+    // preenchidos pela própria UPDATE que os gravou — nunca deveria cair aqui.
+    return { ok: false, reason: 'invalid_transition' };
+  }
+
+  return {
+    ok: true,
+    replayed: true,
+    data: {
+      id: existing.id,
+      status: action,
+      decidedAt: existing.decidedAt,
+      decidedBy: existing.decidedBy,
+      decisionReason: existing.decisionReason,
+    },
+  };
+}
+
+export async function approveDriverApplicationForAdmin(pool: Pool, id: string, context: DecisionContext): Promise<DecideDriverApplicationOutcome> {
+  return decideDriverApplication(pool, id, 'approved', null, context);
+}
+
+export async function rejectDriverApplicationForAdmin(
+  pool: Pool,
+  id: string,
+  reason: string,
+  context: DecisionContext,
+): Promise<DecideDriverApplicationOutcome> {
+  return decideDriverApplication(pool, id, 'rejected', reason, context);
 }

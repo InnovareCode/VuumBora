@@ -19,6 +19,20 @@ export interface DriverApplication {
   readonly status: DriverApplicationStatus;
   readonly source: string;
   readonly createdAt: string;
+  /** `null` enquanto `status === 'pending'` — nenhuma decisão ainda. */
+  readonly decidedAt: string | null;
+  readonly decidedBy: { readonly id: string; readonly name: string } | null;
+  /** Só preenchido em recusa; `null` em aprovação ou candidatura pendente. */
+  readonly decisionReason: string | null;
+}
+
+/** Resposta de `POST .../approve` e `POST .../reject` (contrato fixo desta entrega). */
+export interface DriverApplicationDecision {
+  readonly id: string;
+  readonly status: DriverApplicationStatus;
+  readonly decidedAt: string;
+  readonly decidedBy: { readonly id: string; readonly name: string };
+  readonly decisionReason?: string;
 }
 
 export interface DriverApplicationSummary {

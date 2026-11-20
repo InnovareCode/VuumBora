@@ -3,3 +3,4 @@
 - [Admin v0 — login e leitura de candidaturas](project_admin_v0.md) — admin_users/admin_audit_log/admin_sessions, papéis+requireAdminRole, teto absoluto de sessão, contrato {ok,data}
 - [Cursor de paginação perde linha por precisão de timestamp](feedback_cursor_pagination_timestamp_precision.md) — Date do JS trunca microssegundo do Postgres; testar sempre com 2+ linhas no mesmo INSERT
 - [Logger Fastify grava querystring inteira](feedback_fastify_logger_querystring_pii.md) — serializer req padrão loga query com PII; sempre registrar serializers.req custom no serviço inteiro
+- [Admin v0 — aprovar/recusar candidatura](project_admin_v0_aprovar_recusar.md) — CSRF via corpo (não cookie), idempotência por UPDATE WHERE status=pending, migrações 0008/0009

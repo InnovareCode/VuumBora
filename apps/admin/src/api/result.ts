@@ -12,6 +12,13 @@ export type ApiError =
   | { readonly kind: 'network'; readonly retryable: true }
   | { readonly kind: 'unauthorized' }
   | { readonly kind: 'forbidden' }
+  /**
+   * 403 específico (`error.code === 'csrf_token_invalid'`) — sessão sem
+   * token de CSRF válido (ex.: sessão criada antes da migração 0009, ver
+   * `apps/api/src/routes/admin-auth-route.ts`). Diferente de `forbidden`
+   * porque a saída é outra: nenhum retry resolve, só logar de novo.
+   */
+  | { readonly kind: 'csrf_invalid' }
   | { readonly kind: 'not_found' }
   | { readonly kind: 'conflict'; readonly reason: string }
   | { readonly kind: 'validation'; readonly fields: Readonly<Record<string, string>> }
@@ -32,6 +39,8 @@ export function errorMessage(error: ApiError): string {
       return 'Sua sessão expirou. Entre novamente.';
     case 'forbidden':
       return 'Seu usuário não tem permissão para ver isto.';
+    case 'csrf_invalid':
+      return 'Sua sessão não pôde confirmar esta ação por segurança. Saia e entre novamente para continuar.';
     case 'not_found':
       return 'Não encontramos esse registro.';
     case 'conflict':

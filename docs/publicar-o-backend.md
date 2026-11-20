@@ -94,11 +94,27 @@ Na aba de **variáveis de ambiente**:
 |---|---|
 | `DATABASE_URL` | a string interna do passo 1 |
 | `ALLOWED_ORIGINS` | `https://www.vuumbora.com.br,https://vuumbora.com.br` |
+| `ADMIN_ALLOWED_ORIGINS` | `https://admin.vuumbora.com.br` |
 | `PORT` | `3000` |
 | `TRUST_PROXY` | `true` |
 
-As duas primeiras são obrigatórias: a API se recusa a subir sem elas, de
-propósito, para nunca rodar com banco vazio em silêncio. `TRUST_PROXY` importa
+⚠️ **`ADMIN_ALLOWED_ORIGINS` é obrigatória e nasceu em 20/11/2026** — a API
+**não sobe sem ela**. Quem republicar o backend sem preenchê-la primeiro
+derruba junto o formulário de candidatura do site, que depende da mesma API.
+**Preencha antes de publicar**, não depois.
+
+**As duas listas são separadas de propósito, e não devem se misturar:**
+`ALLOWED_ORIGINS` é do site público, sem cookie e **sem credenciais**;
+`ADMIN_ALLOWED_ORIGINS` é só do painel, a única família de rotas que usa
+cookie de sessão. Juntar as duas foi exatamente o furo de CSRF que o Órion
+encontrou: com o site na mesma lista que o painel e credenciais ligadas
+globalmente, um XSS no site público conseguiria ler a resposta de
+`/v1/admin/me`, roubar o token de CSRF e decidir candidaturas em nome de um
+administrador. Nunca ponha o domínio do painel na lista pública, nem o do
+site na lista do painel.
+
+As três primeiras são obrigatórias: a API se recusa a subir sem elas, de
+propósito, para nunca rodar com banco vazio nem com CORS aberto em silêncio. `TRUST_PROXY` importa
 porque o limite de requisições conta por IP, e atrás do proxy do Easypanel todo
 mundo chegaria com o mesmo endereço sem isso.
 

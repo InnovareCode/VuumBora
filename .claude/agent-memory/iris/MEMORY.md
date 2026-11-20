@@ -6,3 +6,5 @@
 - [tsx watch pode falhar restart com EADDRINUSE](feedback_tsx_watch_eaddrinuse_restart_falho.md) — processo antigo continua no ar; cuidado em teste de mutação
 - [Login premium sem oráculo de conta](project_admin_v0_login_premium_oraculo_ok.md) — mesma mensagem/cor pras 3 causas de 401, 429 dispara mesmo com credencial certa
 - [Logomarca oficial no admin](project_admin_v0_logomarca_oficial.md) — 3 lugares, sem texto residual, nitidez 2x medida por naturalWidth/renderedWidth
+- [Aprovar/recusar candidatura revalidado](project_admin_v0_aprovar_recusar_revalidado.md) — todos os casos do Vega refeitos, concorrência real provada 3x + 2 abas na UI; CORS segregado ainda pendente
+- [CORS segregado (admin x site)](project_admin_v0_cors_segregado.md) — boot ok, site bloqueado por navegador real (não só curl), rota pública intacta

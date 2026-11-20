@@ -1,1 +1,1 @@
-- [Admin v0 — segurança](project_admin_v0_seguranca.md) — auditoria 2026-11-20: sem crítico; pendências RBAC/role de banco para audit log/2FA antes da próxima fatia
+- [Admin v0 — segurança](project_admin_v0_seguranca.md) — 3 rodadas 2026-11-20: RBAC/PII-log/teto-sessão resolvidos; gap de CSRF via CORS+www público (IMPORTANTE); domínio certo é admin.vuumbora.com.br
