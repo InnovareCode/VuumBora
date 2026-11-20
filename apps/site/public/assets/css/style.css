@@ -109,6 +109,12 @@ h1, h2, h3 {
   letter-spacing: -0.035em;
   line-height: 1.1;
 }
+.section-head p {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: 1rem;
+  max-width: 48ch;
+}
 @media (max-width: 640px) {
   .section-head { margin-bottom: 28px; }
 }
@@ -161,14 +167,53 @@ summary:focus-visible,
   color: var(--text-primary);
 }
 
-/* ---------- rótulos (mono) ---------- */
+/* ---------- rótulos (mono) ----------
+   `.eyebrow` é o ÚNICO rótulo amarelo, e só existe um por seção (regra do
+   amarelo, item 3). Rótulo de cartão, de slide e de estação da linha do
+   tempo usam `.label-muted`: mesma fonte, cor `--text-secondary` — a regra
+   proíbe amarelo nesses três lugares. */
 .eyebrow,
-.reason-card__label {
+.label-muted {
   font-family: var(--font-mono);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.14em;
   font-size: 0.8rem;
+}
+.eyebrow {
+  color: var(--accent);
+}
+.label-muted {
+  color: var(--text-secondary);
+}
+
+/*
+  `strong` tem `font-weight: bolder` por padrão, e "bolder" a partir de 800
+  resolve para 900. Esta página carrega só Poppins 500 e 800, então o 900
+  não existe: o navegador ENGROSSA o 800 artificialmente, e o traço sai
+  sujo, diferente do resto dos títulos.
+
+  Medido em 20/11/2026: os cinco `<strong>` dos títulos do carrossel
+  renderizavam em 900. É a terceira vez que peso inexistente passa neste
+  projeto (antes foi o 700 do formulário e o itálico falso do carrossel),
+  e por isso a correção aqui é geral, não caso a caso.
+
+  `inherit` mantém a semântica do `strong` e entrega o destaque pela cor.
+*/
+strong {
+  font-weight: inherit;
+}
+
+/* ---------- fecho amarelo dos títulos (regra do amarelo, item 2) ----------
+   Uma frase por título, sempre a parte final, Poppins 800 (herdado de
+   h1/h2/h3 ou do peso explícito do próprio título), nunca em itálico. */
+h2 em,
+h3 em,
+h2 strong,
+h3 strong,
+.carousel-card__title em,
+.carousel-card__title strong {
+  font-style: normal;
   color: var(--accent);
 }
 
@@ -537,14 +582,47 @@ summary:focus-visible,
   .after-journey > section {
     padding-block: 112px;
   }
-  /* O compromisso é uma faixa, não uma seção com título: entra mais
-     perto do que vem antes e depois, mesmo no desktop. */
-  .after-journey > section.commitment-section {
-    padding-block: 72px;
+}
+
+/* ---------- motivos ----------
+   "A rota passa e o motivo acende" (direção de 20/11/2026): um trilho de
+   2px atravessa o topo da grade só a partir de 1100px (abaixo disso os
+   cartões disparam cada um por si, sem linha ligando). Estado final —
+   pino aceso, trilho desenhado, fecho amarelo — é o padrão do CSS; o JS
+   arma (`data-armed`) antes de o trecho entrar na tela, no mesmo padrão
+   do `.reveal`. Sem JS ou com movimento reduzido, nasce já aceso. */
+.reasons__track-wrap {
+  position: relative;
+}
+.reasons__rail {
+  display: none;
+}
+@media (min-width: 1100px) {
+  .reasons__rail {
+    display: block;
+    position: absolute;
+    top: 6px;
+    left: 20px;
+    right: 20px;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+  }
+  .reasons__rail-fill {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: var(--accent);
+    transform-origin: left center;
+    transform: scaleX(1);
+    transition: transform 1.2s linear;
+    transition-delay: 300ms;
+  }
+  .reasons__track-wrap[data-armed="true"] .reasons__rail-fill {
+    transform: scaleX(0);
   }
 }
 
-/* ---------- motivos ---------- */
 .reasons__grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -554,7 +632,7 @@ summary:focus-visible,
   .reasons__grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (min-width: 1100px) {
-  .reasons__grid { grid-template-columns: repeat(4, 1fr); }
+  .reasons__grid { grid-template-columns: repeat(4, 1fr); margin-top: 6px; }
 }
 .reason-card {
   position: relative;
@@ -563,97 +641,514 @@ summary:focus-visible,
   border-radius: 20px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)), #111B25;
   border: 1px solid rgba(255, 255, 255, 0.07);
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  transition: border-color 0.2s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.6s ease;
 }
 /* Antes, o texto terminava em alturas diferentes entre cartões e o
    cartão 3 sobrava ~70px de painel vazio embaixo. O min-height iguala
    o fundo dos quatro; some abaixo de 640px (1 coluna, sem razão pra
    igualar). */
-.reason-card::before {
-  content: '';
-  display: block;
-  width: 28px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--accent);
-  margin-bottom: 20px;
-}
 .reason-card:hover {
   border-color: rgba(255, 204, 0, 0.32);
   transform: translateY(-2px);
 }
-.reason-card__label {
-  display: block;
-  font-size: 0.6875rem;
-  letter-spacing: 0.16em;
+/* Luz que segue o cursor, só com mouse de verdade (regra 5 da seção de
+   animações): no toque nada se move, então nem o custo do listener de
+   pointermove entra em jogo (ver initReasonCards). */
+@media (hover: hover) and (pointer: fine) {
+  .reason-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(280px circle at var(--mx, 50%) var(--my, 50%), rgba(136, 103, 73, 0.22), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.24s ease;
+    pointer-events: none;
+  }
+  .reason-card:hover::before {
+    opacity: 1;
+  }
+  .reason-card:hover {
+    transform: translateY(-4px);
+  }
 }
+
+/* Pino de 12px no canto superior esquerdo, sobre a borda do cartão.
+   Estado final (aceso) é o padrão: miolo e borda amarelos. Enquanto
+   armado (ver regras mais abaixo), some para --canvas/--accent-muted e
+   o pulso para de tocar. */
+.reason-card__pin {
+  position: absolute;
+  top: -6px;
+  left: 20px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--accent);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  z-index: 1;
+}
+.reason-card__pin::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+  animation: reason-pin-pulse 500ms ease-out;
+}
+@keyframes reason-pin-pulse {
+  from { transform: scale(1); opacity: 0.5; }
+  to { transform: scale(2.2); opacity: 0; }
+}
+
+/* Brilho quente no canto, aceso por padrão, some enquanto o cartão
+   está armado. */
 .reason-card__title {
+  position: relative;
   font-size: 1.375rem;
   letter-spacing: -0.03em;
   line-height: 1.2;
-  margin: 10px 0;
+  margin: 18px 0 10px;
+}
+.reason-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 80% at 0 0, rgba(136, 103, 73, 0.16), transparent 60%);
+  opacity: 1;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+.reason-card__title em {
+  transition: color 320ms ease;
 }
 .reason-card__body {
   color: var(--text-secondary);
   font-size: 0.9375rem;
   line-height: 1.6;
 }
+
+/* Entrada por cartão: cada um sobe 24px em 600ms. Em telas largas, os
+   quatro disparam juntos (gatilho na grade, 40% visível) com atraso
+   escalonado de 90ms; abaixo de 1100px cada cartão dispara sozinho a
+   50% visível, sem atraso entre eles. */
+[data-armed="true"] .reason-card,
+.reason-card[data-armed="true"] {
+  opacity: 0;
+  transform: translateY(24px);
+}
+[data-armed="true"] .reason-card .reason-card__pin,
+.reason-card[data-armed="true"] .reason-card__pin {
+  background: var(--canvas);
+  border-color: var(--accent-muted);
+}
+[data-armed="true"] .reason-card .reason-card__pin::after,
+.reason-card[data-armed="true"] .reason-card__pin::after {
+  animation: none;
+  opacity: 0;
+}
+[data-armed="true"] .reason-card .reason-card__title em,
+.reason-card[data-armed="true"] .reason-card__title em {
+  color: var(--text-primary);
+}
+[data-armed="true"] .reason-card::after,
+.reason-card[data-armed="true"]::after {
+  opacity: 0;
+}
+@media (min-width: 1100px) {
+  .reasons__grid > .reason-card:nth-child(1) { transition-delay: 0ms; }
+  .reasons__grid > .reason-card:nth-child(2) { transition-delay: 90ms; }
+  .reasons__grid > .reason-card:nth-child(3) { transition-delay: 180ms; }
+  .reasons__grid > .reason-card:nth-child(4) { transition-delay: 270ms; }
+  .reasons__grid > .reason-card:nth-child(1) .reason-card__pin,
+  .reasons__grid > .reason-card:nth-child(1) .reason-card__pin::after,
+  .reasons__grid > .reason-card:nth-child(1) .reason-card__title em { transition-delay: 300ms; animation-delay: 300ms; }
+  .reasons__grid > .reason-card:nth-child(2) .reason-card__pin,
+  .reasons__grid > .reason-card:nth-child(2) .reason-card__pin::after,
+  .reasons__grid > .reason-card:nth-child(2) .reason-card__title em { transition-delay: 700ms; animation-delay: 700ms; }
+  .reasons__grid > .reason-card:nth-child(3) .reason-card__pin,
+  .reasons__grid > .reason-card:nth-child(3) .reason-card__pin::after,
+  .reasons__grid > .reason-card:nth-child(3) .reason-card__title em { transition-delay: 1100ms; animation-delay: 1100ms; }
+  .reasons__grid > .reason-card:nth-child(4) .reason-card__pin,
+  .reasons__grid > .reason-card:nth-child(4) .reason-card__pin::after,
+  .reasons__grid > .reason-card:nth-child(4) .reason-card__title em { transition-delay: 1500ms; animation-delay: 1500ms; }
+  .reasons__grid > .reason-card:nth-child(1)::after { transition-delay: 300ms; }
+  .reasons__grid > .reason-card:nth-child(2)::after { transition-delay: 700ms; }
+  .reasons__grid > .reason-card:nth-child(3)::after { transition-delay: 1100ms; }
+  .reasons__grid > .reason-card:nth-child(4)::after { transition-delay: 1500ms; }
+}
+@media (max-width: 1099.98px) {
+  .reason-card .reason-card__pin,
+  .reason-card .reason-card__pin::after,
+  .reason-card .reason-card__title em,
+  .reason-card::after {
+    transition-delay: 250ms;
+    animation-delay: 250ms;
+  }
+}
+
 @media (max-width: 640px) {
   .reason-card { min-height: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .reason-card { transition: border-color 0.2s ease; }
+  .reason-card {
+    transition: border-color 0.2s ease;
+    opacity: 1;
+    transform: none;
+  }
   .reason-card:hover { transform: none; }
+  .reason-card__pin::after { animation: none; opacity: 0; }
 }
 
-/* ---------- compromisso público ----------
-   Antes: fundo rgba(255,204,0,.18) sobre #0A1119 dava ~#36331A, um
-   verde-oliva sujo fora da paleta, com borda amarela sólida — parecia
-   alerta de sistema, não promessa da marca. */
-.commitment {
-  max-width: 880px;
-  margin-inline: auto;
-  display: grid;
-  grid-template-columns: 56px 1fr;
-  gap: 24px;
-  align-items: start;
-  padding: 36px 40px;
-  border-radius: 24px;
-  background: radial-gradient(120% 160% at 0% 0%, rgba(255, 204, 0, 0.09) 0%, rgba(255, 204, 0, 0) 55%), #111B25;
-  border: 1px solid rgba(255, 204, 0, 0.28);
+/* ---------- QUEM SOMOS: texto + ficha ----------
+   Desktop em duas colunas desiguais (7/5, texto à esquerda); mobile
+   empilhado, ficha depois do texto (ordem do HTML já é essa). Gatilho
+   único (40% visível, uma vez): o texto sobe 18px em 600ms, as linhas
+   da ficha entram escalonadas 70ms entre si, 8px de lado, 400ms. */
+/* `overflow: hidden` aqui, não no `.info-card`: o brilho (`.info-card__glow`)
+   precisa vazar PARA FORA da ficha (é "a luz do amanhecer do hero
+   continuando", atrás dela, não dentro dela) sem furar a largura da
+   página — medido em 390px: sem este corte, o brilho de 320px
+   empurrava `document.documentElement.scrollWidth` para 409px. */
+.quem-somos {
+  overflow: hidden;
 }
-.commitment__icon-wrap {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
+.quem-somos__layout {
   display: grid;
-  place-items: center;
-  background: rgba(255, 204, 0, 0.12);
-  border: 1px solid rgba(255, 204, 0, 0.3);
-  color: var(--accent);
+  gap: var(--space-6);
 }
-.commitment__icon {
-  width: 26px;
-  height: 26px;
+@media (min-width: 900px) {
+  .quem-somos__layout {
+    grid-template-columns: 7fr 5fr;
+    align-items: start;
+    gap: var(--space-5);
+  }
+}
+.quem-somos__text h2 {
+  font-size: clamp(1.9rem, 1.4rem + 2vw, 2.5rem);
+  margin-bottom: var(--space-4);
+}
+.quem-somos__text p {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  line-height: 1.65;
+  max-width: 54ch;
+}
+.quem-somos__text p + p {
+  margin-top: var(--space-3);
+}
+.quem-somos__text {
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.quem-somos[data-armed="true"] .quem-somos__text {
+  opacity: 0;
+  transform: translateY(18px);
+}
+
+/* A ficha: o brilho quente atrás dela é a luz do amanhecer do hero
+   continuando — o mecanismo que faltava abaixo dele (ver direção de
+   20/11/2026, seção 1). */
+.info-card {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 28px;
+}
+.info-card__glow {
+  position: absolute;
+  inset: -40px -40px auto auto;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(136, 103, 73, 0.14), transparent 70%);
+  z-index: -1;
+  pointer-events: none;
+}
+.info-card__logo {
+  display: block;
+  height: 32px;
+  width: auto;
+  margin-bottom: 24px;
+}
+.info-card__list {
+  display: block;
+}
+.info-card__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.info-card__row:first-child {
+  border-top: 0;
+}
+.info-card__row dt {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
   margin: 0;
 }
-.commitment .eyebrow {
-  display: block;
-  margin-bottom: 8px;
-}
-.commitment p {
-  font-size: 1.25rem;
-  line-height: 1.5;
-  max-width: 52ch;
+.info-card__row dd {
+  margin: 0;
   color: var(--text-primary);
+  font-size: 0.9375rem;
+  text-align: right;
 }
-@media (max-width: 639px) {
-  .commitment {
-    grid-template-columns: 1fr;
-    gap: 16px;
-    padding: 24px;
+.info-card__row a {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(255, 255, 255, 0.3);
+}
+.info-card__row a:hover,
+.info-card__row a:focus-visible {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+.info-card__mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.info-card__phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Ponto da fase: amarelo e PARADO. O pulso é só do pino HOJE da linha
+   do tempo — dois sinais contínuos na mesma tela diluiriam o "estamos
+   aqui agora" que o HOJE deve significar. */
+.info-card__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.quem-somos[data-armed="true"] .info-card__row {
+  opacity: 0;
+  transform: translateX(8px);
+}
+.info-card__row:nth-child(1) { transition-delay: 0ms; }
+.info-card__row:nth-child(2) { transition-delay: 70ms; }
+.info-card__row:nth-child(3) { transition-delay: 140ms; }
+.info-card__row:nth-child(4) { transition-delay: 210ms; }
+.info-card__row:nth-child(5) { transition-delay: 280ms; }
+.info-card__row:nth-child(6) { transition-delay: 350ms; }
+.info-card__row:nth-child(7) { transition-delay: 420ms; }
+@media (prefers-reduced-motion: reduce) {
+  .quem-somos__text,
+  .info-card__row {
+    transition: none;
+    opacity: 1;
+    transform: none;
   }
-  .commitment p { font-size: 1.0625rem; }
+}
+
+/* ---------- ONDE ESTAMOS: linha do tempo ----------
+   Reaproveita a técnica do `.route-line` (trilho + traço amarelo
+   desenhado por cima, SVG com stroke-dasharray/offset calculado em JS):
+   aqui na horizontal, com um marcador HOJE entre a 2ª e a 3ª estação. O
+   trecho futuro (depois de HOJE) não se desenha — só aparece tracejado,
+   porque o futuro ainda não foi percorrido. Em mobile a linha vira uma
+   barra vertical à esquerda das estações (ver media query abaixo). */
+.roadmap__timeline {
+  position: relative;
+  margin-top: var(--space-6);
+}
+.roadmap__track {
+  display: none;
+}
+.roadmap__stations {
+  position: relative;
+  display: grid;
+  gap: var(--space-5);
+}
+/* Mobile: a linha vira uma barra vertical simples à esquerda das
+   estações (sem desenho progressivo — o traço SVG some abaixo de
+   900px, igual ao `.route-line` já faz). */
+.roadmap__stations::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 5px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.roadmap__station {
+  position: relative;
+  padding-left: 28px;
+}
+.roadmap__pin {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--canvas);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+.roadmap__station:not(.roadmap__station--future) .roadmap__pin {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.roadmap__station-title {
+  font-size: 1.0625rem;
+  letter-spacing: -0.02em;
+  margin: 10px 0 6px;
+}
+.roadmap__station-text {
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  max-width: 34ch;
+}
+.roadmap__today-label {
+  display: none;
+}
+/* Mobile não tem a trilha horizontal nem o marcador flutuante (ambos
+   só existem na linha do tempo deitada) — "HOJE" ainda precisa
+   aparecer em algum lugar, então entra junto do rótulo da 2ª estação. */
+.roadmap__today-inline {
+  display: inline-block;
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+@media (min-width: 900px) {
+  .roadmap__stations {
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-4);
+  }
+  .roadmap__stations::before {
+    display: none;
+  }
+  .roadmap__today-inline {
+    display: none;
+  }
+  .roadmap__station {
+    padding-left: 0;
+    padding-top: 28px;
+  }
+  /* Cada pino centralizado na própria coluna da grade de 4 (12,5%,
+     37,5%, 62,5%, 87,5%), não na borda esquerda — é o que faz o pino
+     bater com o ponto certo do traço SVG abaixo. */
+  .roadmap__pin {
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .roadmap__track {
+    display: block;
+    position: absolute;
+    top: 6px;
+    left: 0;
+    right: 0;
+    height: 20px;
+  }
+  .roadmap__line {
+    width: 100%;
+    height: 20px;
+    overflow: visible;
+  }
+  .roadmap__line-track {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.08);
+    stroke-width: 2;
+  }
+  .roadmap__line-progress {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.9s ease;
+  }
+  .roadmap__line-future {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 2;
+    stroke-dasharray: 5 5;
+    opacity: 1;
+    transition: opacity 0.4s ease;
+    transition-delay: 900ms;
+  }
+  /* Flutua inteiro acima da trilha (e, com isso, bem acima da fileira
+     de rótulos das estações): sem isso, "HOJE" colidia em cima de "EM
+     CONSTRUÇÃO" — medido no navegador a 1440px. */
+  .roadmap__today {
+    position: absolute;
+    bottom: 100%;
+    margin-bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .roadmap__pin--today {
+    position: static;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-color: var(--accent);
+    transform: translateY(0);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .roadmap__pin--today::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 1px solid var(--accent);
+    opacity: 0.35;
+    animation: roadmap-today-pulse 2.4s ease-in-out infinite;
+  }
+  .roadmap__today-label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+  }
+  .roadmap[data-armed="true"] .roadmap__line-future {
+    opacity: 0;
+  }
+  .roadmap[data-armed="true"] .roadmap__pin--today {
+    transform: translateY(-8px);
+  }
+  .roadmap[data-armed="true"] .roadmap__station .roadmap__station-title,
+  .roadmap[data-armed="true"] .roadmap__station .roadmap__station-text {
+    opacity: 0;
+  }
+  .roadmap__station-title,
+  .roadmap__station-text {
+    transition: opacity 0.4s ease;
+  }
+  .roadmap__station:nth-child(1) .roadmap__station-title,
+  .roadmap__station:nth-child(1) .roadmap__station-text { transition-delay: 0ms; }
+  .roadmap__station:nth-child(2) .roadmap__station-title,
+  .roadmap__station:nth-child(2) .roadmap__station-text { transition-delay: 450ms; }
+  .roadmap__station:nth-child(3) .roadmap__station-title,
+  .roadmap__station:nth-child(3) .roadmap__station-text { transition-delay: 900ms; }
+  .roadmap__station:nth-child(4) .roadmap__station-title,
+  .roadmap__station:nth-child(4) .roadmap__station-text { transition-delay: 1300ms; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .roadmap__pin--today::after { animation: none; opacity: 0.35; }
 }
 
 /* ---------- faq ----------
@@ -1270,10 +1765,13 @@ input[type="range"]:focus-visible::-moz-range-thumb {
   gap: 8px;
 }
 
-/* `tabular-nums` para o número não dançar quando a versão muda de dígito. */
+/* `tabular-nums` para o número não dançar quando a versão muda de dígito.
+   Peso 800, não 600: a página carrega só 500 e 800, e um 600 pedido aqui
+   era engrossado artificialmente pelo navegador. Erro meu, de 20/11/2026,
+   pego medindo os pesos computados contra a URL do Google Fonts. */
 .site-footer__version {
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: 800;
   color: var(--text-primary);
   letter-spacing: 0.01em;
   /* O título explica o número ao passar o mouse; a seta avisa que há o quê. */
@@ -1281,7 +1779,9 @@ input[type="range"]:focus-visible::-moz-range-thumb {
 }
 
 .site-footer__signature a {
-  font-weight: 600;
+  /* 500 com filete embaixo distingue o link sem inventar um peso que a
+     página não tem. */
+  font-weight: 500;
   color: inherit;
   text-decoration: none;
   border-bottom: 1px solid rgba(255, 255, 255, 0.18);
@@ -1521,6 +2021,31 @@ noscript .reveal[data-hidden="true"] {
   background: var(--panel);
   font-size: 0;
   color: transparent;
+  transform: scale(1);
+}
+/* Slide ativo: a imagem encolhe de scale(1.06) a scale(1) ao longo do
+   próprio intervalo do carrossel (INTERVAL_MS no main.js), reiniciando a
+   cada troca — o JS reinicia a animação (remove/reflow/aplica a classe)
+   porque o MESMO slide pode voltar a ficar ativo depois de dar a volta,
+   e CSS não reinicia uma `animation` sozinho quando a classe não muda. */
+.carousel__slide.is-active .carousel-card__media img {
+  animation: carousel-zoom 5500ms linear forwards;
+}
+@keyframes carousel-zoom {
+  from { transform: scale(1.06); }
+  to { transform: scale(1); }
+}
+/* Inativos, só quando cabe mais de uma carta na tela por vez (a partir
+   de onde o slide passa a ter largura fixa, em vez de 80vw). */
+@media (min-width: 640px) {
+  .carousel__slide:not(.is-active) .carousel-card__media img {
+    filter: brightness(0.72) saturate(0.85);
+    transition: filter 0.5s ease;
+  }
+  .carousel__slide:not(.is-active) .carousel-card__text {
+    opacity: 0.7;
+    transition: opacity 0.5s ease;
+  }
 }
 .carousel-card__veil {
   position: absolute;
@@ -1539,18 +2064,28 @@ noscript .reveal[data-hidden="true"] {
   bottom: 0;
   padding: var(--space-3) var(--space-3) var(--space-4);
 }
+/* Legenda em sequência no slide ativo: olho, título, texto, cada um
+   subindo 10px em 400ms, 70ms entre eles. Fora do JS (ou sem o slide
+   ter sido marcado "entrando"), o estado final — tudo visível — é o
+   padrão, para a legenda nunca depender de script para aparecer. */
+.carousel-card__text > * {
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.carousel__slide.is-entering .carousel-card__text > *:nth-child(1) { opacity: 0; transform: translateY(10px); transition-delay: 0ms; }
+.carousel__slide.is-entering .carousel-card__text > *:nth-child(2) { opacity: 0; transform: translateY(10px); transition-delay: 70ms; }
+.carousel__slide.is-entering .carousel-card__text > *:nth-child(3) { opacity: 0; transform: translateY(10px); transition-delay: 140ms; }
 .carousel-card__title {
   margin-top: var(--space-1);
   font-family: var(--font-display);
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.22;
-  font-size: clamp(1.05rem, 0.95rem + 0.5vw, 1.3rem);
+  font-size: clamp(1.25rem, 1rem + 0.8vw, 1.6rem);
   color: var(--text-primary);
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.55), 0 8px 22px rgba(0, 0, 0, 0.35);
 }
 .carousel-card__title em {
-  font-style: italic;
+  font-style: normal;
   color: var(--accent);
 }
 .carousel-card__body {
@@ -1558,6 +2093,11 @@ noscript .reveal[data-hidden="true"] {
   color: var(--text-secondary);
   font-size: 0.9rem;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+@media (prefers-reduced-motion: reduce) {
+  .carousel__slide.is-active .carousel-card__media img { animation: none; }
+  .carousel__slide:not(.is-active) .carousel-card__media img,
+  .carousel__slide:not(.is-active) .carousel-card__text { transition: none; }
 }
 
 /* Regra de autor (display:flex) bate regra da UA ([hidden]{display:none})
@@ -1623,15 +2163,45 @@ noscript .reveal[data-hidden="true"] {
   border: none;
   padding: 0;
 }
-.carousel__dots button::after {
-  content: '';
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
+/* Bolinha vira barra de tempo: pílula de 32x4px. A ativa se enche de
+   amarelo da esquerda pra direita, no mesmo tempo do slide (INTERVAL_MS).
+   O alvo de toque continua os 44x44 do botão — só o desenho muda. A
+   pílula é um `span` real (não `::after`) porque precisa conter o
+   preenchimento (`.carousel__dot-fill`) como outro elemento dentro dela. */
+.carousel__dot-track {
+  display: block;
+  width: 32px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
 }
-.carousel__dots button[aria-current="true"]::after {
+.carousel__dot-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
   background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+.carousel__dots button[aria-current="true"] .carousel__dot-fill {
+  animation: carousel-dot-fill 5500ms linear forwards;
+}
+@keyframes carousel-dot-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .carousel__dots button[aria-current="true"] .carousel__dot-fill {
+    animation: none;
+    transform: scaleX(1);
+  }
+}
+/* Pausa manual, hover, foco ou aba escondida: a pílula congela onde
+   estava, em vez de continuar enchendo sem o visitante estar olhando. */
+.carousel__viewport.is-paused .carousel__dots button[aria-current="true"] .carousel__dot-fill,
+.carousel__viewport.is-paused .carousel__slide.is-active .carousel-card__media img {
+  animation-play-state: paused;
 }
 
 /* ---------------------------------------------------------------

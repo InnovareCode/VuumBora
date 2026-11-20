@@ -28,6 +28,102 @@
   var syncJourneyMode = function () {};
 
   /* =========================================================
+     Gatilho compartilhado por QUEM SOMOS, ONDE ESTAMOS e o grid de
+     motivos: mesmo padrão do `.reveal` (estado final é o padrão do
+     CSS; isto arma com `data-armed` antes de o trecho entrar na tela),
+     só que com o nome de atributo que a direção de arte pediu. Sem JS
+     ou com movimento reduzido, nunca arma — o estado final (já aceso)
+     fica valendo direto.
+     ========================================================= */
+  function armOnEnter(els, options, onFire) {
+    if (!els || !els.length) return;
+    if (prefersReducedMotion() || !('IntersectionObserver' in window)) return;
+
+    els.forEach(function (el) { el.setAttribute('data-armed', 'true'); });
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.removeAttribute('data-armed');
+          if (onFire) onFire(entry.target);
+          observer.unobserve(entry.target);
+        }
+      });
+    }, options);
+
+    els.forEach(function (el) { observer.observe(el); });
+  }
+
+  /* =========================================================
+     QUEM SOMOS: um gatilho só para o texto (sobe 18px) e a ficha
+     (linhas escalonadas) — ver seção 5 da direção de 20/11/2026.
+     ========================================================= */
+  function initQuemSomos() {
+    var section = document.querySelector('.quem-somos');
+    if (!section) return;
+    armOnEnter([section], { threshold: 0.4 });
+  }
+
+  /* =========================================================
+     ONDE ESTAMOS: desenha o trecho percorrido da linha do tempo em
+     amarelo (até o marcador HOJE) com a mesma técnica do `.route-line`
+     (stroke-dasharray/offset), e deixa o trecho futuro tracejado
+     aparecer só com opacidade — ele não se desenha, porque ainda não
+     foi percorrido.
+     ========================================================= */
+  function initRoadmap() {
+    var section = document.querySelector('.roadmap');
+    if (!section) return;
+    var progress = section.querySelector('.roadmap__line-progress');
+
+    if (progress && window.matchMedia('(min-width: 900px)').matches) {
+      var length = progress.getTotalLength();
+      progress.style.strokeDasharray = String(length);
+      progress.style.strokeDashoffset = String(length);
+      armOnEnter([section], { threshold: 0.4 }, function () {
+        // Depois de armado, o estado "destravado" é dashoffset 0 — a
+        // transição de 0.9s já está na regra CSS de `.roadmap__line-progress`.
+        progress.style.strokeDashoffset = '0';
+      });
+    } else {
+      armOnEnter([section], { threshold: 0.4 });
+    }
+  }
+
+  /* =========================================================
+     Grid de motivos: "a rota passa e o motivo acende". Acima de
+     1100px os 4 cartões disparam juntos a partir de um gatilho só na
+     grade (os atrasos de 0/90/180/270ms e os de pino em 300/700/1100/
+     1500ms já estão no CSS, por `nth-child`); abaixo disso cada
+     cartão dispara sozinho, a 50% visível.
+     ========================================================= */
+  function initReasonCards() {
+    var wrap = document.querySelector('.reasons__track-wrap');
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.reason-card'));
+    if (!wrap || !cards.length) return;
+
+    var wideQuery = window.matchMedia('(min-width: 1100px)');
+    if (wideQuery.matches) {
+      armOnEnter([wrap], { threshold: 0.4 });
+    } else {
+      armOnEnter(cards, { threshold: 0.5 });
+    }
+
+    // Luz que segue o cursor, só com mouse de verdade (a media query no
+    // CSS já esconde o efeito no toque — aqui só evita o custo do
+    // listener onde ele nunca seria usado).
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      cards.forEach(function (card) {
+        card.addEventListener('pointermove', function (event) {
+          var rect = card.getBoundingClientRect();
+          card.style.setProperty('--mx', ((event.clientX - rect.left) / rect.width) * 100 + '%');
+          card.style.setProperty('--my', ((event.clientY - rect.top) / rect.height) * 100 + '%');
+        });
+      });
+    }
+  }
+
+  /* =========================================================
      JORNADA: troca de faixa (imagem + texto) amarrada ao scroll.
      Só roda quando o modo cinematográfico está ligado. O laço
      (rAF) só é agendado em resposta a scroll/resize: descansa
@@ -368,10 +464,23 @@
     }
 
     function setActive(index) {
+      var wasCurrent = dots[index] && dots[index].getAttribute('aria-current') === 'true';
       currentIndex = index;
       dots.forEach(function (dot, i) {
         dot.setAttribute('aria-current', i === index ? 'true' : 'false');
       });
+      // A bolinha ativa reinicia a animação de preenchimento mesmo
+      // quando é a MESMA (o carrossel deu a volta inteira): sem isso o
+      // navegador não reaplica a keyframe, porque pra ele nada mudou.
+      if (wasCurrent && dots[index]) {
+        var fill = dots[index].querySelector('.carousel__dot-fill');
+        if (fill) {
+          fill.style.animation = 'none';
+          void fill.offsetWidth;
+          fill.style.animation = '';
+        }
+      }
+      markActiveSlide(index);
     }
 
     function goTo(index) {
@@ -402,10 +511,54 @@
       dot.type = 'button';
       dot.setAttribute('aria-label', 'Ir para o slide ' + (i + 1) + ' de ' + slides.length);
       dot.setAttribute('aria-current', i === 0 ? 'true' : 'false');
+      var track = document.createElement('span');
+      track.className = 'carousel__dot-track';
+      var fill = document.createElement('span');
+      fill.className = 'carousel__dot-fill';
+      track.appendChild(fill);
+      dot.appendChild(track);
       dot.addEventListener('click', function () { goTo(i); });
       dotsWrap.appendChild(dot);
       dots.push(dot);
     });
+
+    // Reinicia uma animação CSS no mesmo elemento (ex.: o MESMO slide
+    // voltando a ficar ativo depois de uma volta completa, ou a MESMA
+    // bolinha). Remover a classe, forçar reflow e devolver é o truque
+    // padrão — sem isso o navegador não reaplica a keyframe porque,
+    // pra ele, nada mudou.
+    function restartAnimation(el) {
+      if (!el) return;
+      /* eslint-disable no-unused-expressions */
+      void el.offsetWidth;
+    }
+
+    // Marca o slide ativo (zoom da imagem + legenda em sequência) e
+    // desmarca o anterior. `is-entering` liga por um instante (mesmo
+    // ciclo de rAF) pra disparar a transição de entrada da legenda e
+    // depois sai, deixando o estado final (tudo visível) no lugar.
+    var activeSlideEl = null;
+    function markActiveSlide(index) {
+      var next = slides[index];
+      if (activeSlideEl && activeSlideEl !== next) {
+        activeSlideEl.classList.remove('is-active');
+      }
+      if (next === activeSlideEl) {
+        next.classList.remove('is-active');
+        restartAnimation(next);
+      }
+      if (!prefersReducedMotion()) {
+        next.classList.add('is-entering');
+        restartAnimation(next);
+      }
+      next.classList.add('is-active');
+      activeSlideEl = next;
+      window.requestAnimationFrame(function () {
+        window.requestAnimationFrame(function () {
+          next.classList.remove('is-entering');
+        });
+      });
+    }
 
     prevBtn.addEventListener('click', function () { goTo(currentIndex - 1); });
     nextBtn.addEventListener('click', function () { goTo(currentIndex + 1); });
@@ -419,6 +572,9 @@
         clearInterval(timer);
         timer = null;
       }
+      // Congela o zoom da imagem e a pílula de progresso junto com o
+      // avanço automático: pausa manual, hover, foco ou aba escondida.
+      root.classList.toggle('is-paused', !isPlaying());
       if (isPlaying()) {
         timer = setInterval(function () { goTo(currentIndex + 1); }, INTERVAL_MS);
       }
@@ -455,6 +611,10 @@
       syncTimer();
     }
     reduceMotionQuery.addEventListener('change', syncReducedUI);
+
+    // Acende o primeiro slide (zoom da imagem + pílula) assim que o JS
+    // liga — sem isto, só o segundo slide em diante ganhava a animação.
+    markActiveSlide(0);
 
     // Camada de cima: controles só aparecem depois que o JS liga.
     controls.hidden = false;
@@ -750,6 +910,9 @@
     initHeroCta();
     initRouteLine();
     initReveal();
+    initQuemSomos();
+    initRoadmap();
+    initReasonCards();
     initCarousel();
     initRateSimulator();
     initApplicationForm();
