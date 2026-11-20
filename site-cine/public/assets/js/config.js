@@ -8,5 +8,14 @@
  * produção: o formulário mostra o aviso honesto em vez de fingir que enviou.
  */
 window.VUUMBORA_CONFIG = Object.freeze({
-  apiBaseUrl: ''
+  // Preenchido em 19/11/2026, quando o backend entrou no ar. Medido de fora
+  // antes de escrever aqui: certificado Let's Encrypt válido para
+  // CN=api.vuumbora.com.br, GET /healthz devolvendo 200 {"status":"ok"},
+  // e o preflight do CORS respondendo
+  // `Access-Control-Allow-Origin: https://www.vuumbora.com.br`.
+  //
+  // Tem que ser https: o site é servido por HTTPS, e o navegador recusa que
+  // uma página segura chame um endereço inseguro. Em 19/11/2026 este domínio
+  // esteve cadastrado como `http://` no painel e nada funcionava.
+  apiBaseUrl: 'https://api.vuumbora.com.br'
 });
