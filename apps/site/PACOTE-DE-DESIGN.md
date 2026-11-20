@@ -136,6 +136,45 @@ depois, decisão do dono em 19/11/2026.
 - Tudo isso respeita quem pede menos movimento: o estado final aparece, o motor
   para.
 
+### Os ícones são um conjunto, não uma coleção
+
+Desenhados aqui, nunca de biblioteca e nunca gerados como imagem. São SVG
+porque o navegador desenha o traço na hora: nítido em qualquer tela, 2 KB
+para os seis, e a cor acompanha o `currentColor` (é o que permite o ícone
+ficar amarelo no hover sem virar um segundo arquivo).
+
+A regra que mantém o conjunto coerente, estabelecida em 20/11/2026:
+
+> **O traço tem 1,6px NA TELA. Sempre.**
+
+Não é o `stroke-width` que se repete — é a espessura que o olho vê. Como o
+`stroke-width` vale dentro de um `viewBox` de 24, cada tamanho exige um
+valor diferente:
+
+| Onde | Tamanho na tela | `stroke-width` |
+|---|---|---|
+| Ícone de categoria | 22px | **1.75** |
+| Seta do carrossel | 20px | **1.92** |
+| Ícone do rodapé | 16px | **2.4** |
+
+A conta é `1.6 ÷ (tamanho ÷ 24)`. Antes dessa regra, os ícones do rodapé
+tinham 1,07px na tela, **33% mais finos** que os das categorias — e ninguém
+percebe isso olhando um ícone de cada vez, só comparando a página inteira.
+
+Mais duas regras do conjunto:
+
+- **Grade fixa:** conteúdo entre 3 e 21 do `viewBox` de 24, com margem
+  óptica de 3. Terminais e junções sempre redondos, raios generosos — é a
+  linguagem do pino da marca, que não tem canto vivo nem linha fina.
+- **Nenhum ícone nasce amarelo.** Seis marcas amarelas iguais viram enfeite,
+  que é o erro apontado na seção 6. O amarelo entra no hover, como sinal de
+  interação, e some no toque.
+
+Para julgar um ícone novo: renderize os seis **lado a lado em tamanho real**.
+Ampliado e sozinho, qualquer desenho parece bom — o ícone de Conforto levou
+três tentativas (poltrona lia como impressora, assento lia como pote de
+creme) e só a fileira revelou isso.
+
 ## 8. A lista de engenharia
 
 HTML, CSS e JavaScript puro. Um `index.html` e uma pasta `assets`. Sem framework,
