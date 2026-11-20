@@ -2486,3 +2486,103 @@ noscript .reveal[data-hidden="true"] {
     gap: 12px;
   }
 }
+
+/* =========================================================
+   Faixas de respiro: imagem em tela cheia com pouquíssimo texto.
+
+   Por que existem, e por que SÓ com pouco texto: medido em
+   20/11/2026, as faixas da jornada que funcionam sobre foto têm
+   19 palavras; as seções de conteúdo têm de 100 a 171. Texto
+   sobre foto precisa de véu, e quanto mais texto mais escuro o
+   véu — até a foto virar um fundo cinza caro, com o peso da
+   imagem e sem a imagem. Então a foto entra ENTRE as seções
+   densas, não atrás delas.
+   ========================================================= */
+.respiro {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  min-height: min(62vh, 520px);
+  overflow: hidden;
+  /* Sem margem: a faixa encosta nas seções vizinhas de propósito,
+     para ler como corte de cena e não como cartão solto. */
+}
+
+.respiro__media {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+/* `picture` não tem altura própria: sem isto a imagem cai para a
+   proporção intrínseca em vez de preencher. É a mesma armadilha já
+   anotada em `.faixa__media picture`. */
+.respiro__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* 18% e não o centro: o recorte é bem mais alto que largo (1600x1726),
+     e o rosto do motorista vive no alto da foto. Medido a 32%, o corte
+     passava na altura do nariz e os olhos ficavam de fora — e rosto sem
+     olhos é exatamente o que tira a força de uma foto de gente. */
+  object-position: center 18%;
+}
+
+/* Véu em degradê, mais forte embaixo, onde o texto assenta. Em cima
+   fica leve para a foto aparecer de verdade — que é o ponto. */
+.respiro__veu {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(var(--veil-base), 0.25) 0%,
+    rgba(var(--veil-base), 0.45) 45%,
+    rgba(var(--veil-base), 0.86) 100%
+  );
+}
+
+.respiro__texto {
+  position: relative;
+  z-index: 2;
+  padding-block: 44px;
+  max-width: 640px;
+  margin-inline: 0;
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+/* O container padrão centraliza; aqui o texto fica à esquerda, como
+   no hero, para o olho ter por onde começar. */
+@media (min-width: 1240px) {
+  .respiro__texto {
+    margin-inline: max(calc((100vw - var(--container-max)) / 2), 0px);
+  }
+}
+
+.respiro__texto .eyebrow {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 0.75rem;
+}
+
+.respiro__texto h2 {
+  margin: 0 0 12px;
+  font-size: clamp(1.9rem, 1.2rem + 2.4vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+.respiro__texto p {
+  margin: 0;
+  font-size: clamp(1rem, 0.95rem + 0.2vw, 1.125rem);
+  color: var(--text-primary);
+  opacity: 0.86;
+}
+
+@media (max-width: 640px) {
+  .respiro {
+    min-height: min(58vh, 420px);
+  }
+  .respiro__texto {
+    padding-block: 32px;
+  }
+}

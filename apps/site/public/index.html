@@ -306,6 +306,27 @@
       </div>
     </section>
 
+    <!--
+      Faixa de respiro. Entre QUEM SOMOS, ONDE ESTAMOS e os Motivos há mais
+      de 300 palavras seguidas; esta faixa quebra esse bloco com imagem e
+      quase nenhum texto, no mesmo ritmo do hero.
+
+      A foto é a área fotográfica de uma das artes do dono, recortada sem o
+      logo e sem o texto do banner: frase sobre frase não se lê.
+    -->
+    <section class="respiro" aria-labelledby="respiro-rua-title">
+      <picture class="respiro__media">
+        <source media="(max-width: 700px)" srcset="assets/img/respiro-ponta-negra-800.jpg">
+        <img src="assets/img/respiro-ponta-negra-1600.jpg" alt="Motorista da VuumBora ao lado do carro na orla de Ponta Negra, em Natal." width="1600" height="1726" loading="lazy" decoding="async">
+      </picture>
+      <div class="respiro__veu" aria-hidden="true"></div>
+      <div class="container respiro__texto">
+        <span class="eyebrow">NATAL</span>
+        <h2 id="respiro-rua-title">A rua você já conhece <em>de cor.</em></h2>
+        <p>O que falta é um aplicativo que conheça também.</p>
+      </div>
+    </section>
+
     <section class="reasons">
       <div class="container">
         <div class="section-head">
@@ -508,7 +529,19 @@
       </div>
     </section>
 
-    <div class="container"><div class="divider" role="presentation"></div></div>
+    <!-- Segunda faixa de respiro, antes do bloco de perguntas e simulador. -->
+    <section class="respiro" aria-labelledby="respiro-cidade-title">
+      <picture class="respiro__media">
+        <source media="(max-width: 700px)" srcset="assets/img/respiro-marcos-800.jpg">
+        <img src="assets/img/respiro-marcos-1600.jpg" alt="Motorista da VuumBora ao lado do carro, com a orla de Natal ao fim da tarde." width="1600" height="1770" loading="lazy" decoding="async">
+      </picture>
+      <div class="respiro__veu" aria-hidden="true"></div>
+      <div class="container respiro__texto">
+        <span class="eyebrow">GRANDE NATAL</span>
+        <h2 id="respiro-cidade-title">Da Redinha a Ponta Negra, <em>todo dia.</em></h2>
+        <p>A VuumBora nasce onde você já roda.</p>
+      </div>
+    </section>
 
     <section class="faq reveal" aria-labelledby="faq-title">
       <div class="container faq__layout">
