@@ -39,3 +39,32 @@ elemento visual novo sem o dono pedir é risco, não ganho.
 
 Ver [[feedback_tailwind_v4_theme_alias_mesmo_nome_do_token]] (setup do tema) e
 [[project_apps_admin_vite_react_spa]] (estrutura geral do app).
+
+**Atualização 20/11/2026 — navegação por papel + armadilha de foco real:**
+- `NavItem.roles?: readonly AdminRole[]` (`src/nav/types.ts`; ausente = todos
+  os papéis autenticados veem). `isItemVisibleForRole`/`filterNavForRole`
+  (mesmo arquivo) filtram grupos pelo papel e DESCARTAM grupo que ficou
+  vazio — consumidos pelos três lugares que leem `ADMIN_NAV`: sidebar,
+  gaveta e `CommandPalette`. `AdminRole` mora em `src/api/types.ts`, espelho
+  manual do union real em `apps/api/src/domain/admin.ts` (admin é SPA
+  separado, não importa código da API — se a API mudar o union, aqui muda
+  junto, só manualmente).
+- "Pré-cadastro" ganhou `roles: ['dono', 'operacao']` em `adminNav.ts`,
+  casando com `requireDriverApplicationAccess` em
+  `admin-driver-application-route.ts` — comentário no código avisando que os
+  dois andam juntos. **Isto NÃO é a segurança** (quem sabe a URL digita
+  direto; o 403 do backend é quem protege) — é só o menu não oferecer algo
+  que o próprio papel não abre.
+- Quem digita a URL de uma área que o papel não alcança cai em
+  `src/pages/NoAccessPage.tsx` (renderizada pelo `AppShell` no lugar do
+  `<Outlet/>`, calculada comparando `matchAdminNavItem` — SEM filtro, mapa
+  completo — contra o papel logado), com o nome da área, o papel atual e um
+  botão "Voltar" (`navigate(-1)`). Título do cabeçalho também muda para
+  "Acesso restrito" nesse caso.
+- Mock (`createMockAuthAdapter`) tinha `role: 'owner'` (inglês) enquanto o
+  union real é em português (`'dono'`, etc.) — corrigido para `'dono'`,
+  senão o filtro por papel quebrava o demo padrão (ninguém veria nada).
+- Gaveta mobile e `CommandPalette` ganharam armadilha de foco de verdade via
+  hook `src/nav/useFocusTrap.ts` — ver
+  [[bug_overlay_sem_focus_trap_escapa_para_fundo]] pela causa raiz e o
+  padrão a repetir em qualquer overlay novo.

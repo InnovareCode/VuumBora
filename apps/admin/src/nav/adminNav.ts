@@ -25,6 +25,12 @@ export const ADMIN_NAV: readonly NavGroup[] = [
         icon: UserCheck,
         hint: 'Avaliar candidaturas de motorista recebidas pelo site',
         badge: 'pendingDriverApplications',
+        // Espelha `requireDriverApplicationAccess` em
+        // apps/api/src/routes/admin-driver-application-route.ts — os dois
+        // papéis andam juntos. Se a regra da rota mudar na API, mude aqui
+        // também, senão o menu passa a mentir sobre quem pode abrir isto
+        // (o backend ainda protege com 403; isto é só o menu não mentir).
+        roles: ['dono', 'operacao'],
       },
     ],
   },

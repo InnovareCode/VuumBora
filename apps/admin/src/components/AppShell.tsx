@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { LogOut, Menu, Search, Shield, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -10,7 +10,9 @@ import { NavLink } from './nav/NavLink';
 import { CommandPalette } from './nav/CommandPalette';
 import { ADMIN_NAV, matchAdminNavItem, type AdminBadgeKey } from '../nav/adminNav';
 import { useCollapsibleNavGroups } from '../nav/useCollapsibleNavGroups';
-import type { NavItem } from '../nav/types';
+import { useFocusTrap } from '../nav/useFocusTrap';
+import { filterNavForRole, isItemVisibleForRole, type NavItem } from '../nav/types';
+import { NoAccessPage } from '../pages/NoAccessPage';
 
 const NAV_COLLAPSE_STORAGE_KEY = 'vuumbora-admin-nav-collapsed';
 
@@ -35,8 +37,22 @@ export function AppShell() {
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
 
+  useFocusTrap(drawerRef, drawerOpen, () => setDrawerOpen(false));
+
+  // `current` casa com o mapa COMPLETO (não filtrado) — é como sabemos que a
+  // pessoa chegou numa área que existe, mas que o próprio papel não abre
+  // (ex. digitou a URL direto), para mostrar `NoAccessPage` em vez do
+  // `<Outlet/>`. Esconder o item do menu não é a proteção real: o backend já
+  // devolve 403 por papel (`requireAdminRole`); isto só evita a pessoa clicar
+  // em algo e achar que quebrou algo.
   const current = matchAdminNavItem(location.pathname);
+  const deniedItem = current && !isItemVisibleForRole(current, admin?.role) ? current : undefined;
+
+  // O que sidebar, gaveta e paleta de comandos de fato OFERECEM — grupo que
+  // fica vazio depois do filtro nem aparece (ver `filterNavForRole`).
+  const visibleNav = useMemo(() => filterNavForRole(ADMIN_NAV, admin?.role), [admin?.role]);
 
   // Contador de pendência ao lado do item do menu — vem da mesma API que a
   // lista usa (resposta real em modo http, dado fictício em modo mock),
@@ -60,11 +76,11 @@ export function AppShell() {
 
   // Grupo da rota atual: nunca recolhe (ver useCollapsibleNavGroups). Uma
   // única instância serve sidebar e gaveta — recolher num reflete no outro.
-  const activeGroupTitle = ADMIN_NAV.find((group) => group.items.some((item) => isActiveItem(item, location.pathname)))?.title;
+  const activeGroupTitle = visibleNav.find((group) => group.items.some((item) => isActiveItem(item, location.pathname)))?.title;
   const groupsState = useCollapsibleNavGroups(NAV_COLLAPSE_STORAGE_KEY, activeGroupTitle);
 
   function renderNavGroups(variant: 'sidebar' | 'drawer') {
-    return ADMIN_NAV.map((group) => (
+    return visibleNav.map((group) => (
       <NavGroupCollapsible
         key={group.title}
         title={group.title}
@@ -137,39 +153,6 @@ export function AppShell() {
           </div>
         </aside>
 
-        {/* ── Gaveta mobile ──────────────────────────────────────────── */}
-        {drawerOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden">
-            <div className="absolute inset-0 bg-black/50" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
-            <div className="absolute inset-y-0 right-0 flex w-[280px] flex-col bg-surface shadow-2xl">
-              <div className="flex h-16 shrink-0 items-center justify-between border-b border-border px-5">
-                <span className="text-[10px] font-black uppercase tracking-widest text-text">Menu</span>
-                <button
-                  type="button"
-                  onClick={() => setDrawerOpen(false)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-elevated text-text-secondary outline-none focus-visible:ring-2 focus-visible:ring-info"
-                  aria-label="Fechar menu"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-              <nav className="flex-1 overflow-y-auto p-4" aria-label="Navegação do painel administrativo">
-                {renderNavGroups('drawer')}
-              </nav>
-              <div className="shrink-0 border-t border-border p-4">
-                <button
-                  type="button"
-                  onClick={() => void logout()}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-elevated px-4 py-3 text-small font-bold text-text-secondary outline-none transition-colors hover:text-danger focus-visible:ring-2 focus-visible:ring-info"
-                >
-                  <LogOut className="h-4 w-4" aria-hidden="true" />
-                  Sair do painel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ── Conteúdo ───────────────────────────────────────────────── */}
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-screen/90 px-4 backdrop-blur-sm sm:px-6 lg:h-20 lg:px-8">
@@ -179,7 +162,9 @@ export function AppShell() {
 
             <div className="hidden min-w-0 flex-1 lg:block">
               <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Painel administrativo</p>
-              <h2 className="truncate text-title font-black tracking-tight text-text">{current?.label ?? 'Administração'}</h2>
+              <h2 className="truncate text-title font-black tracking-tight text-text">
+                {deniedItem ? 'Acesso restrito' : current?.label ?? 'Administração'}
+              </h2>
             </div>
 
             <div className="flex flex-1 items-center justify-end gap-2 lg:flex-none">
@@ -208,14 +193,57 @@ export function AppShell() {
             </div>
           </header>
 
-          <main className="flex-1 p-4 sm:p-6 lg:p-8">
-            <Outlet />
-          </main>
+          <main className="flex-1 p-4 sm:p-6 lg:p-8">{deniedItem ? <NoAccessPage item={deniedItem} role={admin?.role} /> : <Outlet />}</main>
         </div>
       </div>
 
+      {/* ── Gaveta mobile ────────────────────────────────────────────────
+          Depois de `header`+`main` no JSX (não antes) de propósito: o botão
+          "Abrir menu" mora dentro do `header`, então ele vem ANTES disto na
+          ordem do documento — sem essa ordem, dar Tab depois de abrir a
+          gaveta ia primeiro para os controles da página de fundo, que o
+          backdrop só cobre visualmente (achado da Íris, 20/11/2026). A
+          posição em si não muda nada visual (`fixed`). */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
+          <div
+            ref={drawerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu de navegação"
+            className="absolute inset-y-0 right-0 flex w-[280px] flex-col bg-surface shadow-2xl"
+          >
+            <div className="flex h-16 shrink-0 items-center justify-between border-b border-border px-5">
+              <span className="text-[10px] font-black uppercase tracking-widest text-text">Menu</span>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-elevated text-text-secondary outline-none focus-visible:ring-2 focus-visible:ring-info"
+                aria-label="Fechar menu"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <nav className="flex-1 overflow-y-auto p-4" aria-label="Navegação do painel administrativo">
+              {renderNavGroups('drawer')}
+            </nav>
+            <div className="shrink-0 border-t border-border p-4">
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-elevated px-4 py-3 text-small font-bold text-text-secondary outline-none transition-colors hover:text-danger focus-visible:ring-2 focus-visible:ring-info"
+              >
+                <LogOut className="h-4 w-4" aria-hidden="true" />
+                Sair do painel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {paletteOpen && (
-        <CommandPalette groups={ADMIN_NAV} label="Buscar área do painel administrativo" onClose={() => setPaletteOpen(false)} />
+        <CommandPalette groups={visibleNav} label="Buscar área do painel administrativo" onClose={() => setPaletteOpen(false)} />
       )}
     </div>
   );

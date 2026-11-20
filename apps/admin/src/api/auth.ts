@@ -49,7 +49,10 @@ function writeMockSession(session: AdminUser | null): void {
  */
 export function createMockAuthAdapter(): AuthPort {
   let session: AdminUser | null = readMockSession();
-  const FAKE_USER: AdminUser = { id: 'mock-admin-1', name: 'Admin (demonstração)', email: 'admin@vuumbora.com.br', role: 'owner' };
+  // 'dono' (não 'owner') — mesmo vocabulário de `AdminRole`, para o filtro de
+  // menu por papel se comportar em modo mock como se comportaria com a API
+  // real (ver `src/nav/types.ts`).
+  const FAKE_USER: AdminUser = { id: 'mock-admin-1', name: 'Admin (demonstração)', email: 'admin@vuumbora.com.br', role: 'dono' };
 
   return {
     async login(input) {

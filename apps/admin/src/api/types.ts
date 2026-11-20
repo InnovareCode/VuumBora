@@ -39,11 +39,18 @@ export interface DriverApplicationListResult {
   readonly nextCursor: string | null;
 }
 
+/**
+ * Mesmo vocabulário de `AdminRole` em `apps/api/src/domain/admin.ts` — espelho
+ * manual (o admin é SPA separado, não importa código da API). Se a API
+ * acrescentar/renomear um papel, este union muda junto.
+ */
+export type AdminRole = 'dono' | 'operacao' | 'revisor_documentos' | 'financeiro' | 'suporte';
+
 export interface AdminUser {
   readonly id: string;
   readonly name: string;
   readonly email: string;
-  readonly role: string;
+  readonly role: AdminRole;
 }
 
 export interface AdminLoginInput {

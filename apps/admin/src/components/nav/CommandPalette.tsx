@@ -1,8 +1,9 @@
-import { useMemo, useState, type KeyboardEvent } from 'react';
+import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CornerDownLeft, Search } from 'lucide-react';
 import type { NavGroup, NavItem } from '../../nav/types';
 import { flattenNav } from '../../nav/types';
+import { useFocusTrap } from '../../nav/useFocusTrap';
 import { cn } from '../../lib/cn';
 
 /**
@@ -36,6 +37,13 @@ export function CommandPalette({
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState(0);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // A paleta só existe no DOM enquanto está aberta (ver comentário acima) —
+  // por isso a armadilha está sempre "ativa" aqui; o próprio
+  // montar/desmontar é que liga/desliga o foco preso. Também resolve
+  // Escape (sem precisar tratar de novo no handleKeyDown abaixo).
+  useFocusTrap(dialogRef, true, onClose);
 
   const results = useMemo(() => {
     const q = normalize(query.trim());
@@ -62,11 +70,6 @@ export function CommandPalette({
   }
 
   function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      onClose();
-      return;
-    }
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setCursor((c) => (results.length ? (c + 1) % results.length : 0));
@@ -87,6 +90,7 @@ export function CommandPalette({
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[12vh]">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={label}
@@ -96,9 +100,8 @@ export function CommandPalette({
         <div className="flex items-center gap-3 border-b border-border px-5">
           <Search className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
           <input
-            // A paleta só existe enquanto está aberta e o campo é o ponto
-            // dela — focar na montagem é o comportamento esperado aqui.
-            autoFocus
+            // `useFocusTrap` já foca este campo (primeiro focável do
+            // contêiner) ao montar — sem `autoFocus` duplicado.
             type="text"
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}

@@ -44,3 +44,4 @@
 - [Mock de auth sem sessionStorage desloga a cada reload](feedback_mock_adapter_sessao_sobrevive_reload.md) — sessão mock em closure some em qualquer navegação dura/Playwright `page.goto()`.
 - [apps/admin — casca padrão ModaShop (Tailwind v4)](project_apps_admin_shell_moda_shop.md) — sidebar/gaveta/paleta de comandos/PageHeader, layout route com Outlet, guarda de build contra mock, 20/11/2026.
 - [Tailwind v4 @theme: mesmo nome do token não é loop](feedback_tailwind_v4_theme_alias_mesmo_nome_do_token.md) — unlayered sempre vence layer "theme"; armadilha irmã do @import de fonte depois do @import tailwindcss.
+- [Overlay sem armadilha de foco escapa pro fundo](bug_overlay_sem_focus_trap_escapa_para_fundo.md) — gaveta e paleta de comandos do admin; hook `useFocusTrap` compartilhado, testar os DOIS sentidos de Tab.

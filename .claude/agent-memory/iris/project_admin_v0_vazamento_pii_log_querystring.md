@@ -1,9 +1,21 @@
 ---
 name: project-admin-v0-vazamento-pii-log-querystring
-description: Bug real encontrado em 20/11/2026 na API do Admin v0 — a busca livre (q) do painel vaza nome/e-mail/telefone pro log de aplicação em texto puro
+description: Bug encontrado em 20/11/2026 na API do Admin v0 (busca vazava PII pro log) — CORRIGIDO e reconfirmado no mesmo dia, com prova por mutação
 metadata:
   type: project
 ---
+
+**STATUS: corrigido e revalidado em 20/11/2026.** `apps/api/src/app.ts` ganhou
+`serializers.req` cortando a querystring antes de logar (função
+`pathnameOnly`). Reconfirmei com `grep -a -c <valor único> <log> == 0` numa
+API rodando de verdade, e PROVEI por mutação: removi o serializer de
+propósito, rodei a mesma busca, o valor voltou a aparecer no log (1
+ocorrência) — recoloquei o fix e revalidei zero de novo. `pathname` continua
+logado (observabilidade preservada). Ver
+[[feedback-tsx-watch-eaddrinuse-restart-falho]] — achadilha ao restaurar o
+código depois da mutação.
+
+O relato original do bug (como referência) fica abaixo.
 
 `apps/api/src/app.ts` monta o Fastify só com `logger: { level: env.LOG_LEVEL
 }` — sem `serializers` nem `redact`. O logger padrão do Fastify (pino) grava

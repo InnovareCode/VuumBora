@@ -1,3 +1,6 @@
 - [Ambiente de teste do Admin v0 (sem Docker)](project_admin_v0_ambiente_de_teste.md) — subir Postgres local com os binários do PG 18, apontar API/SPA pra ele
 - [Rate limit do login não reseta sozinho](feedback_rate_limit_login_reseta_so_reiniciando_api.md) — reaproveitar cookie entre testes, reiniciar API pra zerar contador
-- [Bug: PII vaza no log via querystring da busca](project_admin_v0_vazamento_pii_log_querystring.md) — `q=` da busca de candidaturas aparece em texto puro no log da API
+- [Bug: PII vaza no log via querystring da busca](project_admin_v0_vazamento_pii_log_querystring.md) — CORRIGIDO 20/11/2026, revalidado por mutação
+- [Gaveta mobile sem focus trap / sem Escape](project_admin_v0_gaveta_mobile_sem_focus_trap.md) — CORRIGIDO 20/11/2026 (useFocusTrap), revalidado nos dois sentidos
+- [Testar focus trap nos dois sentidos](feedback_focus_trap_testar_os_dois_sentidos.md) — Tab E Shift+Tab, nas duas superfícies, sempre
+- [tsx watch pode falhar restart com EADDRINUSE](feedback_tsx_watch_eaddrinuse_restart_falho.md) — processo antigo continua no ar; cuidado em teste de mutação
