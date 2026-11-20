@@ -807,7 +807,7 @@
         setStatus(
           'info',
           'Ainda não dá para enviar por aqui.',
-          'O endereço do servidor não foi configurado nesta publicação da página. Fale pelo WhatsApp (84) 3113-2584 ou tente novamente mais tarde.'
+          'O formulário está fora do ar agora. Fale com a gente pelo WhatsApp (84) 3113-2584.'
         );
         syncJourneyMode();
         return;
@@ -859,7 +859,7 @@
               syncJourneyMode();
               return;
             }
-            setStatus('error', 'Não foi possível enviar.', 'Os dados enviados não foram aceitos pelo servidor.');
+            setStatus('error', 'Não foi possível enviar.', 'Confira os dados e tente de novo.');
             syncJourneyMode();
             return;
           }
@@ -873,7 +873,7 @@
           setStatus(
             'error',
             'Não conseguimos enviar agora.',
-            'O servidor não respondeu corretamente. Tente novamente em instantes ou fale pelo WhatsApp (84) 3113-2584.'
+            'Tente de novo em alguns minutos ou fale pelo WhatsApp (84) 3113-2584.'
           );
           syncJourneyMode();
         })
