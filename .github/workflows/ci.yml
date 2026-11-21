@@ -1,0 +1,157 @@
+name: CI
+
+# Roda em todo PR e em todo push na main. O job final `ci-ok` e o UNICO que a
+# protecao de branch precisa exigir: ele fica vermelho se qualquer outro falhar
+# ou for pulado (ver docs/producao-passo-a-passo-dono.md, secao 1).
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Segunda 07:00 UTC: reensaia backup/restauracao mesmo sem commit (o drill apodrece em silencio).
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+# Um push novo no mesmo PR cancela a execucao anterior.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  PG_VERSION: '18'
+
+jobs:
+  check:
+    name: check (fronteiras, contexto docker, typecheck)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      # expo-env.d.ts e gerado pelo `expo start` e fica no .gitignore; sem ele o
+      # typecheck dos apps nao enxerga os tipos do Expo (achado da Iris, S1).
+      - name: Gerar expo-env.d.ts dos apps
+        run: |
+          for app in passenger driver; do
+            printf '/// <reference types="expo/types" />\n' > "apps/$app/expo-env.d.ts"
+          done
+      - run: npm run check
+
+  api:
+    name: api (build, migracoes e testes contra Postgres e Redis reais)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: vuumbora
+          POSTGRES_PASSWORD: ci-somente-teste
+          POSTGRES_DB: vuumbora_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U vuumbora -d vuumbora_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://vuumbora:ci-somente-teste@localhost:5432/vuumbora_test
+      REDIS_URL: redis://localhost:6379
+      ALLOWED_ORIGINS: http://localhost:3000
+      ADMIN_ALLOWED_ORIGINS: http://localhost:4310
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Build da API
+        run: npm run build --workspace @vuumbora/api
+
+      - name: Migracoes reais contra o Postgres do servico
+        run: npm run migrate --workspace @vuumbora/api
+
+      - name: Subir a API e conferir /healthz (pega boot quebrado que o typecheck nao pega)
+        run: |
+          set -eu
+          PORT=3100 npm run start --workspace @vuumbora/api >api.log 2>&1 &
+          echo $! >api.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3100/healthz | grep -q '"ok"'; then
+              echo "healthz ok na tentativa $i"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API nao ficou saudavel em 30s"; cat api.log; exit 1
+      - name: Parar a API
+        if: always()
+        run: kill "$(cat api.pid)" 2>/dev/null || true
+
+      # Falha de proposito se o workspace nao tiver script `test`: "sem testes" nao pode
+      # virar "testes verdes". Quando Iris acrescentar o script, este passo passa a rodar.
+      - name: Testes do apps/api
+        run: |
+          set -eu
+          if ! node -e "process.exit(require('./apps/api/package.json').scripts?.test ? 0 : 1)"; then
+            echo "::error::apps/api/package.json nao tem script \"test\". Acrescente-o (ex.: node --test) antes de confiar neste CI."
+            exit 1
+          fi
+          npm test --workspace @vuumbora/api
+
+  backup-drill:
+    name: backup e restauracao (ensaio com contagem de linhas)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-somente-teste
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      # O cliente pre-instalado do runner e mais antigo que o servidor 18 e o pg_dump recusa.
+      - name: Instalar cliente PostgreSQL ${{ env.PG_VERSION }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq "postgresql-client-${PG_VERSION}"
+          echo "/usr/lib/postgresql/${PG_VERSION}/bin" >>"$GITHUB_PATH"
+      - name: Ensaio de restauracao
+        env:
+          ADMIN_URL: postgres://postgres:ci-somente-teste@localhost:5432/postgres
+        run: sh scripts/backup/drill-restore.sh
+
+  # Unico check obrigatorio na protecao de branch. `if: always()` + conferencia de resultado
+  # impede que um job pulado ou cancelado passe por verde.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [check, api, backup-drill]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Todos os jobs precisam ter passado
+        run: |
+          echo '${{ toJSON(needs) }}'
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" = "true" ]; then
+            echo "::error::ao menos um job falhou, foi cancelado ou pulado"; exit 1
+          fi
