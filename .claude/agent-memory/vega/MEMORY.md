@@ -4,3 +4,10 @@
 - [Cursor de paginação perde linha por precisão de timestamp](feedback_cursor_pagination_timestamp_precision.md) — Date do JS trunca microssegundo do Postgres; testar sempre com 2+ linhas no mesmo INSERT
 - [Logger Fastify grava querystring inteira](feedback_fastify_logger_querystring_pii.md) — serializer req padrão loga query com PII; sempre registrar serializers.req custom no serviço inteiro
 - [Admin v0 — aprovar/recusar candidatura](project_admin_v0_aprovar_recusar.md) — CSRF via corpo (não cookie), idempotência por UPDATE WHERE status=pending, migrações 0008/0009
+- [Handlers Fastify antes do register](feedback_fastify_handlers_antes_do_register.md) — setErrorHandler depois de register não alcança rotas encapsuladas; nunca logar err.message
+- [Admin 2FA TOTP (0013)](project_admin_2fa_totp.md) — desafio sem sessão parcial, FOR UPDATE contra replay, chave ausente = 503, como subir Postgres de teste
+- [Identidade dos apps /v1/auth](project_identidade_apps.md) — contas separadas, verificação por código, limites por chave, banco de teste velho = 503 em tudo
+- [Admin — endurecimento S1 (0016)](project_admin_hardening_s1.md) — contador por conta, token de ativação fora de banda, senha na reautenticação, trustProxy por saltos; Promise.all não prova lock
+- [Admin — SMTP no painel (0015)](project_admin_email_smtp.md) — mailer, trava SSRF, lock do limite de testes, armadilha do teste de corrida
+- [S1 rodada 2 — correções I-1..I-7 + idade/aceite](project_s1_rodada2_correcoes.md) — decisões, limites conhecidos (aceite x reaproveitamento), onde mora cada prova
+- [Armadilhas de teste/edição do S1](feedback_testes_e_edicao_armadilhas_s1.md) — CRLF, heredoc, portas/banco compartilhados, mutação redundante, pool monkeypatchado

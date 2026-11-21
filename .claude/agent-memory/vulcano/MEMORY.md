@@ -6,3 +6,4 @@
 - [Expo CLI não sobe diretório para achar .env num monorepo](expo-monorepo-env-raiz.md) — corrigir em metro.config.js com `@expo/env`, nunca assumir que `.env` na raiz "simplesmente funciona".
 - [@rnmapbox/maps não tem suporte web de verdade](rnmapbox-maps-sem-web.md) — usar mapbox-gl direto em `.web.tsx`; peer dependency não prova suporte.
 - [VuumBora: empacotamento e deploy no Easypanel (site + admin)](vuumbora-deploy-easypanel.md) — Dockerfiles com contexto na raiz; admin: ARG de build do Vite, @types/node escondido por hoisting, Rolldown ≠ esbuild, admin. vs painel. no domínio.
+- [VuumBora: CI e backup do Postgres (preparados, nao ativados)](vuumbora-ci-e-backup.md) — drill precisa imitar o runner (schema_migrations); sem script test na API; sem Docker aqui.

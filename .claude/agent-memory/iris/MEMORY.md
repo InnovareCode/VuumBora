@@ -8,3 +8,5 @@
 - [Logomarca oficial no admin](project_admin_v0_logomarca_oficial.md) — 3 lugares, sem texto residual, nitidez 2x medida por naturalWidth/renderedWidth
 - [Aprovar/recusar candidatura revalidado](project_admin_v0_aprovar_recusar_revalidado.md) — todos os casos do Vega refeitos, concorrência real provada 3x + 2 abas na UI; CORS segregado ainda pendente
 - [CORS segregado (admin x site)](project_admin_v0_cors_segregado.md) — boot ok, site bloqueado por navegador real (não só curl), rota pública intacta
+- [S1: validação independente (21/11/2026)](project_s1_validacao_independente.md) — flakes (virada do TOTP, .env), mutações que sobreviveram, portas do CI limpo
+- [S1: ambiente e ferramentas](project_s1_ambiente_de_teste_e_ferramentas.md) — PG isolado, Node 22 do CI, cópia limpa, mutação em cópia, Playwright WebKit/Firefox

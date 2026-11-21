@@ -1,1 +1,2 @@
 - [VuumBora — modelo de dados](vuumbora-modelo-de-dados.md) — trade-offs (PostGIS, posição em tempo real, tarifa versionada), categorias/elegibilidade, favorito, pendências do dono
+- [VuumBora — identidade e auditoria (0010-0019)](vuumbora-identidade-e-auditoria.md) — auth, audit_log inviolavel, idade 18+ e aceite (0019), colisao de numeracao, PG local de teste

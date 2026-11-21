@@ -48,3 +48,11 @@
 - [Painel só-escuro: sem tom claro de uso geral](feedback_painel_dark_only_sem_tom_claro_geral.md) — login do admin portado do ModaShop; "lado claro" virou navy→surface→elevated, não um tom novo.
 - [Asset de marca tem que morar dentro do workspace com Dockerfile](feedback_logomarca_copiada_para_dentro_do_workspace.md) — logomarca do admin copiada de apps/site para apps/admin, por que import cruzado quebra só no Docker.
 - [apps/admin — decisão de candidatura (aprovar/recusar)](project_admin_driver_application_decision.md) — diálogos, CSRF real (minha 1ª assunção estava errada), bug de badge, create-admin.mjs bloqueado p/ Lyra, 409 só verificado por leitura.
+- [apps/admin — telas do 2FA (TOTP)](project_admin_2fa_totp_ui.md) — 401 de código errado ≠ sessão expirada, challengeToken só em estado, sessão só após os códigos, QR lazy, o que foi/não foi provado.
+- [`justify-center` corta o topo de conteúdo alto](bug_justify_center_corta_topo_conteudo_alto.md) — use `my-auto` no filho; medir com viewport curto.
+- [apps/admin — tela E-mail (SMTP, dono)](project_admin_email_smtp_ui.md) — fields[] lista, aria-disabled, bloco de falha translúcido, bug flex-col+flex-1 (pendente no 2FA), bootstrap de dono de teste.
+- [useFocusTrap + onEscape inline rouba o foco](bug_focustrap_onescape_inline_rouba_foco.md) — só dava para digitar 1 caractere em diálogo; testar com keyboard.type, não fill().
+- [apps/admin — step-up no E-mail, unidade de origem SMTP e CSP do nginx](project_admin_email_stepup_csp_ui.md) — StepUpDialog genérico, nginx real + API/banco próprios, o que não foi provado.
+- [nginx: add_header em location zera os do server](bug_nginx_add_header_location_zera_heranca.md) — CSP some do index.html; map p/ Cache-Control, testar curl -I em todas as rotas.
+- [cn() sem tailwind-merge: classes de tamanho conflitam](bug_cn_sem_tailwind_merge_classes_conflitantes.md) — ativação a 14 px; medir fontSize de todo input em 390.
+- [navigate() depois de acceptSession perde para o redirect do /login](bug_navigate_apos_login_perde_para_redirect.md) — destino pós-login viaja no estado da sessão.

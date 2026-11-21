@@ -1,5 +1,6 @@
 # estado de sessao da squad (nunca versionar)
 .missao-atual
+.claude/settings.local.json
 .missoes-quadro.json
 
 node_modules/
