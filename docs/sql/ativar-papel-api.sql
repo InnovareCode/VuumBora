@@ -1,0 +1,17 @@
+-- Ativa a credencial de runtime da API (papel `vuumbora_api`, criado pela
+-- migracao 0012 sem LOGIN). Rodar UMA vez por ambiente, com a credencial
+-- DONA do banco, depois da migracao 0012. A senha NAO vai para o git:
+-- gere uma aleatoria (ex.: `openssl rand -base64 32`) e cole no lugar.
+--
+--   ALTER ROLE vuumbora_api LOGIN PASSWORD '<SENHA_GERADA>';
+--
+-- Depois, no servico da API (Easypanel):
+--   DATABASE_URL           = postgres://vuumbora_api:<SENHA_GERADA>@host:5432/<banco>
+--   MIGRATION_DATABASE_URL = a URL antiga (usuario dono) -- so migra/cria banco.
+--     ATENCAO (revisao S1 rodada 2, I-3): ela NAO deve ficar no ambiente do servico da
+--     API. Ponha-a so numa tarefa/terminal de operador (migrar, create-admin, retencao)
+--     e desligue RUN_MIGRATIONS_ON_BOOT. Ver docs/publicar-o-backend.md.
+--
+-- Conferir (deve falhar com "permission denied"/"append-only"):
+--   UPDATE admin_audit_log SET action = 'x';
+--   DELETE FROM admin_audit_log;
