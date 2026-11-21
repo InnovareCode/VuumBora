@@ -1,10 +1,16 @@
-import { useId, useState, type FormEvent } from 'react';
-import { AlertCircle, Clock, Eye, EyeOff, KeyRound, Lock, Mail, UserCheck } from 'lucide-react';
+import { useCallback, useId, useState, type FormEvent } from 'react';
+import { Eye, EyeOff, KeyRound, Lock, Mail, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../context/ApiContext';
 import { DemoModeBanner } from '../components/DemoModeBanner';
 import { AuthSplitLayout } from '../components/auth/AuthSplitLayout';
 import { LabeledIconInput } from '../components/auth/LabeledIconInput';
+import { AuthAlert } from '../components/auth/AuthAlert';
+import { TwoFactorAlert } from '../components/auth/TwoFactorAlert';
+import { useTwoFactorFeedback } from '../hooks/useTwoFactorFeedback';
+import { SecondFactorStep } from '../components/auth/SecondFactorStep';
+import { EnrollmentStep } from '../components/auth/EnrollmentStep';
+import type { SecondFactorChallenge } from '../api';
 
 const HERO_FEATURES = [
   { icon: <UserCheck className="h-4 w-4" aria-hidden="true" />, text: 'Gerencie o pré-cadastro de motoristas em um só lugar' },
@@ -27,9 +33,14 @@ const HERO_FEATURES = [
  *   pessoa tentar de novo pensando que digitou errado. Visual de aviso
  *   (âmbar), não de erro.
  */
-export function LoginPage() {
+function CredentialsStep({
+  notice,
+  onChallenge,
+}: {
+  readonly notice: string | null;
+  readonly onChallenge: (stage: 'second_factor_required' | 'enrollment_required', challenge: SecondFactorChallenge) => void;
+}) {
   const { login } = useAuth();
-  const api = useApi();
   const emailId = useId();
   const passwordId = useId();
   const errorId = useId();
@@ -37,27 +48,37 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [feedback, setFeedback] = useState<{ message: string; kind: 'credentials' | 'blocked' } | null>(null);
+  // `account_locked` é a espera curta (1 s a 15 min) do par e-mail + IP depois de uma senha errada: traz contagem
+  // regressiva e trava SÓ o envio até acabar (nem a senha certa entra antes). Não é conta bloqueada, e quem erra de outro
+  // IP não atrapalha. Os demais erros seguem como antes (credenciais = vermelho, espera/rede = âmbar).
+  const { feedback, show, clear, locked, remaining } = useTwoFactorFeedback();
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (submitting || locked) return;
     setSubmitting(true);
-    setFeedback(null);
+    clear();
     const result = await login({ email, password });
     setSubmitting(false);
-    if (!result.ok) setFeedback({ message: result.message, kind: result.kind });
+    if (!result.ok) {
+      show({
+        message: result.message,
+        kind: result.kind === 'blocked' ? 'warning' : 'error',
+        ...(result.lockSeconds != null ? { lockSeconds: result.lockSeconds } : {}),
+      });
+      return;
+    }
+    // A senha não precisa ficar em memória além daqui: se o próximo passo for o segundo fator,
+    // quem volta ao login digita de novo (e o campo nunca reaparece preenchido).
+    setPassword('');
+    if (result.next !== 'signedIn') {
+      onChallenge(result.next, { challengeToken: result.challengeToken, challengeExpiresAt: result.challengeExpiresAt });
+    }
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-screen">
-      {api.mode === 'mock' ? <DemoModeBanner /> : null}
-
-      <AuthSplitLayout
-        heroTitle="Acesso restrito à equipe VuumBora"
-        heroSubtitle="Entre com sua conta de administrador para acompanhar e gerenciar o pré-cadastro de motoristas."
-        heroFeatures={HERO_FEATURES}
-      >
+    <>
         <div className="mb-8 space-y-2 text-left">
           <span className="inline-flex items-center gap-1.5 rounded-pill bg-cta/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-cta-pressed">
             Conta de administrador
@@ -68,24 +89,14 @@ export function LoginPage() {
           </p>
         </div>
 
-        {feedback && (
-          <div
-            role="alert"
-            id={errorId}
-            className={
-              feedback.kind === 'blocked'
-                ? 'mb-6 flex items-start gap-2.5 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-small text-text'
-                : 'mb-6 flex items-start gap-2.5 rounded-xl border border-danger/30 bg-danger-fill px-4 py-3 text-small text-text'
-            }
-          >
-            {feedback.kind === 'blocked' ? (
-              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
-            ) : (
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
-            )}
-            <span className="flex-1 font-medium">{feedback.message}</span>
-          </div>
-        )}
+        {/* `notice`: voltou do segundo fator (desafio expirou etc.) — âmbar, não é "senha errada". */}
+        {feedback ? (
+          <TwoFactorAlert id={errorId} feedback={feedback} remaining={remaining} className="mb-6" />
+        ) : notice ? (
+          <AuthAlert kind="warning" className="mb-6">
+            {notice}
+          </AuthAlert>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="space-y-5" noValidate>
           <LabeledIconInput
@@ -127,8 +138,12 @@ export function LoginPage() {
 
           <button
             type="submit"
-            disabled={submitting}
-            className="mt-2 flex h-12 w-full items-center justify-center rounded-xl bg-cta text-body font-bold text-on-cta transition-colors hover:bg-cta-pressed focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-60"
+            // `aria-disabled` (não `disabled`): desabilitar o botão clicado joga o foco no <body>; o handler ignora o envio.
+            aria-disabled={submitting || locked}
+            onClick={(e) => {
+              if (submitting || locked) e.preventDefault();
+            }}
+            className="mt-2 flex h-12 w-full items-center justify-center rounded-xl bg-cta text-body font-bold text-on-cta transition-colors hover:bg-cta-pressed focus-visible:ring-2 focus-visible:ring-info aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:bg-cta"
           >
             {submitting ? (
               <span className="inline-flex items-center gap-2">
@@ -145,6 +160,51 @@ export function LoginPage() {
           <p>Esqueceu sua senha? Peça para quem administra o painel redefinir o seu acesso.</p>
           <p>Contas de administrador são criadas por quem administra o sistema — não há cadastro aberto.</p>
         </div>
+    </>
+  );
+}
+
+type Stage =
+  | { readonly name: 'credentials'; readonly notice: string | null }
+  | { readonly name: 'second_factor_required' | 'enrollment_required'; readonly challenge: SecondFactorChallenge };
+
+/**
+ * Login em até três passos (contrato docs/contrato-admin-2fa.md): e-mail e
+ * senha → (se o papel exigir/tiver 2FA) código de 6 dígitos, ou ativação
+ * obrigatória. O `challengeToken` mora SÓ neste estado de componente — nunca
+ * em storage, URL ou contexto global — e some quando o componente desmonta.
+ */
+export function LoginPage() {
+  const api = useApi();
+  const { acceptSession } = useAuth();
+  const [stage, setStage] = useState<Stage>({ name: 'credentials', notice: null });
+
+
+  const backToCredentials = useCallback((message?: string) => {
+    setStage({ name: 'credentials', notice: message ?? null });
+  }, []);
+
+  return (
+    <div className="flex min-h-screen flex-col bg-screen">
+      {api.mode === 'mock' ? <DemoModeBanner /> : null}
+
+      <AuthSplitLayout
+        heroTitle="Acesso restrito à equipe VuumBora"
+        heroSubtitle="Entre com sua conta de administrador para acompanhar e gerenciar o pré-cadastro de motoristas."
+        heroFeatures={HERO_FEATURES}
+      >
+        {stage.name === 'credentials' && (
+          <CredentialsStep
+            notice={stage.notice}
+            onChallenge={(name, challenge) => setStage({ name, challenge })}
+          />
+        )}
+        {stage.name === 'second_factor_required' && (
+          <SecondFactorStep challenge={stage.challenge} onSuccess={acceptSession} onBackToCredentials={backToCredentials} />
+        )}
+        {stage.name === 'enrollment_required' && (
+          <EnrollmentStep challenge={stage.challenge} onDone={acceptSession} onBackToCredentials={backToCredentials} />
+        )}
       </AuthSplitLayout>
     </div>
   );

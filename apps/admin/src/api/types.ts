@@ -71,3 +71,107 @@ export interface AdminLoginInput {
   readonly email: string;
   readonly password: string;
 }
+
+/**
+ * Segundo fator (TOTP) — contrato em docs/contrato-admin-2fa.md. Login devolve
+ * um de três estados; os dois que exigem o segundo fator trazem um
+ * `challengeToken` que vive SÓ em memória (estado da tela de login, nunca
+ * storage) e vale 10 min, uma única vez.
+ */
+export interface SecondFactorChallenge {
+  readonly challengeToken: string;
+  /** ISO 8601 — quando o desafio deixa de valer. */
+  readonly challengeExpiresAt: string;
+}
+
+export type LoginOutcome =
+  | { readonly status: 'authenticated'; readonly admin: AdminUser }
+  | ({ readonly status: 'second_factor_required' } & SecondFactorChallenge)
+  | ({ readonly status: 'enrollment_required' } & SecondFactorChallenge);
+
+export interface TotpEnrollment {
+  /** Chave base32, para digitar à mão no app autenticador. */
+  readonly secret: string;
+  /** `otpauth://` — vira o QR code. */
+  readonly otpauthUri: string;
+}
+
+export interface TwoFactorStatus {
+  readonly enabled: boolean;
+  /** Papel que não pode viver sem 2FA (dono, financeiro): esconde "desativar". */
+  readonly required: boolean;
+  readonly recoveryCodesRemaining: number;
+}
+
+/** Os 10 códigos de recuperação — aparecem UMA vez; nunca persistir. */
+export interface RecoveryCodes {
+  readonly recoveryCodes: readonly string[];
+}
+
+/**
+ * Configuração de e-mail (SMTP) — docs/contrato-admin-email.md. Só o papel
+ * `dono`. Por campo vale: painel > variável de ambiente > não definido; a
+ * SENHA nunca volta do servidor (só `saved` e a origem).
+ */
+export type EmailFieldSource = 'panel' | 'env' | 'unset';
+
+export interface EmailEffectiveField<T> {
+  readonly value: T | null;
+  readonly source: EmailFieldSource;
+}
+
+export interface EmailSettings {
+  readonly fields: {
+    readonly host: EmailEffectiveField<string>;
+    readonly port: EmailEffectiveField<number>;
+    readonly user: EmailEffectiveField<string>;
+    readonly from: EmailEffectiveField<string>;
+    readonly password: { readonly saved: boolean; readonly source: EmailFieldSource };
+  };
+  /** O que está GRAVADO no painel (pré-preenche o formulário); `null` = em branco, cai no ambiente. */
+  readonly panel: {
+    readonly host: string | null;
+    readonly port: number | null;
+    readonly user: string | null;
+    readonly from: string | null;
+    readonly passwordSaved: boolean;
+  };
+  readonly configured: boolean;
+  /** `host` | `port` | `from` | `password` — o que falta quando `configured` é false. */
+  readonly missing: readonly string[];
+  /** `null` quando não configurado. */
+  readonly summary: string | null;
+  readonly updatedAt: string | null;
+  /** `false` = servidor sem chave de cifra: o campo de senha não pode ser usado (salvar senha dá 503). */
+  readonly canStorePassword: boolean;
+}
+
+/**
+ * Reautenticação exigida por salvar a configuração de e-mail e por "remover a
+ * senha salva" (revisão S1 rodada 2, I-2): a senha ATUAL do dono logado + o
+ * TOTP de 6 dígitos dele. Código de recuperação NÃO vale aqui (contrato). O
+ * nome é `stepUp` porque `password`, no corpo de salvar, é a senha do servidor
+ * SMTP. Vive só no estado do diálogo que a pede — nunca em storage, URL ou log.
+ */
+export interface StepUp {
+  readonly password: string;
+  readonly code: string;
+}
+
+/**
+ * Estado inteiro do formulário. `null` = em branco. `password` ausente = mantém a salva.
+ * Servidor, porta, usuário e senha são UMA unidade de origem: sem `host`, os outros três
+ * têm de ir em branco (o servidor recusa a mistura com 400).
+ */
+export interface EmailSettingsInput {
+  readonly host: string | null;
+  readonly port: number | null;
+  readonly user: string | null;
+  readonly from: string | null;
+  readonly password?: string;
+}
+
+export interface EmailTestResult {
+  readonly delivered: true;
+  readonly to: string;
+}

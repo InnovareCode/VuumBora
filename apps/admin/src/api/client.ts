@@ -17,6 +17,9 @@ interface ErrorEnvelope {
     readonly message?: string;
     readonly fields?: Readonly<Record<string, string>>;
     readonly reason?: string;
+    readonly retryAfterSeconds?: number;
+    readonly missing?: readonly string[];
+    readonly details?: { readonly kind?: string; readonly serverMessage?: string; readonly smtpCode?: string; readonly responseCode?: number; readonly command?: string };
   };
 }
 type Envelope<T> = SuccessEnvelope<T> | ErrorEnvelope;
@@ -36,14 +39,53 @@ export function onUnauthorized(listener: UnauthorizedListener): () => void {
 function mapStatusToError(status: number, body: Envelope<unknown> | undefined): ApiError {
   const err = body && body.ok === false ? body.error : undefined;
   if (status === 400) {
-    if (err?.fields && Object.keys(err.fields).length > 0) return { kind: 'validation', fields: err.fields };
+    // A maioria das rotas manda `fields` como mapa campo→mensagem; a de e-mail manda só a LISTA de nomes. Normaliza.
+    const fields: Readonly<Record<string, string>> | undefined = Array.isArray(err?.fields)
+      ? Object.fromEntries((err.fields as readonly string[]).map((name) => [name, '']))
+      : err?.fields;
+    if (fields && Object.keys(fields).length > 0) return { kind: 'validation', fields };
     return { kind: 'unknown', message: err?.message ?? 'Corpo da requisição inválido.' };
   }
+  // Códigos do segundo fator ANTES do 401 genérico: um código errado é 401
+  // `invalid_second_factor`, e tratá-lo como "sessão expirada" derrubaria a
+  // sessão inteira (ex.: errar o código ao regenerar códigos de recuperação).
+  if (status === 401 && err?.code === 'invalid_second_factor') return { kind: 'invalid_second_factor' };
+  if (status === 401 && err?.code === 'challenge_invalid') return { kind: 'challenge_invalid' };
   if (status === 401) return { kind: 'unauthorized' };
+  // 403 de reautenticação/ativação: senha ou código errados NÃO são "sem permissão" nem sessão caída.
+  if (status === 403 && err?.code === 'password_invalid') return { kind: 'password_invalid' };
+  if (status === 403 && err?.code === 'enrollment_token_invalid') return { kind: 'enrollment_token_invalid' };
+  if (status === 403 && err?.code === 'two_factor_required_for_role') return { kind: 'two_factor_required_for_role' };
   if (status === 403) return err?.code === 'csrf_token_invalid' ? { kind: 'csrf_invalid' } : { kind: 'forbidden' };
   if (status === 404) return { kind: 'not_found' };
-  if (status === 409) return { kind: 'conflict', reason: err?.reason ?? 'unknown' };
-  if (status === 429) return { kind: 'rate_limited' };
+  if (status === 409 && err?.code === 'email_not_configured') return { kind: 'email_not_configured', missing: err.missing ?? [] };
+  if (status === 409) return { kind: 'conflict', reason: err?.reason ?? err?.code ?? 'unknown' };
+  if (status === 429 && err?.code === 'account_locked') {
+    // Espera por par (1 s … 15 min), não bloqueio de conta. O corpo sempre traz `retryAfterSeconds`; sem ele, um piso curto
+    // (e não os 15 min do bloqueio do código) — se ainda valer, o próximo 429 traz o tempo real.
+    return { kind: 'account_locked', retryAfterSeconds: err.retryAfterSeconds ?? 5 };
+  }
+  if (status === 429 && err?.code === 'two_factor_locked') {
+    // Mesma informação no corpo e no header `Retry-After`; o corpo basta (CORS não expõe o header sem Access-Control-Expose-Headers).
+    return { kind: 'two_factor_locked', retryAfterSeconds: err.retryAfterSeconds ?? 15 * 60 };
+  }
+  if (status === 429) return { kind: 'rate_limited', ...(err?.retryAfterSeconds != null ? { retryAfterSeconds: err.retryAfterSeconds } : {}) };
+  if (status === 422 && err?.code === 'smtp_host_blocked') return { kind: 'smtp_host_blocked' };
+  if (status === 502 && err?.code === 'smtp_delivery_failed') {
+    const d = err.details;
+    return {
+      kind: 'smtp_delivery_failed',
+      details: {
+        kind: d?.kind ?? 'smtp',
+        serverMessage: d?.serverMessage ?? err.message ?? 'Sem detalhe do servidor.',
+        ...(d?.smtpCode !== undefined ? { smtpCode: d.smtpCode } : {}),
+        ...(d?.responseCode !== undefined ? { responseCode: d.responseCode } : {}),
+        ...(d?.command !== undefined ? { command: d.command } : {}),
+      },
+    };
+  }
+  if (status === 503 && err?.code === 'encryption_unavailable') return { kind: 'encryption_unavailable' };
+  if (status === 503 && err?.code === 'two_factor_unavailable') return { kind: 'two_factor_unavailable' };
   if (status === 503) return { kind: 'unavailable', retryable: true };
   if (status >= 500) return { kind: 'unknown', message: err?.message ?? `status HTTP ${status}` };
   return { kind: 'unknown', message: err?.message ?? `status HTTP ${status}` };

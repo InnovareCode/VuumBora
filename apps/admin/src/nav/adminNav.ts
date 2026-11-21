@@ -1,4 +1,4 @@
-import { UserCheck } from 'lucide-react';
+import { Mail, ShieldCheck, UserCheck } from 'lucide-react';
 import type { NavGroup, NavItem } from './types';
 import { flattenNav, matchNavItem } from './types';
 
@@ -31,6 +31,32 @@ export const ADMIN_NAV: readonly NavGroup[] = [
         // também, senão o menu passa a mentir sobre quem pode abrir isto
         // (o backend ainda protege com 403; isto é só o menu não mentir).
         roles: ['dono', 'operacao'],
+      },
+    ],
+  },
+  {
+    title: 'Configurações',
+    items: [
+      {
+        label: 'E-mail',
+        href: '/email',
+        icon: Mail,
+        hint: 'Servidor SMTP que envia os e-mails do VuumBora',
+        // Espelha `requireAdminRole('dono')` em apps/api/src/routes/admin-email-settings-route.ts. O backend
+        // devolve 403 para os demais; isto só evita oferecer uma porta que o papel não abre.
+        roles: ['dono'],
+      },
+    ],
+  },
+  {
+    title: 'Minha conta',
+    items: [
+      {
+        label: 'Segurança',
+        href: '/security',
+        icon: ShieldCheck,
+        hint: 'Verificação em duas etapas e códigos de recuperação',
+        // Sem `roles`: todo papel autenticado tem conta e pode (ou precisa) usar 2FA.
       },
     ],
   },

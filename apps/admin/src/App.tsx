@@ -6,12 +6,19 @@ import { LoginPage } from './pages/LoginPage';
 import { DriverApplicationsListPage } from './pages/DriverApplicationsListPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { LoadingState } from './components/RequestState';
+import { SessionUnavailable } from './components/SessionUnavailable';
 
 // Detalhe é a tela mais pesada (grade de campos + botão de copiar) e não é a
 // primeira coisa que o admin vê — lazy load por rota.
 const DriverApplicationDetailPage = lazy(() =>
   import('./pages/DriverApplicationDetailPage').then((m) => ({ default: m.DriverApplicationDetailPage })),
 );
+
+const SecuritySettingsPage = lazy(() =>
+  import('./pages/SecuritySettingsPage').then((m) => ({ default: m.SecuritySettingsPage })),
+);
+
+const EmailSettingsPage = lazy(() => import('./pages/EmailSettingsPage').then((m) => ({ default: m.EmailSettingsPage })));
 
 /**
  * Rota de layout: decide entre checando/deslogado/logado e, só quando
@@ -21,18 +28,20 @@ const DriverApplicationDetailPage = lazy(() =>
  * resetam a cada troca de tela.
  */
 function RequireAuth() {
-  const { status } = useAuth();
+  const { status, sessionProblem, retrySession } = useAuth();
   if (status === 'checking') return <LoadingState label="Verificando sessão…" />;
+  // 429/rede/5xx em `GET /me` NÃO é "sessão caiu": não vai ao login, avisa e deixa tentar de novo.
+  if (status === 'unavailable') return <SessionUnavailable problem={sessionProblem} onRetry={retrySession} />;
   if (status === 'signedOut') return <Navigate to="/login" replace />;
   return <AppShell />;
 }
 
 export function App() {
-  const { status } = useAuth();
+  const { status, postLoginPath } = useAuth();
 
   return (
     <Routes>
-      <Route path="/login" element={status === 'signedIn' ? <Navigate to="/driver-applications" replace /> : <LoginPage />} />
+      <Route path="/login" element={status === 'signedIn' ? <Navigate to={postLoginPath ?? '/driver-applications'} replace /> : <LoginPage />} />
       <Route element={<RequireAuth />}>
         <Route path="/driver-applications" element={<DriverApplicationsListPage />} />
         <Route
@@ -40,6 +49,22 @@ export function App() {
           element={
             <Suspense fallback={<LoadingState label="Carregando…" />}>
               <DriverApplicationDetailPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/email"
+          element={
+            <Suspense fallback={<LoadingState label="Carregando…" />}>
+              <EmailSettingsPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/security"
+          element={
+            <Suspense fallback={<LoadingState label="Carregando…" />}>
+              <SecuritySettingsPage />
             </Suspense>
           }
         />

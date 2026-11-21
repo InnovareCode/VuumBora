@@ -48,7 +48,7 @@ export function Dialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative w-full max-w-md rounded-xxl bg-surface p-6 shadow-2xl ring-1 ring-border"
+        className="relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xxl bg-surface p-6 shadow-2xl ring-1 ring-border"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2 id={titleId} className="text-title font-bold text-text">

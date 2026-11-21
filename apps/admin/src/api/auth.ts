@@ -1,10 +1,19 @@
-import type { AdminLoginInput, AdminUser } from './types';
+import type { AdminLoginInput, AdminUser, LoginOutcome, RecoveryCodes, TotpEnrollment } from './types';
 import type { Result } from './result';
 import { createHttpRequester } from './client';
 import { clearCsrfToken, setCsrfToken } from './csrf';
 
 export interface AuthPort {
-  login(input: AdminLoginInput): Promise<Result<AdminUser>>;
+  login(input: AdminLoginInput): Promise<Result<LoginOutcome>>;
+  /**
+   * Passo 2 do login: código TOTP de 6 dígitos ou código de recuperação. Sucesso emite a sessão e diz quantos códigos de
+   * recuperação ainda restam (`null` se o servidor não informar) — a tela avisa quando o acesso foi por um deles.
+   */
+  verifySecondFactor(input: { challengeToken: string; code: string }): Promise<Result<{ admin: AdminUser; recoveryCodesRemaining: number | null }>>;
+  /** Enrolamento obrigatório (dono/financeiro) ANTES da sessão — `challengeToken` + `enrollmentToken` (código de ativação entregue fora de banda). Idempotente por 15 min. */
+  startEnrollment(input: { challengeToken: string; enrollmentToken: string }): Promise<Result<TotpEnrollment>>;
+  /** Confirma o primeiro código; já conclui o login e devolve os códigos de recuperação (única exibição). */
+  confirmEnrollment(input: { challengeToken: string; enrollmentToken: string; code: string }): Promise<Result<{ admin: AdminUser } & RecoveryCodes>>;
   me(): Promise<Result<AdminUser>>;
   logout(): Promise<Result<void>>;
 }
@@ -20,9 +29,14 @@ interface AdminSessionResponse extends AdminUser {
   readonly csrfToken: string | null;
 }
 
-/** Guarda o token em memória e devolve só os campos de `AdminUser` para o resto do app. */
-function captureCsrfToken(session: AdminSessionResponse): AdminUser {
-  const { csrfToken, ...admin } = session;
+/** Corpo de `POST /auth/login`: `status` discrimina; só `authenticated` traz o corpo de sessão de antes. */
+type LoginResponse =
+  | ({ readonly status: 'authenticated' } & AdminSessionResponse)
+  | { readonly status: 'second_factor_required' | 'enrollment_required'; readonly challengeToken: string; readonly challengeExpiresAt: string };
+
+/** Guarda o token em memória e devolve só os campos de `AdminUser` (sem `status`, códigos de recuperação etc.) para o resto do app. */
+function captureCsrfToken(session: AdminSessionResponse & { readonly status?: string; readonly recoveryCodes?: unknown; readonly recoveryCodesRemaining?: unknown }): AdminUser {
+  const { csrfToken, status: _status, recoveryCodes: _codes, recoveryCodesRemaining: _remaining, ...admin } = session;
   setCsrfToken(csrfToken);
   return admin;
 }
@@ -31,9 +45,45 @@ export function createHttpAuthAdapter(baseUrl: string): AuthPort {
   const request = createHttpRequester(baseUrl);
   return {
     async login(input) {
-      const result = await request<AdminSessionResponse>({ path: '/v1/admin/auth/login', method: 'POST', body: input });
+      const result = await request<LoginResponse>({ path: '/v1/admin/auth/login', method: 'POST', body: input });
       if (!result.ok) return result;
-      return { ...result, data: captureCsrfToken(result.data) };
+      const body = result.data;
+      if (body.status === 'authenticated') {
+        return { ...result, data: { status: 'authenticated', admin: captureCsrfToken(body) } };
+      }
+      return {
+        ...result,
+        data: { status: body.status, challengeToken: body.challengeToken, challengeExpiresAt: body.challengeExpiresAt },
+      };
+    },
+    async verifySecondFactor({ challengeToken, code }) {
+      const result = await request<AdminSessionResponse & { readonly recoveryCodesRemaining?: unknown }>({
+        path: '/v1/admin/auth/2fa/verify',
+        method: 'POST',
+        body: { challengeToken, code },
+      });
+      if (!result.ok) return result;
+      const remaining = result.data.recoveryCodesRemaining;
+      return {
+        ...result,
+        data: { admin: captureCsrfToken(result.data), recoveryCodesRemaining: typeof remaining === 'number' ? remaining : null },
+      };
+    },
+    startEnrollment({ challengeToken, enrollmentToken }) {
+      return request<TotpEnrollment>({
+        path: '/v1/admin/auth/2fa/enroll/start',
+        method: 'POST',
+        body: { challengeToken, enrollmentToken },
+      });
+    },
+    async confirmEnrollment({ challengeToken, enrollmentToken, code }) {
+      const result = await request<AdminSessionResponse & { recoveryCodes: string[] }>({
+        path: '/v1/admin/auth/2fa/enroll/confirm',
+        method: 'POST',
+        body: { challengeToken, enrollmentToken, code },
+      });
+      if (!result.ok) return result;
+      return { ...result, data: { admin: captureCsrfToken(result.data), recoveryCodes: result.data.recoveryCodes } };
     },
     async me() {
       const result = await request<AdminSessionResponse>({ path: '/v1/admin/me' });
@@ -98,7 +148,21 @@ export function createMockAuthAdapter(): AuthPort {
       }
       session = { ...FAKE_USER, email: input.email };
       writeMockSession(session);
-      return { ok: true, data: session, origin: 'mock' };
+      return { ok: true, data: { status: 'authenticated', admin: session }, origin: 'mock' };
+    },
+    // O mock não simula o segundo fator: o fluxo real só é exercitável contra a
+    // API (VITE_API_MODE=http). Chegar aqui em mock é bug de chamada.
+    async verifySecondFactor() {
+      await delay();
+      return { ok: false, error: { kind: 'challenge_invalid' } };
+    },
+    async startEnrollment() {
+      await delay();
+      return { ok: false, error: { kind: 'challenge_invalid' } };
+    },
+    async confirmEnrollment() {
+      await delay();
+      return { ok: false, error: { kind: 'challenge_invalid' } };
     },
     async me() {
       await delay();

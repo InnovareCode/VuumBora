@@ -103,12 +103,15 @@ export function AuthSplitLayout({
         o cartão) — mesma função visual (separar "marca" de "ação"), tokens
         que já existem.
       */}
-      <div className="relative flex flex-1 flex-col justify-center overflow-y-auto bg-surface p-6 sm:p-10 lg:p-12 xl:p-16">
+      <div className="relative flex flex-1 flex-col overflow-y-auto bg-surface p-6 sm:p-10 lg:p-12 xl:p-16">
         <div
           aria-hidden="true"
           className="absolute right-0 top-0 h-80 w-80 rounded-full bg-cta/10 blur-3xl"
         />
-        <div className="relative z-10 mx-auto w-full max-w-sm py-6">
+        {/* `my-auto` (e não `justify-center` no pai): centraliza quando sobra espaço, mas quando o
+            cartão é mais alto que a tela (códigos de recuperação, QR) o topo continua alcançável
+            por rolagem — `justify-center` corta o topo de conteúdo alto sem como rolar até ele. */}
+        <div className="relative z-10 mx-auto my-auto w-full max-w-sm py-6">
           <div className="mb-8 flex items-center justify-center lg:hidden">
             <BrandLogo className="h-9" />
           </div>

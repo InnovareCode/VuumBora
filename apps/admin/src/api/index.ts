@@ -1,7 +1,11 @@
 import { createHttpAuthAdapter, createMockAuthAdapter, type AuthPort } from './auth';
+import { createHttpTwoFactorAdapter, createMockTwoFactorAdapter, type TwoFactorPort } from './twoFactor';
+import { createHttpEmailSettingsAdapter, createMockEmailSettingsAdapter, type EmailSettingsPort } from './emailSettings';
 import { createHttpDriverApplicationAdapter, createMockDriverApplicationAdapter, type DriverApplicationPort } from './driverApplications';
 
 export type { AuthPort } from './auth';
+export type { TwoFactorPort } from './twoFactor';
+export type { EmailSettingsPort } from './emailSettings';
 export type { DriverApplicationPort } from './driverApplications';
 export * from './types';
 export * from './result';
@@ -10,6 +14,8 @@ export { onUnauthorized } from './client';
 export interface Api {
   readonly mode: 'http' | 'mock';
   readonly auth: AuthPort;
+  readonly twoFactor: TwoFactorPort;
+  readonly emailSettings: EmailSettingsPort;
   readonly driverApplications: DriverApplicationPort;
 }
 
@@ -23,7 +29,7 @@ export function createApi(): Api {
   const mode = import.meta.env.VITE_API_MODE === 'http' ? 'http' : 'mock';
 
   if (mode === 'mock') {
-    return { mode, auth: createMockAuthAdapter(), driverApplications: createMockDriverApplicationAdapter() };
+    return { mode, auth: createMockAuthAdapter(), twoFactor: createMockTwoFactorAdapter(), emailSettings: createMockEmailSettingsAdapter(), driverApplications: createMockDriverApplicationAdapter() };
   }
 
   const baseUrl = import.meta.env.VITE_API_BASE_URL;
@@ -33,6 +39,8 @@ export function createApi(): Api {
   return {
     mode,
     auth: createHttpAuthAdapter(baseUrl),
+    twoFactor: createHttpTwoFactorAdapter(baseUrl),
+    emailSettings: createHttpEmailSettingsAdapter(baseUrl),
     driverApplications: createHttpDriverApplicationAdapter(baseUrl),
   };
 }

@@ -26,6 +26,12 @@ function getFocusable(container: HTMLElement): HTMLElement[] {
  */
 export function useFocusTrap(containerRef: RefObject<HTMLElement | null>, active: boolean, onEscape: () => void): void {
   const triggerRef = useRef<HTMLElement | null>(null);
+  // `onEscape` quase sempre chega como arrow inline (identidade nova a cada render). Se entrasse nas deps do efeito,
+  // CADA re-render de quem usa a armadilha (ex.: digitar num campo do diálogo) re-executaria o efeito e jogaria o foco
+  // de volta no primeiro focável — só dava para digitar UM caractere por vez. Fica numa ref; o efeito só reage a
+  // `active`/`containerRef`. (Bug medido em 21/11/2026 com `keyboard.type`; `fill()` do Playwright não o revela.)
+  const onEscapeRef = useRef(onEscape);
+  onEscapeRef.current = onEscape;
 
   useEffect(() => {
     if (!active) return undefined;
@@ -40,7 +46,7 @@ export function useFocusTrap(containerRef: RefObject<HTMLElement | null>, active
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onEscape();
+        onEscapeRef.current();
         return;
       }
       if (event.key !== 'Tab' || !container) return;
@@ -69,5 +75,5 @@ export function useFocusTrap(containerRef: RefObject<HTMLElement | null>, active
       document.removeEventListener('keydown', onKeyDown, true);
       triggerRef.current?.focus();
     };
-  }, [active, containerRef, onEscape]);
+  }, [active, containerRef]);
 }
