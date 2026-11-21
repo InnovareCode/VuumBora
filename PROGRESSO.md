@@ -2,6 +2,66 @@
 
 Estado do projeto entre sessões. Atualizar ao fim de cada marco.
 
+## S1 (fundação do backend) e fecho do Admin v0 — NO REPOSITÓRIO, NÃO PUBLICADO (21/11/2026)
+
+Tudo abaixo está commitado e enviado para `origin/main`, **mas nada foi
+publicado**: nenhuma migração rodou em produção e nenhuma variável nova foi
+criada no Easypanel. As migrações 0010–0020 e o código novo **só podem ir
+juntos** (o cadastro dos apps depende da 0019 e do código que envia a data de
+nascimento).
+
+**O que entrou**
+- **Banco (0010–0020):** contas separadas (passageiro/motorista), credenciais,
+  dispositivos, renovação rotativa com revogação de família, códigos de e-mail,
+  `access_log`, 2FA do admin, SMTP do painel, trilha de auditoria inviolável,
+  papel de banco com privilégio mínimo, idade mínima (18) e registro de aceite.
+- **API:** `/v1/auth/*` (cadastro, verificação de e-mail com senha, login,
+  renovação, logout, esqueci/redefinir senha) e, no admin, 2FA (TOTP, código de
+  ativação, senha atual), configuração de SMTP com step-up. Atraso progressivo
+  no login em vez de bloqueio duro. Log sem dado pessoal e sem `err.message`.
+- **Painel:** telas do 2FA, tela "E-mail" (só dono), cabeçalhos de segurança
+  (CSP etc.) e correção do foco em todos os diálogos.
+- **CI e backup:** `.github/workflows/ci.yml` (nunca rodou no GitHub), backup
+  cifrado com restauração provada, guias de produção e de emergência.
+
+**Provado:** 255/255 testes da API em Postgres 18 recriado do zero (duas
+vezes); Íris validou de forma independente a versão anterior ao último ciclo
+de correções (`docs/veredito-iris-s1.md`); Órion auditou duas rodadas, 0
+críticos (`docs/revisao-seguranca-s1*.md`).
+**Não provado:** passada final da Íris sobre o código commitado; SMTP real
+com TLS; SPF/DKIM; CI no GitHub; imagem Docker; leitor de tela; Safari/iPhone;
+produção (papel restrito, proxy, `TRUST_PROXY`).
+
+**Decisões do dono (21/11/2026, em `docs/decisoes-do-dono.md`):** contas
+separadas; e-mail verificado obrigatório; recuperação só por e-mail; e-mail
+repetido avisa que já existe; SMTP do próprio domínio, configurado no painel;
+bloqueio de 15 min do código do 2FA aceito, com procedimento de emergência;
+atraso progressivo no login; sem CAPTCHA por enquanto; idade mínima 18 anos;
+IP em claro na auditoria do admin.
+
+**Decisões em aberto (do dono)**
+- Textos e versões dos Termos de Uso e da Política de Privacidade (o cadastro
+  responde 503 sem `AUTH_TERMS_VERSION`/`AUTH_PRIVACY_VERSION`); documento
+  único ou separado para motorista; prazo de guarda do hash do IP de aceite.
+- Unicidade do e-mail por tipo de conta (hipótese em uso) e regra de 29/02.
+- Taxa da plataforma (cortes exatos), gateway com split, cidade, orçamento e
+  prazo: ver `docs/plano-sistema.md` §14.
+
+**Pendente para publicar (ordem em `docs/producao-passo-a-passo-dono.md` e
+`docs/publicar-o-backend.md`)**
+- Variáveis: `AUTH_PEPPER`, `AUTH_JWT_SECRET`, `ADMIN_TOTP_ENCRYPTION_KEY`,
+  `TRUST_PROXY=1`, `ADMIN_ALLOWED_ORIGINS`, versões dos documentos; depois
+  `REQUIRE_SECRETS=true`.
+- Duas credenciais de banco (`MIGRATION_DATABASE_URL` fora do contêiner da API),
+  `ativar-papel-api.sql`, migração por tarefa de operador, retenção agendada.
+- HTTPS e firewall do painel do Easypanel, bucket e serviço de backup, monitor
+  externo, admin de produção (com código de ativação do 2FA).
+- Preencher a tela "E-mail" e conferir SPF, DKIM e DMARC do domínio.
+- Achados do Órion ainda abertos (rodada 2): I-8 parcial (HSTS no proxy),
+  S-3 (usuário SMTP em claro na auditoria) e demais sugestões.
+- Apps móveis (quando forem ligados à API): serializar a renovação do token,
+  porque duas renovações simultâneas com o mesmo token derrubam a sessão.
+
 ## Admin v0 — ENTREGUE E APROVADO (20/11/2026)
 
 Primeira fatia do painel da plataforma (fase **S2** do plano). Commits

@@ -84,6 +84,10 @@ fazem o mesmo, desde que executados do mesmo jeito (`--workspace
 isso). Se preferir não depender disso, exporte `DATABASE_URL` manualmente
 na sessão do terminal antes de rodar.
 
+> **Excluir (`waitlist:delete`, `driver-applications:delete`) exige a credencial DONA do banco**
+> (`MIGRATION_DATABASE_URL`): o papel restrito da API (migração 0017) não apaga linhas. Exportar
+> (`*:export`) continua funcionando com a `DATABASE_URL` da API. Ver `docs/publicar-o-backend.md`.
+
 Teste rápido de que subiu:
 
 ```bash

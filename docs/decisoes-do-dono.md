@@ -812,3 +812,65 @@ um dia isso voltar à mesa, é decisão de design system, não de tela.
 autocadastro e "esqueci minha senha". Conta de administrador nasce por
 script (decisão de segurança), e não existe fluxo de recuperação — link que
 não leva a lugar nenhum é pior que a ausência dele.
+
+## Identidade dos apps — decisões do dono (21/11/2026)
+
+Respostas às quatro perguntas em aberto do S1 (login dos apps, e-mail + senha).
+
+1. **Contas separadas.** Passageiro e motorista são contas distintas, uma por
+   papel. Não existe "conta com dois papéis". Hipótese de implementação, a
+   confirmar: o mesmo e-mail pode abrir uma conta de passageiro e outra de
+   motorista (unicidade do e-mail **por tipo de conta**), e o app indica o tipo
+   no login.
+2. **Verificação de e-mail: obrigatória**, "de muita importância para validar
+   os dados informados". Conta sem e-mail verificado não abre sessão.
+3. **Recuperação de senha: unicamente por e-mail.** Sem WhatsApp, sem SMS.
+4. **Cadastro com e-mail repetido: informar que o e-mail já está cadastrado**
+   (resposta explícita, aceitando o custo de revelar que o e-mail existe).
+   Limitar por IP/identificador o número de consultas.
+
+Consequência de infraestrutura: o envio de e-mail passa a ser dependência do
+cadastro. Falta escolher o provedor (SMTP/transacional) e configurar o
+domínio de envio (SPF, DKIM, DMARC) — ver pendências do S1 no PROGRESSO.
+
+**Provedor de e-mail (21/11/2026): SMTP do próprio domínio do dono.** A API
+envia por SMTP configurado em variáveis de ambiente (host, porta, usuário,
+senha, remetente) — a senha vai só no Easypanel, nunca no git nem no chat.
+Pendente do dono: fornecer esses dados e conferir SPF/DKIM/DMARC do domínio
+de envio.
+
+**Configuração do SMTP dentro do painel (21/11/2026).** O dono quer cadastrar
+servidor, porta, usuário, senha e remetente na própria tela do admin, no
+padrão do ModaShop: cada campo mostra de onde vem o valor (painel, variável
+de ambiente ou padrão), a senha fica salva cifrada e nunca volta para a
+tela, e há envio de e-mail de teste. Só o papel `dono` acessa.
+
+**Bloqueio do 2FA do admin (21/11/2026): aceito.** Cinco códigos errados
+travam o admin por 15 minutos (inclusive com o código certo durante o
+bloqueio). O dono aceitou o risco de quem sabe a senha travar um admin de
+propósito, em troca de proteção contra adivinhação, **com procedimento de
+emergência (break-glass) documentado** para desbloquear. Resposta ao
+achado M-4 de `docs/revisao-seguranca-s1.md`.
+
+**Bloqueio de login: atraso progressivo (21/11/2026).** Em resposta ao achado
+I-6 de `docs/revisao-seguranca-s1-rodada2.md`: no login dos apps e no login
+do admin, o bloqueio duro por conta (teto global de 20 falhas nos apps; 10 em
+15 min no admin) dá lugar a **atraso progressivo** — cada falha seguida
+aumenta o tempo de espera, sem travar a conta de quem conhece a senha. Fica
+valendo, como já decidido, o bloqueio de 15 min do **código do 2FA**.
+
+**Pendências do I-5 e LGPD, respondidas (21/11/2026).**
+- **CAPTCHA no cadastro: não, por enquanto.** O freio contra e-mail em massa
+  fica nos limites por e-mail, por IP e no teto global de envios por hora.
+- **Idade mínima: 18 anos, para passageiro e para motorista.** Hipótese de
+  implementação, a confirmar: data de nascimento no cadastro, validada no
+  servidor (recusa menor de 18) e guardada só para esse fim.
+- **Ainda em aberto:** textos e versões dos Termos de Uso e da Política de
+  Privacidade (o aceite precisa registrar qual versão) e o que fazer com o IP
+  em claro em `admin_audit_log` (recomendação: guardar só o IP truncado).
+
+**IP em `admin_audit_log`: mantido em claro (21/11/2026).** O dono decidiu não
+truncar. Consequência registrada: o banco não permite apagar essas linhas
+(trilha inviolável), então a base legal e o prazo de guarda do IP precisam
+constar na Política de Privacidade (finalidade: segurança e auditoria
+administrativa). Resposta ao ponto aberto da rodada 2 do Órion.

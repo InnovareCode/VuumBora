@@ -96,7 +96,7 @@ Na aba de **variáveis de ambiente**:
 | `ALLOWED_ORIGINS` | `https://www.vuumbora.com.br,https://vuumbora.com.br` |
 | `ADMIN_ALLOWED_ORIGINS` | `https://admin.vuumbora.com.br` |
 | `PORT` | `3000` |
-| `TRUST_PROXY` | `true` |
+| `TRUST_PROXY` | `1` |
 
 ⚠️ **`ADMIN_ALLOWED_ORIGINS` é obrigatória e nasceu em 20/11/2026** — a API
 **não sobe sem ela**. Quem republicar o backend sem preenchê-la primeiro
@@ -118,6 +118,14 @@ propósito, para nunca rodar com banco vazio nem com CORS aberto em silêncio. `
 porque o limite de requisições conta por IP, e atrás do proxy do Easypanel todo
 mundo chegaria com o mesmo endereço sem isso.
 
+**`TRUST_PROXY` é o NÚMERO de proxies à frente da API, não "confiar em tudo"** (achado A-1 da
+revisão S1). `1` = só o Traefik do Easypanel. Com CDN na frente dele (ex.: Cloudflare), ponha `2`.
+Também aceita lista de IP/CIDR (`10.0.0.0/8,172.16.0.0/12`) ou `false`. Antes, `true` fazia a API
+acreditar no `X-Forwarded-For` escrito pelo próprio cliente, e quem forjasse o cabeçalho escolhia o
+IP e driblava todo limite por IP. O valor `true` antigo continua aceito, mas agora vale `1`.
+Confira em produção: `curl -H "X-Forwarded-For: 1.2.3.4" https://api.vuumbora.com.br/health` — o IP
+que a API registra no log **não** pode ser `1.2.3.4`.
+
 ⚠️ A `DATABASE_URL` tem que terminar no nome do banco da aplicação, por exemplo
 `.../vuumbora`. Se terminar em `/postgres`, é nesse banco que as tabelas vão ser
 criadas — funciona, mas mistura os dados da aplicação com o banco de sistema.
@@ -129,8 +137,38 @@ ligada. As três variáveis abaixo existem só para casos fora do comum:
 | Variável | Padrão | Para quê |
 |---|---|---|
 | `RUN_MIGRATIONS_ON_BOOT` | ligado | `false` desliga o preparo no boot (migração manual controlada) |
+| `REQUIRE_SECRETS` | desligado | `true` faz o boot **falhar** se faltar/estiver fraco `AUTH_PEPPER`, `AUTH_JWT_SECRET` ou `ADMIN_TOTP_ENCRYPTION_KEY` (sem a flag a API sobe e **avisa alto** no log, com os nomes). Ligue em produção depois de provisionar os três |
 | `CREATE_DATABASE_IF_MISSING` | ligado | `false` em Postgres gerenciado, onde o banco já vem pronto e o usuário não pode criar |
 | `DB_BOOT_WAIT_SECONDS` | `60` | quanto esperar o Postgres aceitar conexão antes de desistir |
+
+### Duas credenciais de banco: a da API (restrita) e a do dono (fora do contêiner da API)
+
+Revisão de segurança S1 rodada 2, achado I-3. A API roda com o papel **`vuumbora_api`**, que a migração `0017`
+reduz ao mínimo: ele **não** cria administrador, **não** emite token de ativação do 2FA e **não** apaga conta,
+sessão, lista de espera nem candidatura. Isso só protege se a credencial **dona** do banco (a que cria
+administrador e desliga trigger) **não estiver no mesmo contêiner**: quem vaza o ambiente da API leva as duas.
+
+| Credencial | Onde fica | Para quê |
+|---|---|---|
+| `DATABASE_URL` → `vuumbora_api` | serviço da API (runtime) | atender requisições |
+| `MIGRATION_DATABASE_URL` → dono | **só** em tarefa/terminal de operador | migrar, `create-admin`, `reissue-2fa-enrollment`, `waitlist:delete`, `driver-applications:delete`, `identity:retention` |
+
+Passo a passo (infraestrutura — Vulcano):
+
+1. Ative o papel uma vez: `docs/sql/ativar-papel-api.sql` (com a credencial dona). Ponha a senha dele em `DATABASE_URL` da API.
+2. **Retire `MIGRATION_DATABASE_URL` do ambiente do serviço da API.** Com `RUN_MIGRATIONS_ON_BOOT` ligado a API ainda
+   migra no boot e, sem a credencial dona, usa a própria `DATABASE_URL` (o papel restrito não faz DDL): então, em produção,
+   **desligue `RUN_MIGRATIONS_ON_BOOT`** e migre por uma tarefa de operador que tenha `MIGRATION_DATABASE_URL`:
+   `npm run migrate -w @vuumbora/api`.
+3. Os scripts de operador (`create-admin`, `reissue-2fa-enrollment`, `*:delete`, `identity:retention`) leem
+   `MIGRATION_DATABASE_URL` e **avisam** se tiverem de cair em `DATABASE_URL` (com o papel restrito eles falham de propósito).
+   Rode-os num terminal/tarefa do Easypanel em que a variável exista só durante a execução, e agende a retenção
+   (`identity:retention`, diário) com a mesma regra.
+4. Se for inevitável manter `MIGRATION_DATABASE_URL` no serviço da API (migração no boot), a API a **remove do
+   `process.env` depois de migrar** e avisa no log a cada boot (`[server] AVISO ...`). Isso reduz, não elimina: o ambiente do
+   contêiner continua legível por quem tem acesso ao contêiner.
+5. Confira: com `DATABASE_URL` da API, `INSERT INTO admin_users ...` deve falhar com `permission denied`.
+   (`apps/api/test/runtime-role.test.ts` prova isso contra Postgres real a cada execução do CI.)
 
 ## 4. O endereço da API
 
