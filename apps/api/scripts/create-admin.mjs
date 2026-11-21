@@ -13,7 +13,8 @@
  * fica visível no histórico do terminal — use só em automação/CI
  * controlado, nunca digitando à mão.
  *
- * Exige DATABASE_URL no ambiente. Roda dentro do contêiner do serviço
+ * Exige a credencial DONA do banco (MIGRATION_DATABASE_URL; o papel restrito da API não
+ * pode mais criar administrador — migração 0017). Roda no terminal do serviço
  * `vuumbora-backend` (terminal do Easypanel ou `docker exec`) em produção,
  * ou localmente lendo `apps/api/.env` (via `dotenv/config`, mesmo padrão
  * dos outros scripts).
@@ -22,6 +23,8 @@ import 'dotenv/config';
 import { createInterface } from 'node:readline';
 import bcrypt from 'bcryptjs';
 import pg from 'pg';
+import { ENROLLMENT_TOKEN_TTL_HOURS, MANDATORY_2FA_ROLES, issueEnrollmentToken } from './lib/enrollment-token.mjs';
+import { resolveOwnerDatabaseUrl } from './lib/owner-db-url.mjs';
 
 const { Pool } = pg;
 const ROLES = ['dono', 'operacao', 'revisor_documentos', 'financeiro', 'suporte'];
@@ -89,11 +92,7 @@ function askHidden(question) {
 }
 
 async function main() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    console.error('[create-admin] DATABASE_URL não definido no ambiente.');
-    process.exit(1);
-  }
+  const databaseUrl = resolveOwnerDatabaseUrl('create-admin');
 
   const args = parseArgs(process.argv.slice(2));
 
@@ -140,6 +139,16 @@ async function main() {
     }
 
     console.log(`[create-admin] admin criado: ${email} (id ${result.rows[0].id}, role "${role}").`);
+
+    // Dono e financeiro são obrigados a ter 2FA, e o PRIMEIRO enrolamento exige este token
+    // (fora de banda): só a senha não basta. Aparece uma única vez — entregue em mãos.
+    if (MANDATORY_2FA_ROLES.includes(role)) {
+      const issued = await issueEnrollmentToken(pool, result.rows[0].id);
+      console.log('');
+      console.log(`[create-admin] CÓDIGO DE ATIVAÇÃO DO 2FA (uso único, vale ${ENROLLMENT_TOKEN_TTL_HOURS}h, não será mostrado de novo):`);
+      console.log(`    ${issued.token}`);
+      console.log('[create-admin] Entregue por um canal seguro à pessoa. Para emitir outro: npm run reissue-2fa-enrollment -w @vuumbora/api -- --email=' + email);
+    }
   } finally {
     await pool.end();
   }

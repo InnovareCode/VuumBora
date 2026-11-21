@@ -4,6 +4,7 @@
  */
 import 'dotenv/config';
 import { z } from 'zod';
+import { parseTrustProxy } from './lib/trust-proxy.js';
 
 // `dotenv/config` só lê um `.env` se ele existir no diretório de trabalho
 // (uso local); em produção (Easypanel) não há arquivo — as variáveis já
@@ -69,11 +70,23 @@ const schema = z.object({
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
-  /** Easypanel sempre fica atrás de um proxy — precisamos confiar em X-Forwarded-For para o rate limit por IP funcionar. */
+  /**
+   * Quantos proxies ficam à frente da API (padrão 1: o Traefik do Easypanel),
+   * ou lista de IP/CIDR confiáveis, ou `false`. NUNCA "confie em tudo": ver
+   * `lib/trust-proxy.ts` (achado A-1 — `X-Forwarded-For` forjado driblava todo
+   * limite por IP). Se houver CDN na frente do Traefik, ponha 2.
+   */
   TRUST_PROXY: z
     .string()
     .optional()
-    .transform((value) => value !== 'false'),
+    .transform((value, ctx) => {
+      try {
+        return parseTrustProxy(value);
+      } catch (err) {
+        ctx.addIssue({ code: 'custom', message: err instanceof Error ? err.message : 'TRUST_PROXY inválido' });
+        return z.NEVER;
+      }
+    }),
 
   /**
    * O boot cria o banco (se faltar) e aplica as migrações pendentes antes
@@ -125,6 +138,29 @@ const schema = z.object({
    * quando válido para sempre. Default 7 dias.
    */
   ADMIN_SESSION_ABSOLUTE_TTL_HOURS: z.coerce.number().int().positive().default(24 * 7),
+
+  /**
+   * Chave AES-256 (32 bytes em base64: `openssl rand -base64 32`) que cifra
+   * os segredos TOTP em repouso. Opcional no boot para não derrubar um
+   * deploy antigo, mas SEM ela o 2FA falha fechado: quem exige 2FA (dono,
+   * financeiro) recebe 503 no login em vez de entrar sem segundo fator.
+   * Perder/trocar a chave invalida todos os segredos já enrolados.
+   */
+  ADMIN_TOTP_ENCRYPTION_KEY: z
+    .string()
+    .optional()
+    .transform((value) => (value && value.trim() !== '' ? value.trim() : undefined))
+    .refine(
+      (value) => value === undefined || Buffer.from(value, 'base64').length === 32,
+      'ADMIN_TOTP_ENCRYPTION_KEY deve ser 32 bytes em base64',
+    ),
+  /** Nome que aparece no app autenticador. */
+  ADMIN_TOTP_ISSUER: z.string().min(1).default('VuumBora Admin'),
+  /** Erros seguidos de código antes de travar o admin (429). */
+  ADMIN_TOTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  ADMIN_TOTP_LOCK_MINUTES: z.coerce.number().int().positive().default(15),
+  /** Validade do desafio entre a senha e o código (também cobre ler o QR no enrolamento). */
+  ADMIN_LOGIN_CHALLENGE_TTL_MINUTES: z.coerce.number().int().positive().default(10),
 });
 
 export type Env = Readonly<z.infer<typeof schema>>;

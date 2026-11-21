@@ -5,6 +5,7 @@ import { pool } from '../db.js';
 import { env } from '../env.js';
 import { normalizeBrazilianPhone, normalizeBrazilianState } from '../domain/phone.js';
 import { submitDriverApplication } from '../services/driver-application-service.js';
+import { describeErrorForLog } from '../lib/safe-error.js';
 
 /**
  * Mensagens próprias, em português, nunca a mensagem default do zod: assim
@@ -125,7 +126,7 @@ export function registerDriverApplicationRoute(app: FastifyInstance): void {
         request.log.info({ event: 'driver_application_processed' });
         reply.code(200).send({ ok: true });
       } catch (err) {
-        request.log.error({ event: 'driver_application_failed', message: (err as Error).message });
+        request.log.error({ event: 'driver_application_failed', ...describeErrorForLog(err) });
         reply.code(503).send({
           ok: false,
           error: {

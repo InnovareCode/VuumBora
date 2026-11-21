@@ -4,8 +4,17 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
+import { pool } from './db.js';
 import { env } from './env.js';
+import type { MailPort } from './lib/mail-port.js';
+import { rateLimitKey } from './lib/ip-bucket.js';
+import { twoFactorConfig } from './lib/two-factor-config.js';
+import { describeErrorForLog } from './lib/safe-error.js';
+import { registerAuthRoutes } from './routes/auth-route.js';
+import { createSmtpMailer } from './services/mailer.js';
 import { registerAdminAuthRoutes } from './routes/admin-auth-route.js';
+import { registerAdminTwoFactorRoutes } from './routes/admin-two-factor-route.js';
+import { registerAdminEmailSettingsRoutes } from './routes/admin-email-settings-route.js';
 import { registerAdminDriverApplicationRoutes } from './routes/admin-driver-application-route.js';
 import { registerDriverApplicationRoute } from './routes/driver-application-route.js';
 import { registerHealthRoute } from './routes/health-route.js';
@@ -25,18 +34,36 @@ function pathnameOnly(url: string): string {
   return queryStart === -1 ? url : url.slice(0, queryStart);
 }
 
-export async function buildApp(): Promise<FastifyInstance> {
+export interface BuildAppOptions {
+  /** Destino do log — só os testes passam isto (para ler o que foi logado). Em produção, stdout. */
+  readonly logStream?: NodeJS.WritableStream;
+  /** Adaptador de e-mail da identidade dos apps (SMTP em produção; fake nos testes). Sem ele o envio falha de forma explícita. */
+  readonly mail?: MailPort;
+}
+
+export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
       level: env.LOG_LEVEL,
+      ...(options.logStream ? { stream: options.logStream } : {}),
       serializers: {
+        // Rede de segurança: se algum erro for logado pelo handler padrão do Fastify
+        // (ex.: contexto que sobrescreva o handler), a mensagem e a stack não vão junto.
+        err(err) {
+          return { type: err.name, message: '[omitida]', stack: '[omitida]', ...describeErrorForLog(err), ...(typeof err.statusCode === 'number' ? { statusCode: err.statusCode } : {}) };
+        },
         req(request) {
           return {
             method: request.method,
             url: pathnameOnly(request.url),
             host: request.host,
-            remoteAddress: request.ip,
-            ...(request.socket?.remotePort !== undefined ? { remotePort: request.socket.remotePort } : {}),
+            // Identidade dos apps (/v1/auth): nenhum IP em claro no log (só HMAC, na trilha do banco).
+            ...(request.url.startsWith('/v1/auth/')
+              ? {}
+              : {
+                  remoteAddress: request.ip,
+                  ...(request.socket?.remotePort !== undefined ? { remotePort: request.socket.remotePort } : {}),
+                }),
           };
         },
       },
@@ -44,6 +71,45 @@ export async function buildApp(): Promise<FastifyInstance> {
     trustProxy: env.TRUST_PROXY,
     // Nenhum payload legítimo deste serviço passa disso — corta corpo gigante antes de parsear.
     bodyLimit: 10 * 1024,
+  });
+
+  // ORDEM IMPORTA — estes dois handlers precisam ser definidos ANTES de
+  // qualquer `register`. Cada `register` cria um contexto encapsulado que
+  // herda os handlers do pai NO MOMENTO em que é criado, e `await register`
+  // o cria na hora. Definidos depois (como estavam), o handler nunca chegava
+  // às rotas públicas nem às `/v1/admin/*`: um corpo malformado voltava no
+  // formato cru do Fastify (`{statusCode, code, error, message}`, fora do
+  // envelope `{ok:false,error}`) e o erro era logado pelo handler PADRÃO do
+  // Fastify, que grava `err.message` e `err.stack` inteiros — o vazamento
+  // de dado pessoal que `describeErrorForLog` existe para impedir.
+  app.setNotFoundHandler((_request, reply) => {
+    reply.code(404).send({ ok: false, error: { code: 'not_found', message: 'Rota não encontrada.' } });
+  });
+
+  // Cobre erros lançados ANTES de chegar na rota (corpo malformado, Content-Type
+  // errado, payload maior que `bodyLimit`, limite de requisições excedido) —
+  // não só os erros inesperados do handler. Por isso nunca assume 500: lê
+  // `statusCode` do erro real e nunca ecoa `err.message` do Fastify (texto em
+  // inglês, detalhe de implementação) para quem chama.
+  app.setErrorHandler((err: FastifyError, request, reply) => {
+    const statusCode = err.statusCode ?? 500;
+
+    if (statusCode === 429) {
+      reply.code(429).send({
+        ok: false,
+        error: { code: 'rate_limited', message: 'Muitas requisições. Tente novamente em alguns minutos.' },
+      });
+      return;
+    }
+
+    if (statusCode >= 400 && statusCode < 500) {
+      request.log.info({ event: 'request_rejected', statusCode, ...describeErrorForLog(err) });
+      reply.code(400).send({ ok: false, error: { code: 'invalid_body', message: 'Corpo da requisição inválido.' } });
+      return;
+    }
+
+    app.log.error({ event: 'unhandled_error', ...describeErrorForLog(err) });
+    reply.code(500).send({ ok: false, error: { code: 'unknown', message: 'Erro interno.' } });
   });
 
   await app.register(helmet);
@@ -64,6 +130,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     global: true,
     max: 100,
     timeWindow: '1 minute',
+    // Todo limite por IP do serviço (inclusive os de rota, que herdam isto) usa o balde: IPv4 = o endereço,
+    // IPv6 = o /64. Sem isso, um único /64 dá 2^64 "IPs" (revisão S1 rodada 2, I-5d).
+    keyGenerator: rateLimitKey,
     errorResponseBuilder: () => {
       const err = new Error('rate limited') as FastifyError;
       err.statusCode = 429;
@@ -102,6 +171,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     registerHealthRoute(instance);
     registerWaitlistRoute(instance);
     registerDriverApplicationRoute(instance);
+    // Sem adaptador injetado (produção): SMTP configurado no painel/ambiente, lido a cada envio.
+    registerAuthRoutes(instance, { mail: options.mail ?? createSmtpMailer({ pool, encryptionKey: twoFactorConfig.encryptionKey, log: instance.log }) });
   });
 
   // `prefix: '/v1/admin'` não é só estética: `@fastify/cors` registra uma
@@ -134,38 +205,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
 
     registerAdminAuthRoutes(instance);
+    registerAdminTwoFactorRoutes(instance);
+    registerAdminEmailSettingsRoutes(instance);
     registerAdminDriverApplicationRoutes(instance);
   }, { prefix: '/v1/admin' });
-
-  app.setNotFoundHandler((_request, reply) => {
-    reply.code(404).send({ ok: false, error: { code: 'not_found', message: 'Rota não encontrada.' } });
-  });
-
-  // Cobre erros lançados ANTES de chegar na rota (corpo malformado, Content-Type
-  // errado, payload maior que `bodyLimit`, limite de requisições excedido) —
-  // não só os erros inesperados do handler. Por isso nunca assume 500: lê
-  // `statusCode` do erro real e nunca ecoa `err.message` do Fastify (texto em
-  // inglês, detalhe de implementação) para quem chama.
-  app.setErrorHandler((err: FastifyError, request, reply) => {
-    const statusCode = err.statusCode ?? 500;
-
-    if (statusCode === 429) {
-      reply.code(429).send({
-        ok: false,
-        error: { code: 'rate_limited', message: 'Muitas requisições. Tente novamente em alguns minutos.' },
-      });
-      return;
-    }
-
-    if (statusCode >= 400 && statusCode < 500) {
-      request.log.info({ event: 'request_rejected', statusCode, message: err.message });
-      reply.code(400).send({ ok: false, error: { code: 'invalid_body', message: 'Corpo da requisição inválido.' } });
-      return;
-    }
-
-    app.log.error({ event: 'unhandled_error', message: err.message });
-    reply.code(500).send({ ok: false, error: { code: 'unknown', message: 'Erro interno.' } });
-  });
 
   return app;
 }

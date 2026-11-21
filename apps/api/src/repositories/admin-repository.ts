@@ -33,3 +33,15 @@ export async function findAdminByEmail(pool: Pool, email: string): Promise<Admin
   const row = result.rows[0];
   return row ? mapRow(row) : null;
 }
+
+/** Reautenticação com sessão: busca pelo id que a sessão já provou. `null` se o admin sumiu. */
+export async function findAdminRecordById(pool: Pool, id: string): Promise<AdminUserRecord | null> {
+  const result = await pool.query<AdminUserRow>(
+    `SELECT id, name, email, password_hash, role, deactivated_at
+     FROM admin_users
+     WHERE id = $1`,
+    [id],
+  );
+  const row = result.rows[0];
+  return row ? mapRow(row) : null;
+}

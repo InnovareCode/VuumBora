@@ -246,15 +246,42 @@ export interface OpcoesDePreparo {
   criarBanco?: boolean;
   esperaEmSegundos?: number;
   log?: Log;
+  /**
+   * Credencial DONA do banco, usada só para criar o banco e migrar. Quando a
+   * API roda com um papel restrito (`vuumbora_api`, sem DDL e sem UPDATE/DELETE
+   * em `admin_audit_log` — migração 0012), esse papel não consegue migrar.
+   * Se omitido, lê `MIGRATION_DATABASE_URL` do ambiente; se também ausente,
+   * tudo roda com `databaseUrl` (comportamento anterior, sem mudança).
+   */
+  migrationDatabaseUrl?: string;
 }
 
 /** Os três passos juntos: criar, esperar, migrar. */
 export async function prepararBanco(opcoes: OpcoesDePreparo): Promise<void> {
   const { databaseUrl, pool, criarBanco = true, esperaEmSegundos = 60, log = logPadrao } = opcoes;
+  const migrationUrl = (opcoes.migrationDatabaseUrl ?? process.env['MIGRATION_DATABASE_URL'] ?? '').trim();
 
+  if (migrationUrl.length === 0) {
+    if (criarBanco) {
+      await garantirBanco(databaseUrl, log);
+    }
+    await esperarBanco(pool, esperaEmSegundos, log);
+    await aplicarMigracoes(pool, log);
+    return;
+  }
+
+  // Credenciais separadas: o dono do banco cria e migra; só depois a API
+  // (papel restrito) é esperada — o papel só existe depois da migração 0012.
+  log('[migrate] MIGRATION_DATABASE_URL definido: migrando com a credencial dona do banco.');
   if (criarBanco) {
-    await garantirBanco(databaseUrl, log);
+    await garantirBanco(migrationUrl, log);
+  }
+  const donoPool = new pg.Pool({ connectionString: migrationUrl, max: 1 });
+  try {
+    await esperarBanco(donoPool, esperaEmSegundos, log);
+    await aplicarMigracoes(donoPool, log);
+  } finally {
+    await donoPool.end().catch(() => undefined);
   }
   await esperarBanco(pool, esperaEmSegundos, log);
-  await aplicarMigracoes(pool, log);
 }

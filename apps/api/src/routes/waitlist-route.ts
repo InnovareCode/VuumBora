@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { pool } from '../db.js';
 import { env } from '../env.js';
 import { signUpForWaitlist } from '../services/waitlist-service.js';
+import { describeErrorForLog } from '../lib/safe-error.js';
 
 const bodySchema = z.object({
   email: z.string().trim().toLowerCase().min(3).max(254).email(),
@@ -50,7 +51,7 @@ export function registerWaitlistRoute(app: FastifyInstance): void {
         request.log.info({ event: 'waitlist_signup_processed' });
         reply.code(200).send({ ok: true });
       } catch (err) {
-        request.log.error({ event: 'waitlist_signup_failed', message: (err as Error).message });
+        request.log.error({ event: 'waitlist_signup_failed', ...describeErrorForLog(err) });
         reply.code(503).send({
           ok: false,
           error: {

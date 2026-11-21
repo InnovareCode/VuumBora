@@ -8,14 +8,15 @@
  *   node scripts/delete-waitlist.mjs --email=pessoa@exemplo.com
  *   npm run waitlist:delete --workspace @vuumbora/api -- --email=pessoa@exemplo.com
  *
- * Exige DATABASE_URL no ambiente. Roda dentro do contêiner do serviço
- * `vuumbora-backend` (terminal do Easypanel ou `docker exec`) — ver
+ * Exige a credencial DONA do banco (MIGRATION_DATABASE_URL: o papel restrito da API não
+ * apaga linhas — migração 0017). Roda no terminal do serviço `vuumbora-backend` do Easypanel — ver
  * docs/lista-de-espera.md, seção "Excluir uma inscrição".
  * Local, lê `apps/api/.env` se existir (via `dotenv/config` — silencioso
  * se o arquivo não existir, caso de produção).
  */
 import 'dotenv/config';
 import pg from 'pg';
+import { resolveOwnerDatabaseUrl } from './lib/owner-db-url.mjs';
 
 const { Pool } = pg;
 
@@ -28,11 +29,7 @@ function parseEmailArg(argv) {
 }
 
 async function main() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    console.error('[waitlist:delete] DATABASE_URL não definido no ambiente.');
-    process.exit(1);
-  }
+  const databaseUrl = resolveOwnerDatabaseUrl('waitlist:delete');
 
   const rawEmail = parseEmailArg(process.argv.slice(2));
   if (!rawEmail) {

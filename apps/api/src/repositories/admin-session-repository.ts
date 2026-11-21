@@ -1,6 +1,8 @@
 /** Camada de dados — único lugar que fala SQL com `admin_sessions`. Guarda só o HASH do token, nunca o valor bruto do cookie. */
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { AdminRole, AdminUser } from '../domain/admin.js';
+
+type Queryable = Pool | PoolClient;
 
 export interface CreateAdminSessionInput {
   readonly adminId: string;
@@ -82,4 +84,17 @@ export async function touchAdminSession(pool: Pool, sessionId: string, expiresAt
 /** Idempotente: apagar um token que já não existe (logout duplicado, sessão expirada) não é erro. */
 export async function deleteAdminSessionByTokenHash(pool: Pool, tokenHash: string): Promise<void> {
   await pool.query(`DELETE FROM admin_sessions WHERE token_hash = $1`, [tokenHash]);
+}
+
+/**
+ * Apaga as sessões do admin, menos a atual (`keepTokenHash`; `null` = nenhuma é
+ * poupada). Chamado ao LIGAR ou DESLIGAR o 2FA: cookie roubado antes da
+ * mudança não pode sobreviver a ela (achado M-3). Devolve quantas apagou.
+ */
+export async function deleteAdminSessionsExcept(db: Queryable, adminId: string, keepTokenHash: string | null): Promise<number> {
+  const result = await db.query(
+    `DELETE FROM admin_sessions WHERE admin_id = $1 AND ($2::text IS NULL OR token_hash <> $2)`,
+    [adminId, keepTokenHash],
+  );
+  return result.rowCount ?? 0;
 }
