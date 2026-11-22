@@ -50,6 +50,13 @@ export type ApiError =
   | { readonly kind: 'enrollment_token_invalid' }
   /** 503 `two_factor_unavailable`: servidor sem chave de cifra — falha fechada de propósito. */
   | { readonly kind: 'two_factor_unavailable' }
+  /**
+   * 400 `activation_token_invalid` (`POST /auth/activate`): e-mail inexistente, admin desativado, ou token
+   * ausente/errado/vencido/já usado — SEMPRE a mesma resposta das quatro causas (sem oráculo de quais e-mails
+   * de admin existem, revisão S1 rodada 3g). Nada no formulário indica qual delas foi; a tela só pode pedir
+   * para conferir e-mail/token de novo ou pedir um novo convite.
+   */
+  | { readonly kind: 'activation_token_invalid' }
   /** 422 `smtp_host_blocked`: o host aponta para rede interna/reservada (trava de SSRF no servidor). */
   | { readonly kind: 'smtp_host_blocked' }
   /** 503 `encryption_unavailable`: servidor sem chave de cifra, não dá para guardar a senha no painel. */
@@ -110,6 +117,8 @@ export function errorMessage(error: ApiError): string {
       return 'Código de ativação inválido ou vencido. Peça um novo ao responsável técnico.';
     case 'two_factor_unavailable':
       return 'A verificação em duas etapas está indisponível. Contate o responsável técnico.';
+    case 'activation_token_invalid':
+      return 'Link de ativação inválido, vencido ou já usado. Confira o e-mail e o código, ou peça um novo convite a quem administra o painel.';
     case 'two_factor_required_for_role':
       return 'Seu papel exige a verificação em duas etapas; ela não pode ser desativada.';
     case 'smtp_host_blocked':

@@ -7,6 +7,22 @@ import type {
 } from './types';
 import type { Result } from './result';
 import { createHttpRequester } from './client';
+import {
+  parseDriverApplicationDecisionResponse,
+  parseDriverApplicationListResponse,
+  parseDriverApplicationResponse,
+  parseDriverApplicationSummaryResponse,
+} from './driverApplicationResponses';
+
+/**
+ * Toda resposta entra como `unknown` e só vira tipo do app depois de passar pelo validador (mesma regra de
+ * `auth.ts`/`authResponses.ts`): formato fora do contrato nunca aparece como um item na tela, vira
+ * `contract_mismatch` — e o motivo (só nomes de campo e tipo, nunca valor) vai ao console.
+ */
+function contractMismatch(reason: string): { readonly ok: false; readonly error: { readonly kind: 'contract_mismatch' } } {
+  console.error(`[admin] Resposta de candidatura de motorista incompatível com este painel (${reason}).`);
+  return { ok: false, error: { kind: 'contract_mismatch' } };
+}
 
 export interface DriverApplicationPort {
   list(params: DriverApplicationListParams): Promise<Result<DriverApplicationListResult>>;
@@ -21,35 +37,55 @@ export interface DriverApplicationPort {
 export function createHttpDriverApplicationAdapter(baseUrl: string): DriverApplicationPort {
   const request = createHttpRequester(baseUrl);
   return {
-    list(params) {
+    async list(params) {
       const query = new URLSearchParams();
       if (params.status) query.set('status', params.status);
       if (params.q) query.set('q', params.q);
       if (params.cursor) query.set('cursor', params.cursor);
       if (params.limit) query.set('limit', String(params.limit));
       const qs = query.toString();
-      return request<DriverApplicationListResult>({ path: `/v1/admin/driver-applications${qs ? `?${qs}` : ''}` });
+      const result = await request<unknown>({ path: `/v1/admin/driver-applications${qs ? `?${qs}` : ''}` });
+      if (!result.ok) return result;
+      const parsed = parseDriverApplicationListResponse(result.data);
+      if (!parsed.ok) return contractMismatch(parsed.reason);
+      return { ...result, data: parsed.value };
     },
-    get(id) {
-      return request<DriverApplication>({ path: `/v1/admin/driver-applications/${encodeURIComponent(id)}` });
+    async get(id) {
+      const result = await request<unknown>({ path: `/v1/admin/driver-applications/${encodeURIComponent(id)}` });
+      if (!result.ok) return result;
+      const parsed = parseDriverApplicationResponse(result.data);
+      if (!parsed.ok) return contractMismatch(parsed.reason);
+      return { ...result, data: parsed.value };
     },
-    summary() {
-      return request<DriverApplicationSummary>({ path: '/v1/admin/driver-applications/summary' });
+    async summary() {
+      const result = await request<unknown>({ path: '/v1/admin/driver-applications/summary' });
+      if (!result.ok) return result;
+      const parsed = parseDriverApplicationSummaryResponse(result.data);
+      if (!parsed.ok) return contractMismatch(parsed.reason);
+      return { ...result, data: parsed.value };
     },
-    approve(id, idempotencyKey) {
-      return request<DriverApplicationDecision>({
+    async approve(id, idempotencyKey) {
+      const result = await request<unknown>({
         path: `/v1/admin/driver-applications/${encodeURIComponent(id)}/approve`,
         method: 'POST',
         idempotencyKey,
       });
+      if (!result.ok) return result;
+      const parsed = parseDriverApplicationDecisionResponse(result.data);
+      if (!parsed.ok) return contractMismatch(parsed.reason);
+      return { ...result, data: parsed.value };
     },
-    reject(id, reason, idempotencyKey) {
-      return request<DriverApplicationDecision>({
+    async reject(id, reason, idempotencyKey) {
+      const result = await request<unknown>({
         path: `/v1/admin/driver-applications/${encodeURIComponent(id)}/reject`,
         method: 'POST',
         body: { reason },
         idempotencyKey,
       });
+      if (!result.ok) return result;
+      const parsed = parseDriverApplicationDecisionResponse(result.data);
+      if (!parsed.ok) return contractMismatch(parsed.reason);
+      return { ...result, data: parsed.value };
     },
   };
 }

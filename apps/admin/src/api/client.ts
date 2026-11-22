@@ -39,6 +39,9 @@ export function onUnauthorized(listener: UnauthorizedListener): () => void {
 function mapStatusToError(status: number, body: Envelope<unknown> | undefined): ApiError {
   const err = body && body.ok === false ? body.error : undefined;
   if (status === 400) {
+    // `activation_token_invalid` (`POST /auth/activate`) ANTES do genérico: não é um campo de formulário com
+    // mensagem própria (é sempre a mesma resposta para as quatro causas — ver o `kind` em result.ts).
+    if (err?.code === 'activation_token_invalid') return { kind: 'activation_token_invalid' };
     // A maioria das rotas manda `fields` como mapa campo→mensagem; a de e-mail manda só a LISTA de nomes. Normaliza.
     const fields: Readonly<Record<string, string>> | undefined = Array.isArray(err?.fields)
       ? Object.fromEntries((err.fields as readonly string[]).map((name) => [name, '']))
@@ -58,6 +61,10 @@ function mapStatusToError(status: number, body: Envelope<unknown> | undefined): 
   if (status === 403 && err?.code === 'two_factor_required_for_role') return { kind: 'two_factor_required_for_role' };
   if (status === 403) return err?.code === 'csrf_token_invalid' ? { kind: 'csrf_invalid' } : { kind: 'forbidden' };
   if (status === 404) return { kind: 'not_found' };
+  // 423 `account_locked` (gestão de usuários, F07): mesma espera progressiva do par e-mail+IP do LOGIN, só que
+  // aqui é a senha de reautenticação de uma mutação (criar/desativar/reativar/trocar papel). Status diferente
+  // (423, não 429) do `account_locked` do login/step-up de e-mail — mesmo `kind`, a tela trata igual.
+  if (status === 423 && err?.code === 'account_locked') return { kind: 'account_locked', retryAfterSeconds: err.retryAfterSeconds ?? 5 };
   if (status === 409 && err?.code === 'email_not_configured') return { kind: 'email_not_configured', missing: err.missing ?? [] };
   if (status === 409) return { kind: 'conflict', reason: err?.reason ?? err?.code ?? 'unknown' };
   if (status === 429 && err?.code === 'account_locked') {

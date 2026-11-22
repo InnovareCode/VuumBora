@@ -74,6 +74,69 @@ export interface AdminLoginInput {
 }
 
 /**
+ * Gestão de usuários do painel (F07, só `dono`) — contrato
+ * docs/contrato-admin-usuarios.md. `AdminUserRecord` é `AdminUser` + as duas
+ * datas que só a LISTA/mutação devolvem (login e `/me` não precisam delas).
+ */
+export interface AdminUserRecord extends AdminUser {
+  readonly createdAt: string;
+  /** `null` = conta ativa. */
+  readonly deactivatedAt: string | null;
+}
+
+export interface AdminUserListParams {
+  readonly role?: AdminRole | undefined;
+  /** `false` (padrão do servidor) = só contas ativas. */
+  readonly includeDeactivated?: boolean | undefined;
+  readonly cursor?: string | undefined;
+  readonly limit?: number | undefined;
+}
+
+export interface AdminUserListResult {
+  readonly items: readonly AdminUserRecord[];
+  readonly nextCursor: string | null;
+}
+
+/**
+ * `password`: senha ATUAL de quem está chamando (reautenticação) — nunca a
+ * senha do usuário alvo, que nasce sem senha nenhuma. `code`: TOTP de quem
+ * chama, só exigido pelo servidor quando o papel ENVOLVIDO é `dono`/`financeiro`
+ * (`roleRequiresSecondFactorGate` em `lib/permissions.ts` decide quando a tela pede o campo).
+ */
+export interface AdminUserCreateInput {
+  readonly name: string;
+  readonly email: string;
+  readonly role: AdminRole;
+  readonly password: string;
+  readonly code?: string | undefined;
+}
+
+/** `activationToken` só vem UMA vez, nesta resposta — nunca mais recuperável pela API. */
+export interface AdminUserCreateResult extends AdminUserRecord {
+  readonly activationToken: string;
+  readonly activationTokenExpiresAt: string;
+}
+
+export interface AdminUserStepUp {
+  readonly password: string;
+  readonly code?: string | undefined;
+}
+
+export interface ActivateAdminUserInput {
+  readonly email: string;
+  readonly token: string;
+  readonly newPassword: string;
+}
+
+export interface ActivateAdminUserResult {
+  readonly role: AdminRole;
+  readonly requiresTwoFactorEnrollment: boolean;
+  /** Vêm JUNTOS quando `requiresTwoFactorEnrollment` é `true`; ausentes quando é `false`. */
+  readonly enrollmentToken?: string;
+  readonly enrollmentTokenExpiresAt?: string;
+}
+
+/**
  * Segundo fator (TOTP) — contrato em docs/contrato-admin-2fa.md. Login devolve
  * um de três estados; os dois que exigem o segundo fator trazem um
  * `challengeToken` que vive SÓ em memória (estado da tela de login, nunca
