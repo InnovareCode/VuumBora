@@ -142,12 +142,13 @@ function ResetForm({ pending }: { readonly pending: PendingReset }) {
   const requestLabel = `Pedir novo código${waitSuffix}`;
 
   return (
-    <AppShell scroll testID="redefinir-senha-screen">
+    <AppShell scroll glow testID="redefinir-senha-screen">
       <View style={styles.content}>
         <AuthHeader
           title="Nova senha"
           subtitle={`Se ${email} tiver conta confirmada, enviamos um código de 6 dígitos para esse e-mail. Digite o código e escolha a nova senha.`}
           onBack={() => goBackOr('/esqueci-senha')}
+          showLogo={false}
         />
 
         {identity.mode === 'mock' ? <MockBadge label={MOCK_CODE_HINT} testID="redefinir-mock-hint" /> : null}
