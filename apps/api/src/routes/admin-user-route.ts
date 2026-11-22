@@ -78,7 +78,10 @@ function sendStepUpFailure(reply: FastifyReply, failure: StepUpFailure): void {
       reply.code(423).send({ ok: false, error: { code: 'account_locked', message: 'Muitas tentativas de senha. Tente novamente mais tarde.', retryAfterSeconds: failure.retryAfterSeconds } });
       return;
     case 'password_invalid':
-      reply.code(401).send({ ok: false, error: { code: 'password_invalid', message: 'Senha incorreta.' } });
+      // 403, como em todo o painel (`admin-auth-http.ts`, sendFactorFailure): o cliente do painel trata 401 que não é
+      // invalid_second_factor/challenge_invalid como sessão perdida e desloga. Com 401 aqui, errar a PRÓPRIA senha num
+      // step-up derrubava o dono para o /login (achado da QA da F07b, Íris, 22/11/2026).
+      reply.code(403).send({ ok: false, error: { code: 'password_invalid', message: 'Senha incorreta.' } });
       return;
     case 'invalid_code':
       reply.code(401).send({ ok: false, error: { code: 'invalid_second_factor', message: 'Código de verificação inválido.' } });
