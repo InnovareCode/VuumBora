@@ -27,6 +27,17 @@
  * (b) um portão escondido numa rota `account-exempt` não é visto, mas essa rota já é uma exceção declarada com motivo; (c) o
  * comportamento do portão por HTTP fica para quando a primeira rota de compromisso existir (pendência registrada no PROGRESSO).
  * A sondagem também só vale para rotas fora de `/v1/admin` (outra identidade, outra recusa).
+ *
+ * Q3 da passada 5 da Íris (`docs/veredito-iris-s1-passada-5.md`, seção 3): a sondagem SEM corpo cai em `400` (validação do
+ * Fastify, ex.: `schema.body`/`schema.querystring` obrigatórios, ou `schema.params` com `format: uuid`) ANTES do
+ * `preHandler`, e esse `400` não é a recusa de `requireAccount` — a rota passava por "pública" mesmo autenticada. Correção:
+ * uma SEGUNDA sondagem, com corpo/consulta/parâmetro GENÉRICOS (mas válidos o bastante para passar de um `schema` comum:
+ * objeto JSON vazio, uma querystring preenchida, um `:param` em formato de UUID), e a rota é tratada como recusada se
+ * QUALQUER uma das duas sondagens vir com a recusa característica. Hoje nenhuma rota real usa `schema` do Fastify (a
+ * validação é por zod DENTRO do handler, que só roda depois do `preHandler`), então a segunda sondagem não muda nada do
+ * app real agora — é rede para quando a primeira rota com `schema` nascer. Ainda ficam sem cobertura (limitação
+ * registrada, não corrigida aqui): autenticação própria que responde 401 com outro `code` ou 403, o portão de mentira e o
+ * portão escondido numa rota `exempt` (itens (a)/(b)/(c) acima e a tabela de `docs/veredito-iris-s1-passada-5.md`).
  */
 import './helpers/auth-env.js';
 import './helpers/setup.js';
@@ -69,12 +80,15 @@ const ROUTE_POLICY: Readonly<Record<string, Policy>> = {
   'GET /v1/auth/me': { kind: 'account-exempt', reason: 'é por aqui que o app descobre o aceite pendente (`consent`); bloqueá-lo escondia a tela de reaceite' },
   'POST /v1/auth/consents': { kind: 'account-exempt', reason: 'é a SAÍDA do aceite pendente (reaceite): nunca pode ser bloqueada por ele' },
   'POST /v1/auth/logout-all': { kind: 'account-exempt', reason: 'encerrar sessões não cria compromisso novo e precisa funcionar com aceite pendente' },
+  'POST /v1/auth/delete-account': { kind: 'account-exempt', reason: 'excluir a conta é o oposto de um compromisso novo: nunca pode ser bloqueada por aceite pendente' },
 };
 
 /** Fases em que uma função pode autenticar a requisição, na ordem em que o Fastify as roda. */
 const HOOK_PHASES = ['onRequest', 'preParsing', 'preValidation', 'preHandler'] as const;
 /** Cabeçalho da sondagem: um "token" que nenhuma sessão reconhece (a recusa vem antes de qualquer consulta ao banco). */
 const PROBE_AUTHORIZATION = 'Bearer lixo.sem.sessao';
+/** `:param` da 2ª sondagem (Q3): formato de UUID, para não cair em `schema.params` com `format: uuid`. */
+const PROBE_UUID = '00000000-0000-4000-8000-000000000000';
 
 interface RouteFacts {
   /** "MÉTODO caminho completo (com o prefixo do contexto)". */
@@ -119,21 +133,28 @@ function isSessionRefusal(statusCode: number, body: string): boolean {
 }
 
 /**
- * Chama cada rota fora do painel SEM sessão (sem corpo, com um Bearer inválido) e anota se a autenticação a recusou. Sem corpo
- * e sem `content-type`, as rotas públicas param na validação (400) e nada é gravado. É isto que enxerga a autenticação
- * escondida do olhar por nome (`onRequest`, função anônima, `addHook` do contexto): o efeito é o mesmo de qualquer forma.
+ * Chama cada rota fora do painel SEM sessão, com um Bearer inválido, em DUAS sondagens, e anota se QUALQUER uma viu a
+ * recusa característica de `requireAccount`:
+ *  1) sem corpo, sem `content-type` — pega a autenticação escondida do olhar por nome (`onRequest`, função anônima,
+ *     `addHook` do contexto): o efeito é o mesmo de qualquer forma;
+ *  2) com corpo/consulta/parâmetro GENÉRICOS, porém válidos (Q3, passada 5 da Íris) — pega a rota que exige
+ *     `schema.body`/`schema.querystring`/`schema.params` do Fastify, cuja validação (400) aconteceria ANTES do
+ *     `preHandler` na sondagem 1 e esconderia uma autenticação real por trás de um 400 que não é a recusa dela.
  */
 async function probeWithoutSession(app: FastifyInstance, routes: readonly RouteFacts[]): Promise<void> {
   for (const route of routes) {
     const separator = route.key.indexOf(' ');
     const path = route.key.slice(separator + 1);
     if (isAdminPath(path)) continue;
-    const response = await app.inject({
-      method: route.key.slice(0, separator) as HTTPMethods,
-      url: path.replace(/:[A-Za-z0-9_]+/g, 'x'),
-      headers: { authorization: PROBE_AUTHORIZATION },
+    const method = route.key.slice(0, separator) as HTTPMethods;
+    const bare = await app.inject({ method, url: path.replace(/:[A-Za-z0-9_]+/g, 'x'), headers: { authorization: PROBE_AUTHORIZATION } });
+    const withPayload = await app.inject({
+      method,
+      url: `${path.replace(/:[A-Za-z0-9_]+/g, PROBE_UUID)}?probe=1`,
+      headers: { authorization: PROBE_AUTHORIZATION, 'content-type': 'application/json' },
+      payload: '{}',
     });
-    route.refusesWithoutSession = isSessionRefusal(response.statusCode, response.body);
+    route.refusesWithoutSession = isSessionRefusal(bare.statusCode, bare.body) || isSessionRefusal(withPayload.statusCode, withPayload.body);
   }
 }
 

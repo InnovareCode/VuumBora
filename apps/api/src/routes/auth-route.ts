@@ -7,11 +7,13 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { pool } from '../db.js';
-import { loginSchema, normalizeOptionalPhone, refreshSchema, registerSchema } from '../domain/auth.js';
+import { deleteAccountSchema, loginSchema, normalizeOptionalPhone, refreshSchema, registerSchema } from '../domain/auth.js';
 import { checkBirthDate } from '../domain/birth-date.js';
 import { makeRequireAccount } from '../hooks/require-account.js';
 import { authConfigProblems, loadAuthConfig } from '../lib/auth-config.js';
 import { drainBackgroundTasks } from '../lib/background-tasks.js';
+import { env } from '../env.js';
+import { rateLimitKey } from '../lib/ip-bucket.js';
 import { createIpLimits } from '../lib/ip-rate-limits.js';
 import { loadLegalConfig, type LegalConfig } from '../lib/legal-config.js';
 import { unavailableMailPort, type MailPort } from '../lib/mail-port.js';
@@ -156,7 +158,17 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
     const parsed = refreshSchema.safeParse(request.body);
     // Código PRÓPRIO (não o genérico `invalid_body`): é a assinatura que o app lê para saber que o refresh guardado está malformado e a sessão acabou. Um 4xx de
     // transporte (413, 415, corpo ilegível) sai como `invalid_body` (app.ts) e NÃO encerra sessão nenhuma.
-    if (!parsed.success) return invalidBody(request, reply, 'auth_refresh_rejected', 'invalid_refresh_body');
+    //
+    // Q2 da passada 6 da Íris: `invalid_refresh_body` só vale quando o corpo CHEGOU como objeto JSON válido e falhou
+    // SÓ no formato do `refreshToken` em si (o caso real: o app leu um token corrompido do armazenamento) — é a
+    // única situação em que faz sentido tratar como "sessão encerrada". Corpo que nem chegou a ser um objeto (sem
+    // corpo e sem `Content-Type`, ou `text/plain`: `request.body` vira `undefined`/string, nunca um objeto) não prova
+    // nada sobre o token guardado; um intermediário que mudasse o tipo do corpo ou o removesse não pode derrubar a
+    // sessão por engano. Esses casos caem no `invalid_body` genérico, que o app trata como transitório.
+    if (!parsed.success) {
+      const isJsonObjectBody = typeof request.body === 'object' && request.body !== null && !Array.isArray(request.body);
+      return invalidBody(request, reply, 'auth_refresh_rejected', isJsonObjectBody ? 'invalid_refresh_body' : 'invalid_body');
+    }
     try {
       const result = await identity.refresh(pool, config, parsed.data.refreshToken, contextOf(request, config));
       if (result.kind === 'invalid') {
@@ -191,7 +203,38 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
 
   registerAuthConsentRoutes(app, config, legal, limits.session, requireAccount);
 
-  app.get('/v1/auth/me', { preHandler: requireAccount }, async (request, reply) => {
+  // Exclusão de conta (item 3 das pendências jurídicas): reautentica por senha (gasta bcrypt — mesma classe de limite
+  // de login/cadastro) e, só se ela confere, anonimiza a conta e revoga toda sessão. Nunca bloqueada por aceite
+  // pendente (não é "compromisso novo": é o oposto, encerrar a conta) — por isso não leva `requireCurrentConsent`.
+  app.post('/v1/auth/delete-account', { ...limits.credentials(), preHandler: requireAccount }, async (request, reply) => {
+    const parsed = deleteAccountSchema.safeParse(request.body);
+    if (!parsed.success) return invalidBody(request, reply, 'auth_delete_account_rejected');
+    try {
+      const result = await identity.deleteAccount(pool, config, request.authAccount!.accountId, parsed.data.password, contextOf(request, config));
+      if (result.kind === 'blocked') {
+        request.log.warn({ event: 'auth_delete_account_blocked' });
+        return tooManyAttempts(reply, result.retryAfterSeconds);
+      }
+      if (result.kind === 'wrong_password') {
+        request.log.info({ event: 'auth_delete_account_failed' });
+        return fail(reply, 401, 'wrong_password', 'Senha incorreta.');
+      }
+      if (result.kind === 'account_missing') return fail(reply, 401, 'unauthorized', 'Sessão inválida ou expirada.');
+      request.log.info({ event: 'auth_account_deleted', accountId: request.authAccount!.accountId });
+      reply.code(200).send({ ok: true, data: { accountDeleted: true } });
+    } catch (err) {
+      unavailable(request, reply, err, 'auth_delete_account_failed_internal');
+    }
+  });
+
+  app.get('/v1/auth/me', {
+    preHandler: requireAccount,
+    // Mesmo motivo do F01-M1 em `/v1/legal/current` (achado do Órion, rodada 3d): contador PRÓPRIO, separado do
+    // global que `refresh`/`logout`/`logout-all`/`consents` usam de propósito. `/me` é chamado toda vez que o app
+    // abre em primeiro plano; sem isolamento, muitas contas no MESMO /64 chamando `/me` esgotavam a cota de
+    // renovação de sessão dos vizinhos daquele bloco. Mesmo número do padrão global (100/min por /64).
+    config: { rateLimit: { max: env.GLOBAL_RATE_LIMIT_MAX, timeWindow: '1 minute', keyGenerator: rateLimitKey } },
+  }, async (request, reply) => {
     try {
       const accountId = request.authAccount!.accountId;
       const account = await identity.getAccount(pool, accountId);

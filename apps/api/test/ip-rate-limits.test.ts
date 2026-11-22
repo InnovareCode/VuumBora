@@ -263,6 +263,46 @@ describe('A1 — TODA rota da classe tem a própria cota e o próprio teto (uma 
   }
 });
 
+describe('F01-M1 — GET /v1/legal/current e GET /v1/auth/me têm contador PRÓPRIO, fora do global da sessão', () => {
+  const legalCurrent = (client: Client, ip: string) => client.call('GET', '/v1/legal/current?audience=passenger', { ip });
+  const me = (client: Client, ip: string) => client.call('GET', '/v1/auth/me', { ip, bearer: 'token-lixo' });
+
+  test('esgotar /v1/legal/current (100/min) não dá 429 no refresh do MESMO /64; o 101º de legal/current é 429', async () => {
+    await withApp({}, async (_harness, client) => {
+      const ip = '2001:db8:f001:1::1';
+      const statuses = await statusesOf(100, () => legalCurrent(client, ip));
+      assert.deepEqual(statuses.filter((status) => status !== 200), [], `os 100 primeiros de legal/current: ${statuses.join(',')}`);
+      const over = await legalCurrent(client, ip);
+      assert.equal(over.status, 429, 'o 101º de legal/current nesse /64 estoura o contador PRÓPRIO dela');
+      assert.equal(over.body.error.code, 'rate_limited');
+
+      // A prova do achado: o refresh do MESMO IP não herda o estouro de legal/current.
+      const refreshed = await refresh(client, ip);
+      assert.equal(refreshed.status, 401, 'refresh ainda funciona (401 de token inválido, não 429): não compartilha o balde com legal/current');
+    });
+  });
+
+  test('o mesmo vale para GET /v1/auth/me: esgotar o contador dela não derruba o refresh do mesmo /64', async () => {
+    await withApp({}, async (_harness, client) => {
+      const ip = '2001:db8:f002:1::1';
+      const statuses = await statusesOf(100, () => me(client, ip));
+      assert.deepEqual(statuses.filter((status) => status !== 401), [], `/me com bearer inválido é sempre 401: ${statuses.join(',')}`);
+      assert.equal((await me(client, ip)).status, 429, 'o 101º de /me nesse /64');
+      assert.equal((await refresh(client, ip)).status, 401, 'refresh do mesmo /64 não herda o estouro de /me');
+    });
+  });
+
+  test('legal/current e /me também têm contadores SEPARADOS entre si, e do logout (classe sessão, global)', async () => {
+    await withApp({}, async (_harness, client) => {
+      const ip = '2001:db8:f003:1::1';
+      await statusesOf(100, () => legalCurrent(client, ip));
+      assert.equal((await legalCurrent(client, ip)).status, 429, 'legal/current esgotada');
+      assert.equal((await me(client, ip)).status, 401, '/me, mesmo /64, tem o PRÓPRIO contador — não herda o estouro de legal/current');
+      assert.equal((await logoutOne(client, ip)).status, 200, 'logout (classe sessão, global) também intacto');
+    });
+  });
+});
+
 describe('B5 — o 400 do refresh tem código PRÓPRIO', () => {
   test('corpo malformado do refresh: 400 invalid_refresh_body (ausente, curto, longo, tipo errado)', async () => {
     await withApp({}, async (_harness, client) => {
@@ -287,6 +327,24 @@ describe('B5 — o 400 do refresh tem código PRÓPRIO', () => {
       }
     });
   });
+
+  test('Q2 (passada 6): corpo que NEM chegou a ser objeto JSON (text/plain; sem corpo e sem Content-Type) também é invalid_body genérico, não invalid_refresh_body', async () => {
+    await withApp({}, async (harness) => {
+      const textPlain = await harness.t.app.inject({
+        method: 'POST', url: '/v1/auth/refresh',
+        headers: { 'x-forwarded-for': '203.0.113.54', 'content-type': 'text/plain' },
+        payload: 'eyJyZWZyZXNoVG9rZW4iOiJ4In0=',
+      });
+      const noBody = await harness.t.app.inject({ method: 'POST', url: '/v1/auth/refresh', headers: { 'x-forwarded-for': '203.0.113.55' } });
+      for (const [name, reply] of [['text/plain', textPlain], ['sem corpo e sem Content-Type', noBody]] as const) {
+        assert.equal(reply.statusCode, 400, name);
+        assert.equal(JSON.parse(reply.body).error.code, 'invalid_body', `${name}: um intermediário que troca o tipo ou tira o corpo não pode encerrar a sessão`);
+      }
+    });
+  });
+
+  // O caso "corpo JSON de OBJETO válido com refreshToken no formato errado continua invalid_refresh_body" já está
+  // coberto pelo teste anterior (`{}, {refreshToken:''}, ...`, todos objetos JSON válidos via `client.call`).
 
   test('o refresh de verdade recusado segue sendo 401 invalid_refresh_token', async () => {
     await withApp({}, async (_harness, client) => {

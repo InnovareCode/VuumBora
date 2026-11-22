@@ -304,7 +304,23 @@ describe('retenção (M-5): função rodada com a credencial dona', () => {
     const old = await registerAndLogin();
     // login_attempts / access_log
     await pool.query(`INSERT INTO login_attempts (identifier_hash, succeeded, attempted_at) VALUES (repeat('a',64), false, now() - interval '3 days'), (repeat('b',64), false, now() - interval '1 hour')`);
-    await pool.query(`INSERT INTO access_log (event, account_id, occurred_at) VALUES ('logout', $1, now() - interval '91 days'), ('logout', $1, now() - interval '89 days')`, [old.account.id]);
+    // accessLogDays agora é 180 (6 meses, item 12 das pendências jurídicas: Marco Civil, art. 15) — era 90.
+    await pool.query(`INSERT INTO access_log (event, account_id, occurred_at) VALUES ('logout', $1, now() - interval '181 days'), ('logout', $1, now() - interval '179 days')`, [old.account.id]);
+    // Candidatura e lista de espera (item 14): mesma rotina, mesmo prazo provisório de 180 dias.
+    const oldApplicationEmail = uniqueEmail('candidatura-velha');
+    const freshApplicationEmail = uniqueEmail('candidatura-nova');
+    await pool.query(
+      `INSERT INTO driver_applications (name, email, phone, city, state, created_at) VALUES
+         ('Velho', $1, '84988880000', 'Natal', 'RN', now() - interval '181 days'),
+         ('Novo', $2, '84988880001', 'Natal', 'RN', now() - interval '179 days')`,
+      [oldApplicationEmail, freshApplicationEmail],
+    );
+    const oldWaitlistEmail = uniqueEmail('fila-velha');
+    const freshWaitlistEmail = uniqueEmail('fila-nova');
+    await pool.query(
+      `INSERT INTO waitlist_signups (email, created_at) VALUES ($1, now() - interval '181 days'), ($2, now() - interval '179 days')`,
+      [oldWaitlistEmail, freshWaitlistEmail],
+    );
     // famílias: vencida há 8 dias (apaga), revogada há 8 dias (apaga), viva (fica)
     await pool.query(`UPDATE refresh_token_families SET expires_at = now() - interval '8 days' WHERE account_id = $1`, [old.account.id]);
     await pool.query(`INSERT INTO refresh_token_families (account_id, expires_at, revoked_at, revoke_reason) VALUES ($1, now() + interval '1 day', now() - interval '8 days', 'logout')`, [live.account.id]);
@@ -322,13 +338,21 @@ describe('retenção (M-5): função rodada com a credencial dona', () => {
     assert.equal(report.accessLog, 1);
     assert.equal(report.sessionFamilies, 2);
     assert.equal(report.emailCodes, 1);
+    assert.equal(report.driverApplications, 1);
+    assert.equal(report.waitlistSignups, 1);
 
     assert.equal((await pool.query('SELECT count(*)::int AS n FROM refresh_token_families')).rows[0].n, familiesBefore - 2);
     assert.equal((await pool.query(`SELECT count(*)::int AS n FROM login_attempts WHERE identifier_hash = repeat('b',64)`)).rows[0].n, 1, 'recente fica');
-    assert.equal((await pool.query(`SELECT count(*)::int AS n FROM access_log WHERE occurred_at > now() - interval '90 days' AND event = 'logout'`)).rows[0].n, 1);
+    assert.equal((await pool.query(`SELECT count(*)::int AS n FROM access_log WHERE occurred_at > now() - interval '180 days' AND event = 'logout'`)).rows[0].n, 1);
     assert.equal((await pool.query(`SELECT count(*)::int AS n FROM account_email_codes WHERE code_hash = repeat('d',64)`)).rows[0].n, 1, 'código vivo fica');
     const orphans = await pool.query(`SELECT count(*)::int AS n FROM refresh_tokens t WHERE NOT EXISTS (SELECT 1 FROM refresh_token_families f WHERE f.id = t.family_id)`);
     assert.equal(orphans.rows[0].n, 0, 'a cascata levou os tokens das famílias apagadas');
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM driver_applications WHERE email = $1', [oldApplicationEmail])).rows[0].n, 0, 'candidatura velha apagada');
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM driver_applications WHERE email = $1', [freshApplicationEmail])).rows[0].n, 1, 'candidatura recente fica');
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM waitlist_signups WHERE email = $1', [oldWaitlistEmail])).rows[0].n, 0, 'inscrição velha apagada');
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM waitlist_signups WHERE email = $1', [freshWaitlistEmail])).rows[0].n, 1, 'inscrição recente fica');
     await assert.rejects(runIdentityRetention(pool, { ...DEFAULT_RETENTION, accessLogDays: 0 }), /retention_policy_invalid/);
+    await assert.rejects(runIdentityRetention(pool, { ...DEFAULT_RETENTION, driverApplicationsDays: 0 }), /retention_policy_invalid/);
+    await assert.rejects(runIdentityRetention(pool, { ...DEFAULT_RETENTION, waitlistSignupsDays: 0 }), /retention_policy_invalid/);
   });
 });

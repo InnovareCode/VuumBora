@@ -8,7 +8,7 @@ import { pool } from './db.js';
 import { env } from './env.js';
 import type { MailPort } from './lib/mail-port.js';
 import { BCRYPT_BUSY_RETRY_AFTER_SECONDS, BcryptBusyError, closeBcryptPools } from './lib/bcrypt-pool.js';
-import { rateLimitKey } from './lib/ip-bucket.js';
+import { hashIpForLog, rateLimitKey } from './lib/ip-bucket.js';
 import { loadLegalConfig } from './lib/legal-config.js';
 import { twoFactorConfig } from './lib/two-factor-config.js';
 import { describeErrorForLog } from './lib/safe-error.js';
@@ -65,11 +65,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             method: request.method,
             url: pathnameOnly(request.url),
             host: request.host,
-            // Identidade dos apps (/v1/auth): nenhum IP em claro no log (só HMAC, na trilha do banco).
+            // Identidade dos apps (/v1/auth): nenhum IP no log, nem hash (só o HMAC estável na trilha do banco).
+            // Fora dela (candidatura, lista de espera, painel, saúde — item 16 das pendências jurídicas): também
+            // nunca o IP em claro, só um hash de log (`hashIpForLog`, chave aleatória do processo, sem relação com
+            // o pepper da identidade) — o bastante para reconhecer "é o mesmo IP" numa investigação, sem guardar o
+            // endereço em si.
             ...(request.url.startsWith('/v1/auth/')
               ? {}
               : {
-                  remoteAddress: request.ip,
+                  remoteAddress: hashIpForLog(request.ip),
                   ...(request.socket?.remotePort !== undefined ? { remotePort: request.socket.remotePort } : {}),
                 }),
           };

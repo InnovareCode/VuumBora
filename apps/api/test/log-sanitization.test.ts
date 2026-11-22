@@ -65,3 +65,26 @@ test('describeErrorForLog nunca devolve a mensagem', () => {
   assert.deepEqual(described, { errorName: 'Error', errorCode: 'X1' });
   assert.ok(!JSON.stringify(described).includes('segredo'));
 });
+
+// Item 16 das pendências jurídicas: fora de /v1/auth (candidatura, lista de espera, painel, saúde) o IP ia em claro
+// para o log do servidor; agora vai só um hash (hashIpForLog, chave aleatória do processo — nunca o pepper da
+// identidade, que precisa ser estável entre requisições e só existe quando AUTH_PEPPER está configurado).
+test('IP em claro nunca aparece no log fora de /v1/auth (vai um hash, não o endereço)', async () => {
+  const ip = '203.0.113.77';
+  const response = await t.app.inject({ method: 'GET', url: '/healthz', headers: { 'x-forwarded-for': ip } });
+  assert.equal(response.statusCode, 200);
+  const logs = t.logs();
+  assert.ok(!logs.includes(ip), 'o IP em claro vazou para o log de uma rota fora de /v1/auth');
+  assert.match(logs, /"remoteAddress":"[0-9a-f]{16}"/, 'o log traz um hash curto no lugar do IP');
+});
+
+test('dentro de /v1/auth nem o IP em claro nem o hash aparecem no log', async () => {
+  const ip = '203.0.113.88';
+  // `t.logs()` acumula desde o `before()` (os testes anteriores já logaram "remoteAddress" de rota fora de /v1/auth):
+  // só a parte NOVA, gerada por esta chamada, importa.
+  const before = t.logs().length;
+  await t.app.inject({ method: 'POST', url: '/v1/auth/login', headers: { 'x-forwarded-for': ip, 'content-type': 'application/json' }, payload: '{}' });
+  const added = t.logs().slice(before);
+  assert.ok(!added.includes(ip));
+  assert.ok(!added.includes('remoteAddress'), '/v1/auth não loga remoteAddress nenhum (nem em claro, nem hash)');
+});

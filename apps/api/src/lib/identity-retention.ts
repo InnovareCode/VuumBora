@@ -7,13 +7,22 @@
  *
  * NÃO cobre `admin_audit_log` (trigger de inviolabilidade; procedimento
  * próprio, decisão do dono) nem `admin_login_challenges` (módulo do admin).
+ *
+ * Candidatura de motorista e lista de espera (item 14 das pendências jurídicas, `docs/juridico/pendencias-para-o-advogado.md`):
+ * entram na MESMA rotina, com prazo PRÓPRIO e configurável — a pergunta ao advogado ("até o lançamento, ou por X meses
+ * sem atualização?") ainda não tem resposta; o padrão abaixo é o mesmo prazo do `access_log` (6 meses), só para não
+ * ficar "para sempre" enquanto a resposta não chega, e deve ser revisto quando ela vier. As duas tabelas só têm
+ * `created_at` (sem coluna de atualização), então o prazo conta da criação, não de "sem atualização".
  */
 import type { Pool } from 'pg';
 
 export interface RetentionPolicy {
   /** `login_attempts`: a maior janela de limite é 1 h; sobra folga para investigação curta. */
   readonly loginAttemptsDays: number;
-  /** `access_log`: trilha de acesso — 90 dias (documentado em 0011). */
+  /**
+   * `access_log`: trilha de acesso. 6 meses (item 12 das pendências jurídicas: Marco Civil da Internet, art. 15,
+   * aplicado por analogia enquanto o advogado não confirma — antes era 90 dias, só o que a 0011 havia documentado).
+   */
   readonly accessLogDays: number;
   /** Famílias de refresh vencidas ou revogadas há mais que isto (a cascata apaga os tokens). */
   readonly sessionFamiliesDays: number;
@@ -25,9 +34,23 @@ export interface RetentionPolicy {
    * ser dono do e-mail não ficam guardados). A apagada leva junto credencial e códigos (cascata).
    */
   readonly unverifiedAccountsDays: number;
+  /** `driver_applications`: candidatura de motorista criada há mais que isto (prazo provisório — ver o comentário do módulo). */
+  readonly driverApplicationsDays: number;
+  /** `waitlist_signups`: inscrição na lista de espera criada há mais que isto (idem). */
+  readonly waitlistSignupsDays: number;
 }
 
-export const DEFAULT_RETENTION: RetentionPolicy = { loginAttemptsDays: 2, accessLogDays: 90, sessionFamiliesDays: 7, emailCodesDays: 7, unverifiedAccountsDays: 7 };
+const SIX_MONTHS_DAYS = 180;
+
+export const DEFAULT_RETENTION: RetentionPolicy = {
+  loginAttemptsDays: 2,
+  accessLogDays: SIX_MONTHS_DAYS,
+  sessionFamiliesDays: 7,
+  emailCodesDays: 7,
+  unverifiedAccountsDays: 7,
+  driverApplicationsDays: SIX_MONTHS_DAYS,
+  waitlistSignupsDays: SIX_MONTHS_DAYS,
+};
 
 export interface RetentionReport {
   readonly loginAttempts: number;
@@ -35,6 +58,8 @@ export interface RetentionReport {
   readonly sessionFamilies: number;
   readonly emailCodes: number;
   readonly unverifiedAccounts: number;
+  readonly driverApplications: number;
+  readonly waitlistSignups: number;
 }
 
 const BATCH = 5000;
@@ -81,5 +106,7 @@ export async function runIdentityRetention(pool: Pool, policy: RetentionPolicy =
       pool, 'account_email_codes', 'id',
       `expires_at < now() - $1::interval OR closed_at < now() - $1::interval`, [days(policy.emailCodesDays)],
     ),
+    driverApplications: await deleteInBatches(pool, 'driver_applications', 'id', `created_at < now() - $1::interval`, [days(policy.driverApplicationsDays)]),
+    waitlistSignups: await deleteInBatches(pool, 'waitlist_signups', 'id', `created_at < now() - $1::interval`, [days(policy.waitlistSignupsDays)]),
   };
 }
