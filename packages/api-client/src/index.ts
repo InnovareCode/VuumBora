@@ -17,8 +17,8 @@ export interface ClientConfig {
   readonly baseUrl?: string;
 }
 
-/** Contrato de erro único para as duas apps. A UI mapeia `kind` para estados de erro/retry. */
-export type ApiError =
+/** A família do erro. A UI mapeia `kind` para estados de erro/retry — o `kind` é estável. */
+export type ApiErrorKind =
   | { readonly kind: 'network'; readonly retryable: true }
   | { readonly kind: 'unauthorized' }
   | { readonly kind: 'forbidden' }
@@ -29,13 +29,30 @@ export type ApiError =
   | { readonly kind: 'unavailable'; readonly retryable: true }
   | { readonly kind: 'unknown'; readonly message: string };
 
+/**
+ * Detalhes OPCIONAIS que o servidor devolve junto do erro. Qualquer `kind` pode trazê-los; quem não os conhece
+ * ignora. A UI decide texto e ação pelo `code` (ex.: `invalid_code`, `email_not_verified`, `too_many_attempts`),
+ * nunca pela mensagem. Só `apps/api` define os valores — ver `docs/contrato-identidade-apps.md`.
+ */
+export interface ApiErrorExtras {
+  /** Código do servidor (`error.code` do envelope). Ausente em erro que não veio do servidor (`network`). */
+  readonly code?: string;
+  /** Tentativas restantes do código (`invalid_code`). */
+  readonly attemptsLeft?: number;
+  /** Espera, em segundos, antes de tentar de novo (`too_many_attempts`, `reset_locked`). */
+  readonly retryAfterSeconds?: number;
+}
+
+/** Contrato de erro único para as duas apps: o `kind` de sempre + os extras do servidor. */
+export type ApiError = ApiErrorKind & ApiErrorExtras;
+
 /** Toda resposta carrega a origem do dado para a UI poder sinalizar "demonstração". */
 export type Result<T> =
   | { readonly ok: true; readonly data: T; readonly origin: DataOrigin }
   | { readonly ok: false; readonly error: ApiError };
 
-/** Porta comum de autenticação (o papel — passageiro/motorista — é decidido pelo backend). */
-export interface AuthPort {
-  signIn(input: { readonly login: string; readonly password: string }): Promise<Result<{ readonly sessionId: string }>>;
-  signOut(): Promise<Result<void>>;
-}
+/*
+ * A porta de autenticação mora em `@vuumbora/api-client/identity` (contrato: docs/contrato-identidade-apps.md):
+ * `createIdentityClient({ mode, baseUrl, accountType })`. O `AuthPort` antigo (`signIn` → `sessionId`, "papel decidido
+ * pelo backend") foi removido: não tinha `accountType`, tokens nem renovação, e nenhuma tela o usava.
+ */

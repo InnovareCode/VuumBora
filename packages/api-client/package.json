@@ -10,12 +10,18 @@
     "./passenger": "./src/passenger/index.ts",
     "./driver": "./src/driver/index.ts",
     "./waitlist": "./src/waitlist/index.ts",
-    "./driver-applications": "./src/driver-applications/index.ts"
+    "./driver-applications": "./src/driver-applications/index.ts",
+    "./identity": "./src/identity/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p tsconfig.test.json",
+    "test": "node --import tsx --test --test-concurrency=1 test/*.test.ts"
   },
   "dependencies": {
     "@vuumbora/domain": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2"
   }
 }

@@ -44,6 +44,10 @@ jobs:
             printf '/// <reference types="expo/types" />\n' > "apps/$app/expo-env.d.ts"
           done
       - run: npm run check
+      # Testes do cliente de identidade dos apps (sessao, refresh em voo unico, adaptadores mock e http).
+      # Sem este passo, o pacote so teria o typecheck no CI.
+      - name: Testes do api-client
+        run: npm test -w @vuumbora/api-client
       # nginx.conf nunca foi executado nesta maquina de desenvolvimento (sem nginx nem Docker).
       # Mesma imagem dos Dockerfiles; o arquivo entra onde eles o copiam. Pega erro de sintaxe e
       # de diretiva antes de o Easypanel tentar subir o contêiner (M-4, revisao-seguranca-s1-rodada3).
