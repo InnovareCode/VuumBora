@@ -930,3 +930,18 @@ de ambiente (`apps/api/.env.example`); o dono pode mandar subir ou descer qualqu
   (21/11/2026). Se o volume de lançamento atrás de um mesmo endereço passar disso, a decisão de subi-los é do dono.
 - Como calibrar: cada resposta limitada deixa no log uma linha `{"event":"rate_limited","route":"/v1/auth/login"}`. Conte por rota
   depois de o `TRUST_PROXY` estar provado em produção (sem ele todos os clientes parecem um endereço só).
+
+## Decisões do dono — 22/11/2026 (manhã)
+
+1. **Textos dos Termos de Uso e da Política de Privacidade: o Atlas redige, o dono revisa com o advogado.** Os textos saem como
+   **rascunho para revisão jurídica** (nada neles vale como parecer), com tudo o que depender de fato ainda não decidido marcado
+   para o advogado e para o dono. Publicação só depois da revisão.
+2. **E-mail (SMTP): o domínio oficial do VuumBora, configurado pela tela "E-mail" do painel do admin**, como já decidido em
+   21/11/2026. A tela existe (S1) e só funciona depois da publicação conjunta da API, das migrações e do painel; falta o dono
+   preencher os dados do servidor e conferir SPF, DKIM e DMARC do domínio.
+3. **Contas de desenvolvedor da Apple: serão criadas ao final do desenvolvimento.** Até lá o desenvolvimento e a prova de
+   dispositivo seguem em Android e no preview web; o que é específico de iOS (Keychain real, build, revisão da App Store,
+   localização em segundo plano) fica concentrado na fase final. Risco assumido: achado específico de iOS aparece tarde.
+4. **Diretriz de qualidade: o plano de implementação precisa andar organizado e orquestrado, com padrão premium e consistência em
+   TODAS as telas, e com tratamento de layout tela a tela.** Isso vira o plano mestre (`docs/plano-mestre.md`) e o padrão premium
+   (`docs/padrao-premium-telas.md`), com portão de qualidade por tela antes de qualquer tela ser dada como pronta.
