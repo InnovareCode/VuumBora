@@ -48,6 +48,10 @@ jobs:
       # Sem este passo, o pacote so teria o typecheck no CI.
       - name: Testes do api-client
         run: npm test -w @vuumbora/api-client
+      # Cofre da sessao (primeira execucao e Keychain), SHA-256 do texto legal e UTF-8 estrito:
+      # packages/ui/src/device. O `npm run check` so tipa estes testes.
+      - name: Testes do packages/ui
+        run: npm test -w @vuumbora/ui
       # nginx.conf nunca foi executado nesta maquina de desenvolvimento (sem nginx nem Docker).
       # Mesma imagem dos Dockerfiles; o arquivo entra onde eles o copiam. Pega erro de sintaxe e
       # de diretiva antes de o Easypanel tentar subir o contêiner (M-4, revisao-seguranca-s1-rodada3).
