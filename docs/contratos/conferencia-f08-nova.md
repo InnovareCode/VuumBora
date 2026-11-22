@@ -494,3 +494,69 @@ O cenário 1 da suíte permanente chama `status()` durante a busca, e foi por is
 - **Comentário de `DeclineReason`:** atribui os valores à decisão 15, que trata de cancelamento, não de recusa.
 - **Distância e tempo na oferta:** arredondamento recomendado (ver acima).
 - **Destino exato na oferta:** pergunta ao dono (ver acima).
+
+---
+
+## Reconferência 2 (Nova, 22/11/2026): commit `985bc67`, ponta da branch `fatia/f08-v2`
+
+**Alvo:** `985bc67`, que entra por cima do `c5f8fa0`. Conferi contra R1 a R8 e contra as duas decisões do dono de
+22/11 em `docs/decisoes-do-dono.md`: "o embarque na oferta é só o bairro" e "o destino na oferta também é só o bairro".
+
+**Método:**
+- Extraí `packages/domain` e `packages/api-client` do commit, com `git archive`, para uma pasta temporária fora do
+  repositório. A árvore de trabalho não foi tocada.
+- Rodei os testes dessa cópia:
+  - `packages/domain`: `tests 28 · suites 8 · pass 28 · fail 0`.
+  - `packages/api-client`: `tests 288 · suites 43 · pass 288 · fail 0`.
+- Rodei a sonda de novo, ampliada para 27 verificações, contra os mocks deste commit.
+- Não rodei `typecheck` nem a CI.
+
+### Veredito: APROVADO
+
+R1 a R8 estão corrigidos e provados na sonda. As duas decisões do dono estão respeitadas no contrato e no mock.
+Nenhum dos cenários que falharam na reconferência anterior falha agora.
+
+### R1 a R8
+
+| Item | Situação | Prova (sonda) |
+|---|---|---|
+| R1 o motorista atribuído fica sabendo do cancelamento | **Corrigido** | Quando o passageiro, o admin ou o sistema cancela, o motorista atribuído recebe `status: cancelled` e o `status()` dele devolve `cancelled`. O A3 continua valendo: o motorista que já tinha devolvido a corrida recebe 404 quando ela é cancelada depois, e o que saiu antes não vê o cancelamento do motorista seguinte |
+| R2 o resumo é sempre do motorista atribuído | **Corrigido** | Depois que B aceita, sem nenhuma consulta durante a busca, o passageiro vê a corrida sem motorista, e não A. Um `setDriverSummary` de A, que não é o atribuído, é ignorado; o de B aparece |
+| R3 ordem das checagens em `start` | **Corrigido** | Antes de chegar, `409 invalid_transition`; motorista não atribuído, 404; as tentativas de quem não é atribuído não contam, e B usa o código certo e passa para `in_progress`; o atribuído erra 5 vezes e a 6ª dá `429` |
+| R4 quem aceita não recebe a revogação | **Corrigido** | Quem aceita recebe só `offer.created` |
+| R5 sem bairro, texto neutro | **Corrigido** | `neighborhood: "Bairro não informado"`; teste novo em `packages/domain/test/geo.test.ts` |
+| R6 chave repetida em outra corrida | **Corrigido** | `409 idempotency_key_reused`, e a segunda corrida continua em `requested` |
+| R7 ficar offline sempre funciona | **Corrigido** | Offline funciona com documento vencido e com conta não aprovada; ficar online com documento vencido continua dando `409 not_eligible` |
+| R8 textos | **Corrigido** | O JSDoc de `TripRealtimePort` cobre reconexão, buraco e `seq` estritamente crescente; `trip/result.ts` e o README dizem que `reason` desconhecido vira `unknown` |
+
+Os cenários que já passavam continuam passando:
+- motorista que saiu: 404;
+- o domínio recusa motorista em `searching_driver` e `requested`;
+- chave repetida com corpo diferente: 409;
+- a sequência de `seq` sai `status:1 status:2 location:2 status:3`, e o snapshot traz `seq: 3`.
+
+### As duas decisões do dono
+
+- **Embarque e destino só pelo bairro:** `RideOffer.pickup` e `RideOffer.destination` são `ApproximatePlace`, com
+  bairro e ponto arredondado a 2 casas. Na sonda, procurei no `offer.created` recebido por quem **recusou** o endereço
+  do embarque, o do destino, os números de porta, as coordenadas exatas e os rótulos ("Casa", "Trabalho"). **Nenhum
+  aparece.**
+- **Endereço exato só para o atribuído:** o `DriverTripSnapshot` do motorista atribuído traz os dois endereços
+  completos. Quem recusou recebe 404.
+- **Distância e tempo arredondados:** com 1234 m e 257 s na entrada, a oferta mostra 1200 m e 240 s. Isso está no
+  mock e no JSDoc de `RideOffer`.
+
+### Observações que não bloqueiam
+
+1. **Embarque muito perto aparece como zero.** O arredondamento simples mostra "0 m, 0 min" quando o embarque está
+   muito perto (com 40 m e 20 s na entrada, a oferta traz 0 e 0). A tela M06 deve mostrar "menos de 100 m" e "menos
+   de 1 min", ou o servidor do S4 usa um passo como mínimo.
+2. **O bloqueio do mock não expira.** No mock, o `429` do código de embarque não se desfaz depois dos
+   `retryAfterSeconds: 30`. A tela não deve testar o desbloqueio contra o mock.
+3. **No mock só do passageiro, `advance` precisa do `driverId`.** `control.advance(tripId, 'driver_assigned')` tem
+   de receber o `driverId`; sem ele, `setDriverSummary` é ignorado e a tela fica sem motorista, sem aviso. Está escrito
+   no README e no exemplo dele.
+4. **Fora da zona da F08, para a fatia de interface (F08b e M06):** o cartão de oferta que existe hoje em
+   `apps/driver/src/components/home/NewRideOfferCard.tsx` recebe `passengerName` e `pickupAddress`. As duas decisões
+   do dono proíbem isso antes do aceite. O cartão passa a receber os bairros do embarque e do destino, sem o nome do
+   passageiro.
