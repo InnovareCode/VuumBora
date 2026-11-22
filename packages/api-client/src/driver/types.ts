@@ -6,10 +6,11 @@
  * Revisado na conferência da Nova (`docs/contratos/conferencia-f08-nova.md`):
  * - **A3**: `DriverTripPort` só vale para o motorista ATRIBUÍDO. Fora disso, `404 not_found` (não
  *   `403` — não confirma que a corrida existe).
- * - **B4**: `DriverTripSnapshot` é a projeção do MOTORISTA — endereço e ponto EXATOS do embarque,
- *   porque a essa altura ele já foi atribuído. Antes do aceite, a oferta (`RideOffer`,
- *   `@vuumbora/domain/driver`) só leva bairro — decisão do dono em 22/11/2026
- *   (`docs/decisoes-do-dono.md`, "Complemento: o embarque na oferta é só o bairro").
+ * - **B4**: `DriverTripSnapshot` é a projeção do MOTORISTA — endereço e ponto EXATOS do embarque E
+ *   do destino, porque a essa altura ele já foi atribuído. Antes do aceite, a oferta (`RideOffer`,
+ *   `@vuumbora/domain/driver`) só leva bairro dos DOIS — decisão do dono em 22/11/2026
+ *   (`docs/decisoes-do-dono.md`, "Complemento: o embarque na oferta é só o bairro" e "Complemento:
+ *   o destino na oferta também é só o bairro").
  */
 import type { GeoPoint, Money, Place, TripId, TripStatus } from '@vuumbora/domain';
 import type { DriverPhase, RideOffer, VerificationStatus } from '@vuumbora/domain/driver';
@@ -24,7 +25,12 @@ export interface DriverAvailabilityInput {
 
 export interface DriverJourneyPort {
   verification(): Promise<Result<{ readonly status: VerificationStatus }>>;
-  /** `409 conflict`: `driver_not_approved` ou `not_eligible` (documento vencido). `400 validation` sem `point` ao ligar. */
+  /**
+   * `409 conflict`: `driver_not_approved` ou `not_eligible` (documento vencido). `400 validation`
+   * sem `point` ao ligar. **R7 (reconferência da Nova):** essas checagens valem só para
+   * `online: true` — ficar OFFLINE sempre funciona, mesmo com documento vencido ou conta não
+   * aprovada (senão o motorista trava online sem conseguir saída).
+   */
   setAvailability(input: DriverAvailabilityInput): Promise<Result<{ readonly phase: DriverPhase }>>;
 }
 
@@ -69,7 +75,14 @@ export interface DriverTripPort extends TripRealtimePort {
   status(tripId: TripId): Promise<Result<DriverTripSnapshot>>;
   /** `driver_en_route` → `driver_arrived`. */
   arrived(tripId: TripId, idempotencyKey: string): Promise<Result<DriverTripSnapshot>>;
-  /** `driver_arrived` → `in_progress`. `pickupCode` é opcional (D-12 em aberto); `429` depois de várias tentativas erradas. */
+  /**
+   * `driver_arrived` → `in_progress`. `pickupCode` é opcional (D-12 em aberto). **R3 (reconferência
+   * da Nova):** a ordem das checagens é `404` (motorista não atribuído) → `409 invalid_transition`
+   * (corrida não está em `driver_arrived`) → `400 validation` (código errado) → `429 rate_limited`
+   * (muitas tentativas erradas). As tentativas contam por corrida E motorista, e só as do
+   * atribuído — checar a atribuição ANTES do código evita que quem recebeu a oferta mas não a
+   * aceitou gaste as tentativas de quem aceitou.
+   */
   start(tripId: TripId, input: { readonly pickupCode?: string }, idempotencyKey: string): Promise<Result<DriverTripSnapshot>>;
   /** `in_progress` → `completed`. `deliveryCode` só importa para `kind: 'delivery'` (hoje desligado, §13.3). */
   complete(tripId: TripId, input: { readonly deliveryCode?: string }, idempotencyKey: string): Promise<Result<DriverTripSnapshot>>;

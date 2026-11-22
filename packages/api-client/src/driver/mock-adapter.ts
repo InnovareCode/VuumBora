@@ -15,10 +15,13 @@
  * faria outro motorista vencer a corrida ou o tempo esgotar; se o passageiro cancelar por baixo
  * (store compartilhada), a oferta pendente é revogada automaticamente (C2).
  *
- * **Embarque só o bairro na oferta** (decisão do dono, 22/11/2026 — `docs/decisoes-do-dono.md`,
- * "Complemento: o embarque na oferta é só o bairro"): `control.offer` nunca passa o endereço nem o
- * ponto exato para `RideOffer`. O endereço completo só aparece em `DriverTripSnapshot`, depois do
- * aceite, e só para quem `assignedTripInfo` confirma ser o atribuído (A3).
+ * **Embarque E destino só o bairro na oferta** (decisão do dono, 22/11/2026 —
+ * `docs/decisoes-do-dono.md`, "Complemento: o embarque na oferta é só o bairro" e "Complemento: o
+ * destino na oferta também é só o bairro"): `control.offer` nunca passa o endereço nem o ponto
+ * exato de nenhum dos dois para `RideOffer`. O endereço completo dos dois só aparece em
+ * `DriverTripSnapshot`, depois do aceite, e só para quem `assignedTripInfo` confirma ser o
+ * atribuído (A3). `pickupDistanceM`/`pickupEtaS` vão arredondados (100 m / 1 min) — recomendação da
+ * Nova: exatos estreitariam demais o quadrado aproximado do embarque.
  */
 import { cancelTrip, toApproximatePlace, transitionTrip } from '@vuumbora/domain';
 import type { Money, Place, TripId, TripStatus } from '@vuumbora/domain';
@@ -54,6 +57,13 @@ const DEFAULT_OFFER_TTL_MS = 15 * 1000; // §5.4: proposta de 15 s
 const DEFAULT_PICKUP_DISTANCE_M = 1200;
 const DEFAULT_PICKUP_ETA_S = 240;
 const START_CODE_ATTEMPTS = 5;
+const PICKUP_DISTANCE_STEP_M = 100;
+const PICKUP_ETA_STEP_S = 60;
+
+/** Arredonda para o múltiplo mais próximo de `step` — nunca o valor exato na oferta (recomendação da Nova). */
+function roundToStep(value: number, step: number): number {
+  return Math.round(value / step) * step;
+}
 
 interface TripInfo {
   readonly pickup: Place;
@@ -182,11 +192,11 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
       tripId,
       expiresAt: new Date(expiresAtMs).toISOString() as RideOffer['expiresAt'],
       estimatedPayout: input.estimatedPayout,
-      // Decisão do dono, 22/11/2026: só o bairro + distância/tempo até o embarque, nunca o endereço nem o ponto exato.
+      // Decisão do dono, 22/11/2026: embarque E destino só o bairro — nunca o endereço nem o ponto exato de nenhum.
       pickup: toApproximatePlace(input.pickup),
-      pickupDistanceM: input.pickupDistanceM ?? DEFAULT_PICKUP_DISTANCE_M,
-      pickupEtaS: input.pickupEtaS ?? DEFAULT_PICKUP_ETA_S,
-      destination: input.destination,
+      pickupDistanceM: roundToStep(input.pickupDistanceM ?? DEFAULT_PICKUP_DISTANCE_M, PICKUP_DISTANCE_STEP_M),
+      pickupEtaS: roundToStep(input.pickupEtaS ?? DEFAULT_PICKUP_ETA_S, PICKUP_ETA_STEP_S),
+      destination: toApproximatePlace(input.destination),
       categoryId: input.categoryId,
     };
     emitOfferEvent({ type: 'offer.created', offer: rideOffer });
@@ -216,11 +226,15 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
       const outcome = trip ? transitionTrip(trip.status, 'driver_assigned') : undefined;
       if (!outcome?.ok) return failWith(acceptConflict('offer_taken')); // zero linhas afetadas no UPDATE real (§5.4)
 
+      // R4 (reconferência da Nova): resolve e desliga o vigia da OFERTA antes das duas transições de
+      // estado — senão a passagem automática driver_assigned -> driver_en_route (abaixo) é lida pelo
+      // próprio vigia como "a corrida não está mais em driver_assigned" e revoga a oferta que o
+      // motorista acabou de aceitar, emitindo `offer.revoked` para quem a aceitou.
       record.taken = true;
-      store.setStatus(record.tripId, outcome.state, driverId);
-      store.setStatus(record.tripId, 'driver_en_route'); // sistema: automático no aceite, o app não chama nada (C1)
       record.resolved = true;
       record.stopWatching();
+      store.setStatus(record.tripId, outcome.state, driverId);
+      store.setStatus(record.tripId, 'driver_en_route'); // sistema: automático no aceite, o app não chama nada (C1)
       return succeed({ tripId: record.tripId });
     })();
 
@@ -305,25 +319,34 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
     return doTransition(tripId, idempotencyKey, arrivedCache, fingerprint({ tripId }), 'driver_arrived');
   }
 
+  /**
+   * R3 (reconferência da Nova): a ordem das checagens é 404 (não é o atribuído) → 409 (fase errada)
+   * → 400 (código errado) → 429 (muitas tentativas). Antes, o código era checado ANTES da
+   * atribuição — qualquer motorista que recebeu a oferta (o `tripId` vai em toda `RideOffer`)
+   * conseguia confirmar que a corrida existe e gastava as tentativas do motorista ATRIBUÍDO.
+   * `pickupCodes`/`startAttempts` são por INSTÂNCIA (um motorista) e só alcançados depois do 404,
+   * então as tentativas já contam por corrida E motorista, e só as do atribuído.
+   */
   async function start(tripId: TripId, input: { readonly pickupCode?: string }, idempotencyKey: string): Promise<Result<DriverTripSnapshot>> {
     const body = fingerprint({ tripId, ...input });
     const cached = startCache.get(idempotencyKey);
     if (cached) return cached.fingerprint === body ? cached.result : failWith(driverActionConflict('idempotency_key_reused'));
 
     const result = ((): Result<DriverTripSnapshot> => {
+      const found = assignedTripInfo(tripId);
+      if (!found) return failWith(notFound()); // 404
+      const outcome = transitionTrip(found.status, 'in_progress');
+      if (!outcome.ok) return failWith(driverActionConflict('invalid_transition')); // 409
+
       const expected = pickupCodes.get(tripId);
       if (expected !== undefined) {
         const attempts = startAttempts.get(tripId) ?? 0;
-        if (attempts >= START_CODE_ATTEMPTS) return failWith({ kind: 'rate_limited', retryAfterSeconds: 30 });
+        if (attempts >= START_CODE_ATTEMPTS) return failWith({ kind: 'rate_limited', retryAfterSeconds: 30 }); // 429
         if (input.pickupCode !== expected) {
           startAttempts.set(tripId, attempts + 1);
-          return failWith(validation({ pickupCode: 'Código de embarque incorreto.' }));
+          return failWith(validation({ pickupCode: 'Código de embarque incorreto.' })); // 400
         }
       }
-      const found = assignedTripInfo(tripId);
-      if (!found) return failWith(notFound());
-      const outcome = transitionTrip(found.status, 'in_progress');
-      if (!outcome.ok) return failWith(driverActionConflict('invalid_transition'));
       store.setStatus(tripId, outcome.state);
       startAttempts.delete(tripId);
       const after = assignedTripInfo(tripId);
@@ -364,10 +387,17 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
     return succeed({ status: verificationStatus });
   }
 
+  /**
+   * R7 (reconferência da Nova): as checagens de aprovação/documento valem só para ficar ONLINE —
+   * um motorista com documento vencido, ou cuja conta nunca foi aprovada, ainda precisa conseguir
+   * ficar offline (senão trava o app no meio do turno, sem saída).
+   */
   async function setAvailability(input: DriverAvailabilityInput): Promise<Result<{ readonly phase: DriverPhase }>> {
-    if (verificationStatus !== 'approved') return failWith(availabilityConflict('driver_not_approved'));
-    if (documentExpired) return failWith(availabilityConflict('not_eligible'));
-    if (input.online && !input.point) return failWith(validation({ point: 'Posição obrigatória para ficar online.' }));
+    if (input.online) {
+      if (verificationStatus !== 'approved') return failWith(availabilityConflict('driver_not_approved'));
+      if (documentExpired) return failWith(availabilityConflict('not_eligible'));
+      if (!input.point) return failWith(validation({ point: 'Posição obrigatória para ficar online.' }));
+    }
     phase = input.online ? 'online' : 'offline';
     return succeed({ phase });
   }

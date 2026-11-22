@@ -22,10 +22,16 @@ function round(value: number, decimals: number): number {
   return Math.round(value * factor) / factor;
 }
 
-/** `place.neighborhood` ausente cai no `label` — mock/fixture sem bairro cadastrado ainda. */
+/**
+ * `place.neighborhood` ausente cai num texto NEUTRO — nunca em `place.label` nem `place.address`
+ * (achado R5 da reconferência da Nova, `docs/contratos/conferencia-f08-nova.md`): quando `label` é
+ * o próprio endereço (mock/fixture sem bairro cadastrado, ou um geocodificador real que não devolve
+ * bairro), cair nele vazava o endereço exato na oferta — exatamente o que esta função existe para
+ * impedir.
+ */
 export function toApproximatePlace(place: Place): ApproximatePlace {
   return {
-    neighborhood: place.neighborhood ?? place.label,
+    neighborhood: place.neighborhood ?? 'Bairro não informado',
     approximatePoint: {
       latitude: round(place.point.latitude, APPROX_DECIMALS),
       longitude: round(place.point.longitude, APPROX_DECIMALS),

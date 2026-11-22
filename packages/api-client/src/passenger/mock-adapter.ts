@@ -11,9 +11,12 @@
  *
  * Categorias de referência (decisão do dono, 20/11/2026): VuumBora, Conforto, Motorista mulher,
  * Pet, Entrega. **Entrega e Motorista mulher (até a D-08) não aparecem na cotação** — estão
- * DESLIGADAS (plano-sistema.md §13.3; decisão 8 em aberto), não é "sem motorista agora". Pedir uma
- * categoria que ainda está na lista mas ficou `availability: 'none'` É aceito: se nenhum motorista
- * aparecer no tempo máximo, a corrida termina em `failed` (achado B1 da conferência).
+ * DESLIGADAS (plano-sistema.md §13.3; decisão 8 em aberto), não é "sem motorista agora". **Pet
+ * também nasce DESLIGADA** (D-09, plano-mestre.md: "as duas [Pet e Entrega] nascem desligadas") —
+ * achado de "não bloqueia" da reconferência da Nova; o teste que precisar de Pet liga por
+ * `control.setCategoryEnabled('pet', true)`. Pedir uma categoria que ainda está na lista mas ficou
+ * `availability: 'none'` É aceito: se nenhum motorista aparecer no tempo máximo, a corrida termina
+ * em `failed` (achado B1 da conferência).
  */
 import { cancelTrip, transitionTrip } from '@vuumbora/domain';
 import type { GeoPoint, Place, TripId, TripStatus, TripTransitionResult } from '@vuumbora/domain';
@@ -52,7 +55,7 @@ const DEFAULT_CATEGORIES: readonly CategoryFixture[] = [
   { categoryId: 'vuumbora', amountCents: 1890, distanceM: 5200, durationS: 900, pickupEtaS: 180, availability: 'high', kind: 'ride', enabled: true },
   { categoryId: 'conforto', amountCents: 2490, distanceM: 5200, durationS: 900, pickupEtaS: 240, availability: 'high', kind: 'ride', enabled: true },
   { categoryId: 'motorista_mulher', amountCents: 1990, distanceM: 5200, durationS: 900, pickupEtaS: 300, availability: 'low', kind: 'ride', enabled: false },
-  { categoryId: 'pet', amountCents: 2190, distanceM: 5200, durationS: 900, pickupEtaS: 300, availability: 'low', kind: 'ride', enabled: true },
+  { categoryId: 'pet', amountCents: 2190, distanceM: 5200, durationS: 900, pickupEtaS: 300, availability: 'low', kind: 'ride', enabled: false }, // D-09: nasce desligada
   { categoryId: 'entrega', amountCents: 1590, distanceM: 6000, durationS: 1100, pickupEtaS: 300, availability: 'low', kind: 'delivery', enabled: false },
 ];
 
@@ -72,9 +75,21 @@ export interface MockPassengerRideOptions {
 
 /** Hooks que progridem a corrida — o que o simulador antigo fazia a golpes de `setTimeout`. */
 export interface MockPassengerRideControl {
-  /** Tenta mover a corrida para `to`, com a MESMA validação do domínio. */
-  advance(tripId: TripId, to: TripStatus): TripTransitionResult;
-  /** Anexa o resumo do motorista para exibição. Sem efeito se a fase atual não tem motorista (A2). */
+  /**
+   * Tenta mover a corrida para `to`, com a MESMA validação do domínio. `assignedDriverId`: passe
+   * ao ir para `driver_assigned` — é por ele que `setDriverSummary` resolve A QUEM atribuir o
+   * resumo (R2); sem ele, a corrida fica sem motorista atribuído na store mesmo com `to:
+   * 'driver_assigned'`, e nenhum resumo aparece no snapshot.
+   */
+  advance(tripId: TripId, to: TripStatus, assignedDriverId?: string): TripTransitionResult;
+  /**
+   * Anexa o resumo do motorista ATUALMENTE atribuído (R2, reconferência da Nova): só tem efeito se
+   * `summary.driverId` for exatamente quem a store diz estar atribuído agora — de um motorista que
+   * não é mais o atribuído é ignorado em silêncio. Isso evita o resumo de um motorista que já saiu
+   * reaparecer para o PRÓXIMO motorista atribuído (antes, o resumo era guardado por `tripId`, e um
+   * `tripId` reaproveitado por um motorista novo herdava o resumo do antigo até alguém chamar isto
+   * de novo).
+   */
   setDriverSummary(tripId: TripId, summary: TripDriverSummary): void;
   /** Cancelamento com autor — motorista em `driver_assigned`/`driver_en_route` volta para a busca. */
   cancel(tripId: TripId, actor: CancelActor): TripTransitionResult;
@@ -105,7 +120,8 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
   const fixtureById = new Map(fixtures.map((f) => [f.categoryId, f] as const));
   const enabledOverrides = new Map<string, boolean>();
   const quotesById = new Map<string, { readonly categoryId: string; readonly expiresAtMs: number }>();
-  const driverSummaries = new Map<TripId, TripDriverSummary>();
+  /** Por `driverId` (R2) — NUNCA por `tripId`: ver o porquê no JSDoc de `MockPassengerRideControl.setDriverSummary`. */
+  const driverSummaries = new Map<string, TripDriverSummary>();
 
   const requestCache = createIdempotencyCache<Result<{ readonly tripId: TripId; readonly status: TripStatus }>>();
   const cancelCache = createIdempotencyCache<Result<{ readonly status: TripStatus }>>();
@@ -162,16 +178,23 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
     return result;
   }
 
-  function driverSummaryFor(tripId: TripId, status: TripStatus): TripDriverSummary | undefined {
-    if (!DRIVER_ASSIGNED_STATUSES.has(status)) {
-      driverSummaries.delete(tripId); // A2: a volta para a busca (ou fim) limpa o motorista — nunca mostra o antigo
-      return undefined;
-    }
-    return driverSummaries.get(tripId);
+  /**
+   * A2/R2: resolve pelo `assignedDriverId` ATUAL da store, nunca por um valor guardado à parte do
+   * `tripId` — assim um motorista que já saiu nunca "empresta" o resumo para quem assumiu depois
+   * dele (R2 da reconferência: com a chave por `tripId`, a limpeza só acontecia quando alguém LIA o
+   * snapshot durante a busca; sem essa leitura, o resumo antigo sobrevivia e era servido para o
+   * motorista NOVO, que nunca teve o próprio resumo anexado).
+   */
+  function driverSummaryFor(record: { readonly status: TripStatus; readonly assignedDriverId?: string }): TripDriverSummary | undefined {
+    if (!DRIVER_ASSIGNED_STATUSES.has(record.status) || !record.assignedDriverId) return undefined;
+    return driverSummaries.get(record.assignedDriverId);
   }
 
-  function buildSnapshot(tripId: TripId, record: { readonly status: TripStatus; readonly seq: number }): PassengerTripSnapshot {
-    const driver = driverSummaryFor(tripId, record.status);
+  function buildSnapshot(
+    tripId: TripId,
+    record: { readonly status: TripStatus; readonly seq: number; readonly assignedDriverId?: string },
+  ): PassengerTripSnapshot {
+    const driver = driverSummaryFor(record);
     return driver
       ? { tripId, status: record.status, seq: record.seq, driver }
       : { tripId, status: record.status, seq: record.seq };
@@ -187,7 +210,10 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
     input: { readonly reason?: CancelReason },
     idempotencyKey: string,
   ): Promise<Result<{ readonly status: TripStatus }>> {
-    const body = fingerprint(input);
+    // R6 (reconferência da Nova): a impressão inclui o tripId — sem ele, a MESMA chave usada em
+    // OUTRA corrida com o mesmo `input` (ex.: {} sem reason) batia no cache e devolvia o resultado
+    // da corrida ERRADA, sem tocar na corrida que de fato devia ser cancelada.
+    const body = fingerprint({ tripId, ...input });
     const cached = cancelCache.get(idempotencyKey);
     if (cached) return cached.fingerprint === body ? cached.result : failWith(cancelConflict('idempotency_key_reused'));
 
@@ -209,16 +235,19 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
   }
 
   const control: MockPassengerRideControl = {
-    advance(tripId, to) {
+    advance(tripId, to, assignedDriverId) {
       const record = store.get(tripId);
       if (!record) return { ok: false, from: to, to, reason: 'Corrida inexistente neste mock.' };
       const result = transitionTrip(record.status, to);
-      if (result.ok) store.setStatus(tripId, result.state);
+      if (result.ok) store.setStatus(tripId, result.state, assignedDriverId);
       return result;
     },
     setDriverSummary(tripId, summary) {
+      // R2: ignora em silêncio se este motorista não é (mais) o atribuído a esta corrida AGORA.
       const record = store.get(tripId);
-      if (record && DRIVER_ASSIGNED_STATUSES.has(record.status)) driverSummaries.set(tripId, summary);
+      if (record && DRIVER_ASSIGNED_STATUSES.has(record.status) && record.assignedDriverId === summary.driverId) {
+        driverSummaries.set(summary.driverId, summary);
+      }
     },
     cancel(tripId, actor) {
       const record = store.get(tripId);

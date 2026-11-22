@@ -44,8 +44,13 @@ export type TripEvent =
  * Assina eventos de uma corrida. **Ressincronização mora na PORTA (B5), não em cada tela:** ao
  * assinar, entrega IMEDIATAMENTE um evento `status` com o estado atual e o `seq` do snapshot —
  * quem assina nunca fica sem saber o ponto de partida, mesmo que a corrida já tenha avançado antes
- * da assinatura. Sem `Result`: é um stream — "WS avisa, REST é a verdade". Corrida inexistente, ou
- * não mais visível a quem assina (A3 — ver `DriverTripPort`), não entrega nada.
+ * da assinatura. A porta faz o MESMO ao **reconectar** depois de uma queda e ao **ver um buraco**
+ * (`seq` do evento maior que o último + 1): consulta o estado atual e entrega um evento `status`
+ * com ele, antes de voltar a repassar o canal — a tela nunca precisa pedir isso sozinha (R8, texto
+ * pendente da reconferência da Nova). A porta só repassa eventos de estado com `seq` ESTRITAMENTE
+ * crescente e descarta ela mesma qualquer duplicado — quem assina nunca vê o mesmo `seq` duas
+ * vezes. Sem `Result`: é um stream — "WS avisa, REST é a verdade". Corrida inexistente, ou não
+ * mais visível a quem assina (A3 — ver `DriverTripPort`), não entrega nada.
  */
 export interface TripRealtimePort {
   /** Devolve a função de cancelamento (unsubscribe). Chamar duas vezes é inofensivo. */

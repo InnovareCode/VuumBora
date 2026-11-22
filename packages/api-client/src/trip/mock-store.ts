@@ -20,13 +20,24 @@ interface TripRecord {
   readonly subscribers: Set<(event: TripEvent) => void>;
 }
 
-/** Fases em que a corrida TEM motorista atribuído. Fora destas, `assignedDriverId` é limpo (A2/A3). */
+/**
+ * Fases em que a corrida TEM (ou teve) motorista atribuído. Fora destas, `assignedDriverId` é
+ * limpo (A2/A3) — é assim que a VOLTA para `searching_driver`/`requested` esquece o motorista
+ * antigo. `cancelled` entra aqui (achado R1 da reconferência da Nova,
+ * `docs/contratos/conferencia-f08-nova.md`): quando é o passageiro, o admin ou o sistema quem
+ * cancela (não o motorista voltando a busca), a corrida MORRE com o motorista ainda atribuído —
+ * ele precisa continuar vendo o desfecho (`status()` não pode virar 404, e o `subscribe` dele tem
+ * que entregar o evento terminal). Sem isso, `setStatus` para `cancelled` limpava
+ * `assignedDriverId` e o motorista atribuído ficava sabendo do cancelamento do mesmo jeito que um
+ * estranho: 404.
+ */
 export const DRIVER_ASSIGNED_STATUSES: ReadonlySet<TripStatus> = new Set([
   'driver_assigned',
   'driver_en_route',
   'driver_arrived',
   'in_progress',
   'completed',
+  'cancelled',
 ]);
 
 export interface TripStoreRecord {

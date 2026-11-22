@@ -4,6 +4,12 @@
  * `invalid_transition`, `idempotency_key_reused`, `outside_service_area`, `not_found`). Cobre os
  * achados A2 e A4 da conferência da Nova (`docs/contratos/conferencia-f08-nova.md`); A1/A3 vivem
  * no lado do motorista (`driver-ride-mock.test.ts`).
+ *
+ * Cobre também, da RECONFERÊNCIA (mesmo documento): R2 (o resumo do motorista é resolvido por
+ * `assignedDriverId`, nunca "herdado" pelo motorista seguinte) e R6 (a impressão de idempotência do
+ * cancelamento inclui o `tripId` — a mesma chave em OUTRA corrida é conflito, não sucesso
+ * emprestado). D-09: a fixture de Pet nasce DESLIGADA (testes que precisam dela ligam por
+ * `control.setCategoryEnabled`).
  */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
@@ -41,13 +47,13 @@ async function quotedAndRequested(mock: ReturnType<typeof fresh>) {
 }
 
 describe('quote (B1)', () => {
-  test('devolve só as categorias LIGADAS de "ride": vuumbora, conforto, pet — sem Entrega nem Motorista mulher', async () => {
+  test('devolve só as categorias LIGADAS de "ride": vuumbora, conforto — sem Pet (D-09), Entrega nem Motorista mulher', async () => {
     const mock = fresh();
     const result = await mock.port.quote({ origin: ORIGIN, destination: DESTINATION });
     assert.ok(result.ok);
     if (!result.ok) return;
     const ids = result.data.categories.map((c) => c.categoryId).sort();
-    assert.deepEqual(ids, ['conforto', 'pet', 'vuumbora']);
+    assert.deepEqual(ids, ['conforto', 'vuumbora']);
     assert.equal(result.origin, 'mock');
   });
 
@@ -130,6 +136,7 @@ describe('request (B2)', () => {
 
   test('B1: availability "low"/"none" NÃO bloqueia o pedido — só "sem motorista estimado agora"', async () => {
     const mock = fresh();
+    mock.control.setCategoryEnabled('pet', true); // D-09: Pet nasce desligada — liga só para este teste
     const quoteResult = await mock.port.quote({ origin: ORIGIN, destination: DESTINATION });
     assert.ok(quoteResult.ok);
     if (!quoteResult.ok) return;
@@ -225,6 +232,35 @@ describe('cancel (B3)', () => {
     assert.equal(second.ok, false);
     if (!second.ok) assert.deepEqual(second.error, { kind: 'conflict', reason: 'idempotency_key_reused' });
   });
+
+  test('4b) R6: a MESMA idempotencyKey usada no cancelamento de OUTRA corrida é 409 idempotency_key_reused — a segunda corrida não é tocada', async () => {
+    const mock = fresh();
+    // quotedAndRequested() usa uma idempotencyKey FIXA ('key-setup') para o pedido — então cada
+    // corrida de apoio é pedida com a sua própria chave, para não colidir entre si.
+    async function requestTrip(key: string) {
+      const quoteResult = await mock.port.quote({ origin: ORIGIN, destination: DESTINATION });
+      assert.ok(quoteResult.ok);
+      if (!quoteResult.ok) throw new Error('cotação de apoio deveria passar');
+      const category = firstCategory(quoteResult.data);
+      const requestResult = await mock.port.request({ quoteId: category.quoteId, paymentMethodId: 'pm_1' }, key);
+      assert.ok(requestResult.ok);
+      if (!requestResult.ok) throw new Error('pedido de apoio deveria passar');
+      return requestResult.data.tripId;
+    }
+    const tripA = await requestTrip('req-4b-a');
+    const tripB = await requestTrip('req-4b-b');
+    const first = await mock.port.cancel(tripA, {}, 'mesma-chave');
+    assert.ok(first.ok);
+    if (first.ok) assert.equal(first.data.status, 'cancelled');
+
+    const second = await mock.port.cancel(tripB, {}, 'mesma-chave');
+    assert.equal(second.ok, false);
+    if (!second.ok) assert.deepEqual(second.error, { kind: 'conflict', reason: 'idempotency_key_reused' });
+
+    const statusB = await mock.port.status(tripB);
+    assert.ok(statusB.ok);
+    if (statusB.ok) assert.equal(statusB.data.status, 'requested', 'a corrida B continua intocada, não "cancelled" por engano');
+  });
 });
 
 describe('control + subscribe — a progressão que substitui o setTimeout do simulador', () => {
@@ -249,7 +285,7 @@ describe('control + subscribe — a progressão que substitui o setTimeout do si
     mock.port.subscribe(tripId, (event) => events.push(event));
 
     assert.ok(mock.control.advance(tripId, 'searching_driver').ok);
-    assert.ok(mock.control.advance(tripId, 'driver_assigned').ok);
+    assert.ok(mock.control.advance(tripId, 'driver_assigned', 'd1').ok);
     mock.control.setDriverSummary(tripId, { driverId: 'd1', firstName: 'Ana', plate: 'ABC1D23' });
     assert.ok(mock.control.advance(tripId, 'driver_en_route').ok);
     mock.control.emitLocation(tripId, { latitude: -5.79, longitude: -35.205 });
@@ -306,7 +342,7 @@ describe('control + subscribe — a progressão que substitui o setTimeout do si
     const mock = fresh();
     const { tripId } = await quotedAndRequested(mock);
     mock.control.advance(tripId, 'searching_driver');
-    mock.control.advance(tripId, 'driver_assigned');
+    mock.control.advance(tripId, 'driver_assigned', 'A');
     mock.control.setDriverSummary(tripId, { driverId: 'A', firstName: 'Ana', plate: 'AAA1A11' });
     assert.equal((await mock.port.status(tripId)).ok && (await mock.port.status(tripId) as { ok: true; data: { driver?: unknown } }).data.driver !== undefined, true);
 

@@ -3,8 +3,15 @@
  * do aceite (C1) e posição (C4), nos erros do contrato (`offer_taken`, `offer_expired`,
  * `invalid_transition`, `idempotency_key_reused`, `driver_not_approved`, `not_eligible`,
  * `not_found`). Cobre os achados A1, A3 e A4 da conferência da Nova
- * (`docs/contratos/conferencia-f08-nova.md`) e a privacidade do embarque (decisão do dono,
- * 22/11/2026): a oferta nunca leva o endereço nem o ponto exato.
+ * (`docs/contratos/conferencia-f08-nova.md`) e a privacidade do embarque E do destino (decisão do
+ * dono, 22/11/2026): a oferta nunca leva o endereço nem o ponto exato de nenhum dos dois.
+ *
+ * Cobre também os achados R1–R7 da RECONFERÊNCIA da Nova (mesmo documento, seção "Reconferência"):
+ * R1 (motorista atribuído recebe o cancelamento do passageiro), R2 (resumo do motorista nunca
+ * "vaza" para o motorista seguinte — em `passenger-ride-mock.test.ts`), R3 (ordem 404→409→400→429
+ * em `start`), R4 (quem aceita não recebe `offer.revoked` da própria oferta), R5 (embarque sem
+ * bairro cai em texto neutro, não no endereço), R6 (idempotência do cancelamento — em
+ * `passenger-ride-mock.test.ts`) e R7 (ficar offline sempre funciona).
  */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
@@ -16,7 +23,7 @@ import type { Quote } from '../src/passenger/types';
 import type { OfferEvent } from '../src/driver/types';
 
 const PICKUP = { label: 'Casa', address: 'Rua A, 1', point: { latitude: -5.791234, longitude: -35.211234 }, neighborhood: 'Tirol' };
-const DESTINATION = { label: 'Trabalho', address: 'Rua B, 2', point: { latitude: -5.8, longitude: -35.2 } };
+const DESTINATION = { label: 'Trabalho', address: 'Rua B, 2', point: { latitude: -5.800987, longitude: -35.200654 }, neighborhood: 'Lagoa Nova' };
 const PAYOUT = { amountCents: 1500, currency: 'BRL' as const };
 
 function fresh(now = 0) {
@@ -29,19 +36,46 @@ function fresh(now = 0) {
   };
 }
 
-describe('control.offer — o embarque só o bairro (decisão do dono, 22/11/2026)', () => {
-  test('RideOffer leva bairro, distância e ETA, mais o destino COMPLETO — nunca o endereço nem o ponto exato do embarque', () => {
+describe('control.offer — embarque E destino só o bairro (decisão do dono, 22/11/2026)', () => {
+  test('RideOffer leva bairro, distância e ETA do embarque E do destino — nunca o endereço nem o ponto exato de nenhum dos dois', () => {
     const mock = fresh();
     const offer = mock.control.offer({ pickup: PICKUP, destination: DESTINATION, categoryId: 'vuumbora', estimatedPayout: PAYOUT });
     assert.equal(offer.pickup.neighborhood, 'Tirol');
     assert.notDeepEqual(offer.pickup.approximatePoint, PICKUP.point, 'o ponto do embarque é arredondado, não o exato');
     assert.ok(!('address' in offer.pickup), 'RideOffer.pickup não tem endereço — só ApproximatePlace');
     assert.ok(!('label' in offer.pickup));
-    assert.equal(offer.destination, DESTINATION); // destino visível por completo (§5.4) — decisão distinta do embarque
+    // Complemento de 22/11/2026: o destino também é só o bairro na oferta.
+    assert.equal(offer.destination.neighborhood, 'Lagoa Nova');
+    assert.notDeepEqual(offer.destination.approximatePoint, DESTINATION.point, 'o ponto do destino também é arredondado, não o exato');
+    assert.ok(!('address' in offer.destination));
+    assert.ok(!('label' in offer.destination));
     assert.equal(typeof offer.pickupDistanceM, 'number');
     assert.equal(typeof offer.pickupEtaS, 'number');
     const snapshot = mock.control.snapshot(offer.tripId);
     assert.equal(snapshot, undefined, 'antes do aceite, nem este motorista vê o DriverTripSnapshot (A3)');
+  });
+
+  test('pickupDistanceM arredonda a 100 m e pickupEtaS a 1 min (recomendação da Nova na reconferência)', () => {
+    const mock = fresh();
+    const offer = mock.control.offer({
+      pickup: PICKUP,
+      destination: DESTINATION,
+      categoryId: 'vuumbora',
+      estimatedPayout: PAYOUT,
+      pickupDistanceM: 1234,
+      pickupEtaS: 125,
+    });
+    assert.equal(offer.pickupDistanceM, 1200);
+    assert.equal(offer.pickupEtaS, 120);
+  });
+
+  test('11) R5: embarque sem bairro cadastrado cai no texto NEUTRO — nunca no label nem no endereço', () => {
+    const mock = fresh();
+    const pickupSemBairro = { label: 'Rua das Flores, 123', address: 'Rua das Flores, 123', point: { latitude: -5.79, longitude: -35.21 } };
+    const offer = mock.control.offer({ pickup: pickupSemBairro, destination: DESTINATION, categoryId: 'vuumbora', estimatedPayout: PAYOUT });
+    assert.notEqual(offer.pickup.neighborhood, pickupSemBairro.label);
+    assert.notEqual(offer.pickup.neighborhood, pickupSemBairro.address);
+    assert.equal(offer.pickup.neighborhood, 'Bairro não informado');
   });
 });
 
@@ -72,7 +106,7 @@ describe('accept', () => {
         pickup: { neighborhood: 'Tirol', approximatePoint: { latitude: -5.79, longitude: -35.21 } },
         pickupDistanceM: 500,
         pickupEtaS: 120,
-        destination: DESTINATION,
+        destination: { neighborhood: 'Lagoa Nova', approximatePoint: { latitude: -5.8, longitude: -35.2 } },
         categoryId: 'vuumbora',
       },
       'k1',
@@ -132,7 +166,7 @@ describe('decline', () => {
         pickup: { neighborhood: 'Tirol', approximatePoint: { latitude: -5.79, longitude: -35.21 } },
         pickupDistanceM: 500,
         pickupEtaS: 120,
-        destination: DESTINATION,
+        destination: { neighborhood: 'Lagoa Nova', approximatePoint: { latitude: -5.8, longitude: -35.2 } },
         categoryId: 'vuumbora',
       },
       { reason: 'too_far' },
@@ -186,6 +220,20 @@ describe('subscribeOffers (C2)', () => {
       ['offer.created', 'offer.revoked'],
     );
     assert.equal((events[1] as { reason: string }).reason, 'cancelled');
+  });
+
+  test('7) R4: quem aceita a própria oferta NÃO recebe o offer.revoked dela', async () => {
+    const mock = fresh();
+    const events: OfferEvent[] = [];
+    mock.offerPort.subscribeOffers((event) => events.push(event));
+
+    const offer = mock.control.offer({ pickup: PICKUP, destination: DESTINATION, categoryId: 'vuumbora', estimatedPayout: PAYOUT });
+    const result = await mock.offerPort.accept(offer, 'acc-7');
+    assert.ok(result.ok);
+
+    // A passagem automática driver_assigned -> driver_en_route (sistema, C1) não pode ser lida pelo
+    // vigia da própria oferta como "a corrida saiu de driver_assigned" e revogar o que acabou de aceitar.
+    assert.deepEqual(events.map((e) => e.type), ['offer.created']);
   });
 });
 
@@ -287,6 +335,47 @@ describe('C1 — ações do motorista depois do aceite', () => {
     assert.equal(second.ok, false);
     if (!second.ok) assert.deepEqual(second.error, { kind: 'conflict', reason: 'idempotency_key_reused' });
   });
+
+  test('9) R3: código errado ANTES de chegar (ainda driver_en_route) é 409 invalid_transition, não 400', async () => {
+    const { mock, tripId } = await accepted(); // driver_en_route — ainda não chegou
+    mock.control.setPickupCode(tripId, '1234');
+    const result = await mock.tripPort.start(tripId, { pickupCode: '0000' }, 'k1');
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.deepEqual(result.error, { kind: 'conflict', reason: 'invalid_transition' });
+  });
+
+  test('9c/9d) R3: motorista NÃO atribuído em "start" é sempre 404 — e não gasta as tentativas do atribuído', async () => {
+    const store = createTripStore(() => 0);
+    const passenger = createMockPassengerRidePort({ store, clock: () => 0 });
+    const drvA = createMockDriverRidePort({ store, clock: () => 0, driverId: 'A' });
+    const drvB = createMockDriverRidePort({ store, clock: () => 0, driverId: 'B' });
+
+    const quote = await passenger.port.quote({ origin: PICKUP, destination: DESTINATION });
+    assert.ok(quote.ok);
+    if (!quote.ok) return;
+    const category = (quote.data as Quote).categories[0];
+    const requested = await passenger.port.request({ quoteId: category!.quoteId, paymentMethodId: 'pm' }, 'req-9');
+    assert.ok(requested.ok);
+    if (!requested.ok) return;
+    const tripId = requested.data.tripId;
+    passenger.control.advance(tripId, 'searching_driver');
+
+    const offer = drvA.control.offer({ tripId, pickup: PICKUP, destination: DESTINATION, categoryId: 'vuumbora', estimatedPayout: PAYOUT });
+    await drvA.offerPort.accept(offer, 'acc-9');
+    await drvA.tripPort.arrived(tripId, 'arr-9');
+    drvA.control.setPickupCode(tripId, '1234');
+
+    // B nunca foi atribuído a esta corrida — tenta repetidamente, mais vezes do que o limite de A.
+    for (let i = 0; i < 10; i += 1) {
+      const attempt = await drvB.tripPort.start(tripId, { pickupCode: '0000' }, `b-attempt-${i}`);
+      assert.equal(attempt.ok, false);
+      if (!attempt.ok) assert.equal(attempt.error.kind, 'not_found', `tentativa ${i} de B deveria ser 404, nunca contar como tentativa da corrida`);
+    }
+
+    // A, o atribuído, ainda usa o código certo normalmente — nenhuma tentativa de B foi contada contra ele.
+    const result = await drvA.tripPort.start(tripId, { pickupCode: '1234' }, 'a-attempt-ok');
+    assert.ok(result.ok, 'R3: tentativas de quem não é atribuído não gastam as tentativas do atribuído');
+  });
 });
 
 describe('tripPort.cancel — a correção do S0 e o achado A1, pelo lado do motorista', () => {
@@ -370,6 +459,18 @@ describe('journeyPort (C3)', () => {
     assert.ok(result.ok);
     if (result.ok) assert.equal(result.data.status, 'rejected');
   });
+
+  test('10) R7: documento vencido ou conta não aprovada ainda consegue ficar OFFLINE', async () => {
+    const expired = createMockDriverRidePort({ documentExpired: true });
+    const off1 = await expired.journeyPort.setAvailability({ online: false });
+    assert.ok(off1.ok);
+    if (off1.ok) assert.equal(off1.data.phase, 'offline');
+
+    const pending = createMockDriverRidePort({ verificationStatus: 'pending' });
+    const off2 = await pending.journeyPort.setAvailability({ online: false });
+    assert.ok(off2.ok);
+    if (off2.ok) assert.equal(off2.data.phase, 'offline');
+  });
 });
 
 describe('locationPort (C4)', () => {
@@ -411,6 +512,39 @@ describe('cenários da sonda da Nova (permanentes) — store compartilhada, dois
     if (passengerView.ok) {
       assert.equal(passengerView.data.status, 'searching_driver');
       assert.equal(passengerView.data.driver, undefined);
+    }
+  });
+
+  test('1b) R2: o MESMO cenário, sem consultar status() durante a busca — B aceita e o passageiro nunca vê o resumo de A', async () => {
+    const store = createTripStore(() => 0);
+    const passenger = createMockPassengerRidePort({ store, clock: () => 0 });
+    const drvA = createMockDriverRidePort({ store, clock: () => 0, driverId: 'A' });
+    const drvB = createMockDriverRidePort({ store, clock: () => 0, driverId: 'B' });
+
+    const quote = await passenger.port.quote({ origin: PICKUP, destination: DESTINATION });
+    assert.ok(quote.ok);
+    if (!quote.ok) return;
+    const category = (quote.data as Quote).categories[0];
+    const requested = await passenger.port.request({ quoteId: category!.quoteId, paymentMethodId: 'pm' }, 'req-1b');
+    assert.ok(requested.ok);
+    if (!requested.ok) return;
+    const tripId = requested.data.tripId;
+    passenger.control.advance(tripId, 'searching_driver');
+
+    const offerA = drvA.control.offer({ tripId, pickup: PICKUP, destination: DESTINATION, categoryId: 'vuumbora', estimatedPayout: PAYOUT });
+    await drvA.offerPort.accept(offerA, 'acc-A');
+    passenger.control.setDriverSummary(tripId, { driverId: 'A', firstName: 'Ana', plate: 'AAA1A11' });
+
+    await drvA.tripPort.cancel(tripId, {}, 'cancel-A-1'); // A sai; volta pra busca — SEM ninguém chamar status() aqui
+
+    const offerB = drvB.control.offer({ tripId, pickup: PICKUP, destination: DESTINATION, categoryId: 'vuumbora', estimatedPayout: PAYOUT });
+    await drvB.offerPort.accept(offerB, 'acc-B'); // B assume, sem passenger.port.status() ter sido chamado no meio
+
+    const passengerView = await passenger.port.status(tripId);
+    assert.ok(passengerView.ok);
+    if (passengerView.ok) {
+      assert.equal(passengerView.data.status, 'driver_en_route');
+      assert.notEqual(passengerView.data.driver?.driverId, 'A', 'R2: nunca o resumo do motorista ANTIGO, mesmo sem leitura no meio');
     }
   });
 
@@ -527,5 +661,39 @@ describe('cenários da sonda da Nova (permanentes) — store compartilhada, dois
     const snapshot = await passenger.port.status(tripId);
     assert.ok(snapshot.ok);
     if (snapshot.ok) assert.equal(snapshot.data.seq, statusEntries[statusEntries.length - 1]);
+  });
+
+  test('6) R1: passageiro cancela com o motorista a caminho — o motorista atribuído recebe o cancelamento', async () => {
+    const store = createTripStore(() => 0);
+    const passenger = createMockPassengerRidePort({ store, clock: () => 0 });
+    const drv = createMockDriverRidePort({ store, clock: () => 0, driverId: 'A' });
+
+    const quote = await passenger.port.quote({ origin: PICKUP, destination: DESTINATION });
+    assert.ok(quote.ok);
+    if (!quote.ok) return;
+    const category = (quote.data as Quote).categories[0];
+    const requested = await passenger.port.request({ quoteId: category!.quoteId, paymentMethodId: 'pm' }, 'req-6');
+    assert.ok(requested.ok);
+    if (!requested.ok) return;
+    const tripId = requested.data.tripId;
+    passenger.control.advance(tripId, 'searching_driver');
+
+    const offer = drv.control.offer({ tripId, pickup: PICKUP, destination: DESTINATION, categoryId: 'vuumbora', estimatedPayout: PAYOUT });
+    await drv.offerPort.accept(offer, 'acc-6'); // driver_assigned + driver_en_route (automático)
+
+    const events: unknown[] = [];
+    drv.tripPort.subscribe(tripId, (e) => events.push(e));
+    const eventsBeforeCancel = events.length;
+
+    await passenger.port.cancel(tripId, {}, 'cancel-6');
+
+    assert.equal(events.length, eventsBeforeCancel + 1, 'R1: o motorista atribuído recebe o evento do cancelamento feito pelo passageiro');
+    const lastEvent = events[events.length - 1] as { type: string; status?: string };
+    assert.equal(lastEvent.type, 'status');
+    assert.equal(lastEvent.status, 'cancelled');
+
+    const driverView = await drv.tripPort.status(tripId);
+    assert.ok(driverView.ok, 'R1: status() do motorista atribuído não vira 404 depois do cancelamento do passageiro');
+    if (driverView.ok) assert.equal(driverView.data.status, 'cancelled');
   });
 });

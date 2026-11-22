@@ -27,8 +27,15 @@ antes mesmo de ser atribuído. A tabela mora em `trip-lifecycle.ts`, na raiz (n�
 `apps/driver` precisa dela sem nunca importar o subcaminho do passageiro.
 
 **Localização aproximada** (`geo.ts`, `toApproximatePlace`) — decisão do dono em 22/11/2026
-(`docs/decisoes-do-dono.md`, "Complemento: o embarque na oferta é só o bairro"): `RideOffer.pickup`
-(`./driver`) é `ApproximatePlace` (bairro + ponto SEMPRE arredondado), nunca o endereço nem o ponto exato —
-a oferta de corrida vai a vários motoristas, inclusive aos que recusam. `RideOffer.destination` continua um
-`Place` completo ("destino visível", §5.4, é uma decisão distinta). O endereço e o ponto exatos do embarque
-só existem no `DriverTripSnapshot` do `api-client`, depois do aceite, para o motorista atribuído.
+(`docs/decisoes-do-dono.md`, "Complemento: o embarque na oferta é só o bairro" e "Complemento: o destino na
+oferta também é só o bairro"): `RideOffer.pickup` **e** `RideOffer.destination` (`./driver`) são
+`ApproximatePlace` (bairro + ponto SEMPRE arredondado a 2 casas), nunca o endereço nem o ponto exato — a
+oferta vai a vários motoristas, um de cada vez, inclusive aos que recusam. "Destino visível" (§5.4) continua
+valendo: o motorista sabe PARA ONDE vai, só não o endereço exato antes de aceitar. O endereço e o ponto
+exatos dos dois só existem no `DriverTripSnapshot` do `api-client`, depois do aceite, para o motorista
+atribuído.
+
+**R5 (reconferência da Nova): sem bairro cadastrado, `toApproximatePlace` cai num texto NEUTRO**
+(`"Bairro não informado"`) — nunca em `place.label` nem `place.address`. Cair no `label` vazava o endereço
+exato quando ele era, por acaso, o próprio endereço (mock sem bairro, ou geocodificador real que não
+devolve bairro).

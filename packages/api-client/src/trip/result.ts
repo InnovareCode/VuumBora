@@ -5,6 +5,10 @@
  * dele com valores arbitrários do servidor (mudar o tipo ali quebraria os dois). A segurança de
  * tipo mora NESTE arquivo: cada operação tem seu próprio construtor, com uma união FECHADA de
  * `reason` — passar um valor fora da união não compila. É o mecanismo pedido no achado B6.
+ *
+ * **R8 (texto, reconferência da Nova):** o adaptador `http` (quando existir) transforma qualquer
+ * `reason` que o servidor mande FORA destas uniões em `kind: 'unknown'` — nunca repassa um valor
+ * não documentado aqui para a tela como se fosse um dos reconhecidos.
  */
 import type { ApiError, Result } from '../index';
 
