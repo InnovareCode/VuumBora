@@ -124,7 +124,17 @@ jobs:
             echo "::error::apps/api/package.json nao tem script \"test\". Acrescente-o (ex.: node --test) antes de confiar neste CI."
             exit 1
           fi
-          npm test --workspace @vuumbora/api
+          # Publica o nome dos testes que falharam como anotacao do GitHub: o log completo exige login
+          # para ser lido por fora, e a anotacao aparece na pagina da execucao e na API publica.
+          set +e
+          npm test --workspace @vuumbora/api 2>&1 | tee api-test.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            grep -E "^\s*✖" api-test.log | sort -u | head -9 | while IFS= read -r line; do echo "::error::${line}"; done
+            echo "::error::testes do apps/api falharam (exit ${status}); os nomes estao nas anotacoes acima"
+          fi
+          exit "$status"
 
   backup-drill:
     name: backup e restauracao (ensaio com contagem de linhas)
