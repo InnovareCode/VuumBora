@@ -32,6 +32,9 @@ const HERO_FEATURES = [
  *   — é um estado de infraestrutura, não "senha errada"; dizer isso evita a
  *   pessoa tentar de novo pensando que digitou errado. Visual de aviso
  *   (âmbar), não de erro.
+ * - `incompatible`: a API respondeu num formato que este painel não conhece
+ *   (versões diferentes). Falha fechada: nunca entra. Visual de erro e o foco
+ *   vai para o aviso, porque não há nada a corrigir nos campos.
  */
 function CredentialsStep({
   notice,
@@ -66,6 +69,8 @@ function CredentialsStep({
         message: result.message,
         kind: result.kind === 'blocked' ? 'warning' : 'error',
         ...(result.lockSeconds != null ? { lockSeconds: result.lockSeconds } : {}),
+        // `incompatible` (painel e API em versões diferentes): não há campo a corrigir, o aviso recebe o foco.
+        ...(result.kind === 'incompatible' ? { focus: true } : {}),
       });
       return;
     }

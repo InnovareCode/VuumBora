@@ -31,7 +31,7 @@ interface AuthState {
   ) => Promise<
     | { ok: true; next: 'signedIn' }
     | ({ ok: true; next: 'second_factor_required' | 'enrollment_required' } & SecondFactorChallenge)
-    | { ok: false; message: string; kind: 'credentials' | 'blocked'; lockSeconds?: number }
+    | { ok: false; message: string; kind: 'credentials' | 'blocked' | 'incompatible'; lockSeconds?: number }
   >;
   /**
    * Conclui o login depois do segundo fator (a API já emitiu o cookie; aqui só a UI passa a saber). `goTo`: destino
@@ -75,6 +75,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         setStatus('signedOut');
       } else {
         // 429 do limite global, rede, 503/5xx: a sessão pode muito bem estar de pé. Não manda ao login.
+        // `contract_mismatch` (resposta fora do formato) também cai aqui: NUNCA vira `signedIn`, e a tela diz o porquê.
         setSessionProblem(result.error);
         setStatus('unavailable');
       }
@@ -120,11 +121,19 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         if (result.error.kind === 'rate_limited' || result.error.kind === 'network' || result.error.kind === 'unavailable') {
           return { ok: false, message: errorMessage(result.error), kind: 'blocked' };
         }
+        // Painel e API em versões diferentes: não é "senha errada" nem espera — a pessoa não tem o que corrigir.
+        if (result.error.kind === 'contract_mismatch') {
+          return { ok: false, message: errorMessage(result.error), kind: 'incompatible' };
+        }
         const message = result.error.kind === 'unknown' ? result.error.message : 'E-mail ou senha incorretos.';
         return { ok: false, message, kind: 'credentials' };
       }
       const outcome = result.data;
-      if (outcome.status !== 'authenticated') {
+      // Lista FECHADA de desfechos, cada um por nome. Nada de "se não for authenticated, é desafio": foi esse atalho
+      // que fez uma API sem `status` cair no ramo do desafio, com `undefined`, e deixar a tela sem passo válido.
+      // O adaptador já valida, mas esta é a última guarda antes de existir sessão na UI: o que não for um dos três
+      // vira erro e NUNCA autentica (também vale para qualquer adaptador futuro, mock inclusive).
+      if (outcome.status === 'second_factor_required' || outcome.status === 'enrollment_required') {
         return {
           ok: true,
           next: outcome.status,
@@ -132,11 +141,14 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
           challengeExpiresAt: outcome.challengeExpiresAt,
         };
       }
-      setPostLoginPath(null);
-      setAdmin(outcome.admin);
-      setOrigin(result.origin);
-      setStatus('signedIn');
-      return { ok: true, next: 'signedIn' };
+      if (outcome.status === 'authenticated') {
+        setPostLoginPath(null);
+        setAdmin(outcome.admin);
+        setOrigin(result.origin);
+        setStatus('signedIn');
+        return { ok: true, next: 'signedIn' };
+      }
+      return { ok: false, message: errorMessage({ kind: 'contract_mismatch' }), kind: 'incompatible' };
     },
     [api],
   );

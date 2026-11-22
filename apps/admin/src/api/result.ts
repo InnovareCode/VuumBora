@@ -61,6 +61,12 @@ export type ApiError =
   /** 403 `two_factor_required_for_role`: dono/financeiro tentando desligar. */
   | { readonly kind: 'two_factor_required_for_role' }
   | { readonly kind: 'unavailable'; readonly retryable: true }
+  /**
+   * A API respondeu 200, mas num formato que este painel não conhece (campo obrigatório ausente, `status` de login que
+   * não é um dos três do contrato, papel desconhecido). Quase sempre é painel e API publicados em versões diferentes.
+   * FALHA FECHADA: nunca vale como login nem como sessão, e retry não resolve — só atualizar um dos dois lados.
+   */
+  | { readonly kind: 'contract_mismatch' }
   | { readonly kind: 'unknown'; readonly message: string };
 
 export type Result<T> =
@@ -114,6 +120,8 @@ export function errorMessage(error: ApiError): string {
       return 'Configure servidor, porta e remetente antes de testar.';
     case 'smtp_delivery_failed':
       return 'O envio de teste falhou.';
+    case 'contract_mismatch':
+      return 'Este painel e a API estão em versões diferentes. Não foi possível entrar. Avise o suporte técnico.';
     case 'unknown':
       return error.message || 'Algo deu errado. Tente novamente.';
   }

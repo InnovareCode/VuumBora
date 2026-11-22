@@ -22,7 +22,7 @@ export function TwoFactorAlert({
   const initial = feedback.lockSeconds;
   const showCountdown = initial != null && remaining > 0;
   return (
-    <AuthAlert id={id} kind={feedback.kind} {...(className ? { className } : {})}>
+    <AuthAlert id={id} kind={feedback.kind} focusOnMount={feedback.focus} {...(className ? { className } : {})}>
       <p>{feedback.message}</p>
       {showCountdown && (
         <p className="mt-1">

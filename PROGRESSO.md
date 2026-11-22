@@ -70,8 +70,17 @@ e deixa a decisão 17, contas de loja da Apple e do Google, como bloqueio de iPh
   e da nova checagem. Roteiro e tabela de compatibilidade em
   `docs/producao-passo-a-passo-dono.md`. Não é consequência do nginx: é o painel
   novo contra a API antiga.
-- Observação menor: um `.js` inexistente na raiz do painel responde 200 com
-  HTML (fallback de SPA; `nosniff` impede a execução).
+- **Correção estrutural do painel (Lyra, 21/11):** o painel agora **falha
+  fechado**: resposta de login fora dos três `status` conhecidos nunca autentica
+  e mostra "Este painel e a API estão em versões diferentes", sem criar sessão
+  (validadores em `apps/admin/src/api/authResponses.ts`). Provado em navegador
+  contra servidor falso; conferi por leitura que os campos batem com o código
+  da API do S1. **Falta a Íris provar contra a API real do S1 antes de
+  publicar.** Backlog: aplicar o mesmo validador a `driverApplications`,
+  `emailSettings` e `twoFactor`, que ainda assumem o tipo da resposta.
+- Observação menor, **corrigida no `main` (`ca9e6c1`) e válida no próximo deploy
+  do painel**: um `.js` inexistente na raiz do painel respondia 200 com HTML
+  (fallback de SPA); agora dá 404.
 
 **Pendente para publicar (ordem em `docs/producao-passo-a-passo-dono.md` e
 `docs/publicar-o-backend.md`)**

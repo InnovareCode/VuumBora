@@ -11,6 +11,8 @@ export interface TwoFactorFeedback {
   readonly lockSeconds?: number;
   /** Qual campo recebe o erro (`aria-invalid`, foco). Ausente = erro geral do formulário. */
   readonly field?: 'code' | 'password' | 'activation';
+  /** Beco sem saída (nenhum campo a corrigir): o foco vai para o aviso quando ele aparece. */
+  readonly focus?: boolean;
 }
 
 /** Qual tipo de código a pessoa digitou — o texto do erro muda (código de recuperação não vem de "app autenticador"). */
@@ -62,6 +64,9 @@ export function twoFactorFeedback(error: ApiError, method: CodeMethod = 'totp'):
     case 'unavailable':
     case 'two_factor_unavailable':
       return { kind: 'warning', message: errorMessage(error) };
+    case 'contract_mismatch':
+      // Painel e API em versões diferentes: nada que a pessoa digite resolve, então o aviso recebe o foco.
+      return { kind: 'error', message: errorMessage(error), focus: true };
     default:
       return { kind: 'error', message: errorMessage(error) };
   }

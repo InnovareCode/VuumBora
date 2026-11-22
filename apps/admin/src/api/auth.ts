@@ -2,6 +2,13 @@ import type { AdminLoginInput, AdminUser, LoginOutcome, RecoveryCodes, TotpEnrol
 import type { Result } from './result';
 import { createHttpRequester } from './client';
 import { clearCsrfToken, setCsrfToken } from './csrf';
+import {
+  parseEnrollmentConfirmResponse,
+  parseEnrollmentStartResponse,
+  parseLoginResponse,
+  parseMeResponse,
+  parseSecondFactorVerifyResponse,
+} from './authResponses';
 
 export interface AuthPort {
   login(input: AdminLoginInput): Promise<Result<LoginOutcome>>;
@@ -19,76 +26,75 @@ export interface AuthPort {
 }
 
 /**
- * Resposta real de login/`/me` (contrato fechado com a Vega, 20/11/2026):
- * mesmos campos de `AdminUser` + `csrfToken` no MESMO objeto `data` — nunca
- * em `Set-Cookie` (ver `src/api/csrf.ts` pelo porquê). Tipo só existe aqui
- * dentro: quem consome a porta (`AuthContext`) nunca precisa saber de CSRF.
+ * Login/`/me` (contrato fechado com a Vega, 20/11/2026; segundo fator em 21/11): `AdminUser` + `csrfToken` no MESMO
+ * objeto `data` — nunca em `Set-Cookie` (ver `src/api/csrf.ts`). O token só existe aqui dentro: quem consome a porta
+ * (`AuthContext`) nunca precisa saber de CSRF.
+ *
+ * Toda resposta daqui entra como `unknown` e só vira tipo do app depois de passar por `authResponses.ts`. Falhou a
+ * validação = `contract_mismatch` (FALHA FECHADA): nenhuma sessão, nenhum token de CSRF guardado. Quando painel e API
+ * estão em versões diferentes o suporte precisa de rastro, então o MOTIVO vai ao console — só nomes de campo e tipos,
+ * nunca valores (o corpo traz e-mail, nome e tokens).
  */
-interface AdminSessionResponse extends AdminUser {
-  /** `null` para sessão criada antes da migração 0009 — mutação falha com `csrf_invalid` até logar de novo (ver `src/api/result.ts`). */
-  readonly csrfToken: string | null;
-}
-
-/** Corpo de `POST /auth/login`: `status` discrimina; só `authenticated` traz o corpo de sessão de antes. */
-type LoginResponse =
-  | ({ readonly status: 'authenticated' } & AdminSessionResponse)
-  | { readonly status: 'second_factor_required' | 'enrollment_required'; readonly challengeToken: string; readonly challengeExpiresAt: string };
-
-/** Guarda o token em memória e devolve só os campos de `AdminUser` (sem `status`, códigos de recuperação etc.) para o resto do app. */
-function captureCsrfToken(session: AdminSessionResponse & { readonly status?: string; readonly recoveryCodes?: unknown; readonly recoveryCodesRemaining?: unknown }): AdminUser {
-  const { csrfToken, status: _status, recoveryCodes: _codes, recoveryCodesRemaining: _remaining, ...admin } = session;
-  setCsrfToken(csrfToken);
-  return admin;
+function contractMismatch(reason: string): { readonly ok: false; readonly error: { readonly kind: 'contract_mismatch' } } {
+  clearCsrfToken();
+  console.error(`[admin] Resposta da API incompatível com este painel (${reason}). Painel e API provavelmente estão em versões diferentes.`);
+  return { ok: false, error: { kind: 'contract_mismatch' } };
 }
 
 export function createHttpAuthAdapter(baseUrl: string): AuthPort {
   const request = createHttpRequester(baseUrl);
   return {
     async login(input) {
-      const result = await request<LoginResponse>({ path: '/v1/admin/auth/login', method: 'POST', body: input });
+      const result = await request<unknown>({ path: '/v1/admin/auth/login', method: 'POST', body: input });
       if (!result.ok) return result;
-      const body = result.data;
-      if (body.status === 'authenticated') {
-        return { ...result, data: { status: 'authenticated', admin: captureCsrfToken(body) } };
-      }
-      return {
-        ...result,
-        data: { status: body.status, challengeToken: body.challengeToken, challengeExpiresAt: body.challengeExpiresAt },
-      };
+      const parsed = parseLoginResponse(result.data);
+      if (!parsed.ok) return contractMismatch(parsed.reason);
+      // Só `authenticated` emite sessão (e traz token de CSRF); os dois desafios vêm SEM cookie.
+      if (parsed.value.outcome.status === 'authenticated') setCsrfToken(parsed.value.csrfToken);
+      return { ...result, data: parsed.value.outcome };
     },
     async verifySecondFactor({ challengeToken, code }) {
-      const result = await request<AdminSessionResponse & { readonly recoveryCodesRemaining?: unknown }>({
+      const result = await request<unknown>({
         path: '/v1/admin/auth/2fa/verify',
         method: 'POST',
         body: { challengeToken, code },
       });
       if (!result.ok) return result;
-      const remaining = result.data.recoveryCodesRemaining;
-      return {
-        ...result,
-        data: { admin: captureCsrfToken(result.data), recoveryCodesRemaining: typeof remaining === 'number' ? remaining : null },
-      };
+      const parsed = parseSecondFactorVerifyResponse(result.data);
+      if (!parsed.ok) return contractMismatch(parsed.reason);
+      setCsrfToken(parsed.value.csrfToken);
+      return { ...result, data: { admin: parsed.value.admin, recoveryCodesRemaining: parsed.value.recoveryCodesRemaining } };
     },
-    startEnrollment({ challengeToken, enrollmentToken }) {
-      return request<TotpEnrollment>({
+    async startEnrollment({ challengeToken, enrollmentToken }) {
+      const result = await request<unknown>({
         path: '/v1/admin/auth/2fa/enroll/start',
         method: 'POST',
         body: { challengeToken, enrollmentToken },
       });
+      if (!result.ok) return result;
+      const parsed = parseEnrollmentStartResponse(result.data);
+      if (!parsed.ok) return contractMismatch(parsed.reason);
+      return { ...result, data: parsed.value };
     },
     async confirmEnrollment({ challengeToken, enrollmentToken, code }) {
-      const result = await request<AdminSessionResponse & { recoveryCodes: string[] }>({
+      const result = await request<unknown>({
         path: '/v1/admin/auth/2fa/enroll/confirm',
         method: 'POST',
         body: { challengeToken, enrollmentToken, code },
       });
       if (!result.ok) return result;
-      return { ...result, data: { admin: captureCsrfToken(result.data), recoveryCodes: result.data.recoveryCodes } };
+      const parsed = parseEnrollmentConfirmResponse(result.data);
+      if (!parsed.ok) return contractMismatch(parsed.reason);
+      setCsrfToken(parsed.value.csrfToken);
+      return { ...result, data: { admin: parsed.value.admin, recoveryCodes: parsed.value.recoveryCodes } };
     },
     async me() {
-      const result = await request<AdminSessionResponse>({ path: '/v1/admin/me' });
+      const result = await request<unknown>({ path: '/v1/admin/me' });
       if (!result.ok) return result;
-      return { ...result, data: captureCsrfToken(result.data) };
+      const parsed = parseMeResponse(result.data);
+      if (!parsed.ok) return contractMismatch(parsed.reason);
+      setCsrfToken(parsed.value.csrfToken);
+      return { ...result, data: parsed.value.admin };
     },
     async logout() {
       const result = await request<void>({ path: '/v1/admin/auth/logout', method: 'POST' });

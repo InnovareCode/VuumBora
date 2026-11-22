@@ -58,7 +58,8 @@ export interface DriverApplicationListResult {
  * manual (o admin é SPA separado, não importa código da API). Se a API
  * acrescentar/renomear um papel, este union muda junto.
  */
-export type AdminRole = 'dono' | 'operacao' | 'revisor_documentos' | 'financeiro' | 'suporte';
+export const ADMIN_ROLES = ['dono', 'operacao', 'revisor_documentos', 'financeiro', 'suporte'] as const;
+export type AdminRole = (typeof ADMIN_ROLES)[number];
 
 export interface AdminUser {
   readonly id: string;
