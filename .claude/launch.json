@@ -14,6 +14,12 @@
         "--silent"
       ],
       "port": 4300
+    },
+    {
+      "name": "passenger-web-dev",
+      "runtimeExecutable": "npm.cmd",
+      "runtimeArgs": ["run", "start", "-w", "@vuumbora/passenger", "--", "--port", "8090"],
+      "port": 8090
     }
   ]
 }
