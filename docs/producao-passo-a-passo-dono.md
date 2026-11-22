@@ -19,8 +19,32 @@ passo 7 só depois de republicar `vuumbora-admin` e `vuumbora-frontend` com o
 > e-mail dão 404. Achado de 21/11/2026, depois de um redeploy do painel com a
 > API ainda antiga. Saídas: (a) publicar a API do S1 **e** as migrações
 > 0010–0020 juntas (`docs/publicar-o-backend.md`) e só então o painel; ou (b)
-> reverter o painel para o commit `da9db50`, o último antes do S1. Esta
-> restrição é do painel: o `nginx.conf` do site é estático e não depende da API.
+> reverter o painel para a branch `producao-admin-estavel` (commit `f79b0fe`, o
+> Admin v0 que combina com a API de produção; roteiro logo abaixo). **Não** use
+> o `da9db50`: ele traz os botões de aprovar e recusar, e essas rotas não
+> existem na API de produção (404). Esta restrição é do painel: o `nginx.conf`
+> do site é estático e não depende da API.
+
+### Roteiro de reversão do painel — AÇÃO DO DONO (uns 5 minutos)
+
+1. Easypanel > serviço `vuumbora-admin` > fonte do código (algo como **Source /
+   GitHub**) > trocar a branch de `main` para `producao-admin-estavel` > salvar.
+2. **Deploy** do serviço e esperar ele ficar saudável (o `/healthz` responde).
+3. Conferir: `curl.exe -sI https://admin.vuumbora.com.br` **não** deve mais
+   trazer `content-security-policy` (é o painel antigo). Abrir o painel e entrar
+   com a senha de sempre (login antigo, sem 2FA).
+4. Se o menu for diferente do descrito ou o deploy falhar, não improvise: chame
+   o Vulcano com o painel do Easypanel aberto.
+5. **Voltar ao painel novo** só depois de a API do S1 estar no ar: trocar a
+   branch de volta para `main` e fazer o deploy.
+
+### Compatibilidade entre painel e API (consultar antes de qualquer deploy)
+
+| Painel (commit) | Exige na API | Situação em 21/11/2026 |
+|---|---|---|
+| `f79b0fe` (Admin v0) | a API de produção de hoje | combina; é a branch `producao-admin-estavel` |
+| `da9db50` | aprovar e recusar candidatura, com CSRF (migração 0009) | a produção **não** tem |
+| `5273769` em diante (`main`) | API do S1 (`40d78cb` em diante) e migrações 0010–0020 | a produção **não** tem |
 
 ---
 

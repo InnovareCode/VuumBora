@@ -63,8 +63,13 @@ e deixa a decisão 17, contas de loja da Apple e do Google, como bloqueio de iPh
   cabeçalhos) e é o **código do S1**.
 - **API: ainda a antiga** (`GET /v1/auth/me` = 404). **Problema:** o painel do
   S1 não conclui o login contra a API antiga (a resposta não traz `status`).
-  Pendente decisão do dono: publicar a API do S1 com as migrações, ou reverter o
-  painel para `da9db50`. Não é consequência do nginx: é o painel novo.
+  **Decisão do Atlas (dono: "você decide"): reverter o painel agora** para a
+  branch `producao-admin-estavel` (`f79b0fe`, o Admin v0 que combina com a API de
+  produção; o `da9db50` NÃO serve, aprovar e recusar dão 404 na API de hoje) e
+  **publicar API e painel juntos, uma vez**, depois das correções A-1, B-1 e M-3
+  e da nova checagem. Roteiro e tabela de compatibilidade em
+  `docs/producao-passo-a-passo-dono.md`. Não é consequência do nginx: é o painel
+  novo contra a API antiga.
 - Observação menor: um `.js` inexistente na raiz do painel responde 200 com
   HTML (fallback de SPA; `nosniff` impede a execução).
 
