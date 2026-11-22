@@ -945,3 +945,26 @@ de ambiente (`apps/api/.env.example`); o dono pode mandar subir ou descer qualqu
 4. **Diretriz de qualidade: o plano de implementação precisa andar organizado e orquestrado, com padrão premium e consistência em
    TODAS as telas, e com tratamento de layout tela a tela.** Isso vira o plano mestre (`docs/plano-mestre.md`) e o padrão premium
    (`docs/padrao-premium-telas.md`), com portão de qualidade por tela antes de qualquer tela ser dada como pronta.
+
+## Decisões de desenho do Atlas sobre o padrão premium — 22/11/2026, revisáveis pelo dono
+
+Sobre as decisões PP-2 a PP-9 de `docs/padrao-premium-telas.md` §0, tomadas para as telas seguirem a prancha do dono de 22/11
+(`VuumBora_Claude_Design_System/referencias/alvo_*_2026-11-22.png`) sem ferir decisões já registradas:
+
+- **PP-2 — aceito:** as categorias e o "Solicitar corrida" saem do início (P03) e vão para a P05 (preço só existe com rota).
+- **PP-3 — aceito:** P05 e P06 viram uma tela (mapa + painel com categoria, pagamento e CTA), como na prancha.
+- **PP-4 — aceito:** a oferta de corrida do motorista (M06) é tela cheia, como na prancha.
+- **PP-5 — aceito:** o motorista começa offline; aprovação vem do estado real, nunca fixa no código.
+- **PP-6 — aceito:** saem do início as promessas "motoristas verificados", "suporte 24h" e "10% OFF" (proibidas pelo
+  `DESIGN_SYSTEM_MESTRE.md` §9).
+- **PP-7 — aceito:** entram no JSON de tokens os tokens que a direção de arte já usa (`gradient.promo`, `tint.yellowSoft`,
+  `map.*`, `chart.*`, `motion.*`), para nenhuma tela improvisar cor ou movimento.
+- **PP-8 — aceito:** entram `react-native-reanimated`, `@react-native-community/netinfo` e `expo-haptics` (versões do Expo SDK 58),
+  cada um atrás de porta com versão web.
+- **PP-9 — segue a prancha:** o app do passageiro usa menu (☰) e sino no topo, sem barra de abas; o do motorista mantém as
+  abas da prancha.
+- **D-30 — mantida a regra:** economia de amarelo; ícone de linha de lista não é amarelo.
+
+**Do dono, em aberto:** **PP-1, a fonte dos apps.** O registro diz Plus Jakarta Sans (linha da tabela de 18/11 acima, "Plus
+Jakarta Sans confirmada") e é o que os apps e o painel carregam; o site usa Poppins, a pedido do dono em 19/11. Recomendação:
+manter Plus Jakarta Sans nos apps (tem algarismos tabulares para preço, tempo e placa) e Poppins no site.
