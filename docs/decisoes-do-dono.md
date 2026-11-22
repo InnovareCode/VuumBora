@@ -366,6 +366,23 @@ PLANO.md). Fica registrada para não ser descoberta em operação.
 O app hoje já mostra "Taxa de aceitação" no painel do motorista — o número
 existe na tela, mas nenhuma regra usa esse número ainda.
 
+### Complemento: o embarque na oferta é só o bairro ✅ (decidido pelo dono em 22/11/2026)
+
+A oferta vai a vários motoristas ao mesmo tempo, inclusive aos que recusam.
+Por isso o dono decidiu, seguindo a recomendação da Nova
+(`docs/contratos/conferencia-f08-nova.md`):
+
+- **Antes do aceite**, o motorista vê **o bairro do embarque**, a distância
+  e o tempo até lá, e o destino (decisão de 18/11, acima). **Não vê** o
+  endereço nem o ponto exato. Se o mapa da oferta precisar de um ponto, ele
+  é arredondado, nunca o local do passageiro.
+- **Depois do aceite**, o endereço completo e o ponto exato aparecem **só
+  para o motorista atribuído**. Quem recusou, ou perdeu a oferta, nunca os
+  recebe.
+
+Vale para o contrato da oferta (`RideOffer`, fatia F08) e para a tela de
+oferta do motorista (M06).
+
 ## Decisão de produto: só o passageiro avalia (18/11/2026)
 
 Confirmado pelo dono. O app já implementa assim — a tela de corrida
