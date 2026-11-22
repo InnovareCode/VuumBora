@@ -38,13 +38,18 @@ const WRITES: Record<string, readonly ('INSERT' | 'UPDATE' | 'DELETE')[]> = {
   account_email_codes: ['INSERT', 'UPDATE'],
   accounts: ['INSERT', 'UPDATE'],
   admin_audit_log: ['INSERT'],
-  admin_enrollment_tokens: ['UPDATE'],
+  // 0023 (F07): a API passou a escrever o token de ativação do primeiro acesso e o de 2FA obrigatório — emitir
+  // (INSERT) e invalidar o anterior ao reemitir (DELETE), mesma regra de `insertEnrollmentToken`.
+  admin_enrollment_tokens: ['INSERT', 'UPDATE', 'DELETE'],
   admin_login_challenges: ['INSERT', 'DELETE'],
   admin_login_failures: ['INSERT', 'DELETE'],
   admin_recovery_codes: ['INSERT', 'UPDATE', 'DELETE'],
   admin_sessions: ['INSERT', 'UPDATE', 'DELETE'],
   admin_totp: ['INSERT', 'UPDATE', 'DELETE'],
-  admin_users: [],
+  // 0023 (F07): gestão de usuários do painel (`/v1/admin/users/*`, só papel `dono`) — criar, desativar, reativar e
+  // trocar papel. Nunca DELETE: ninguém é apagado, só desativado (`deactivated_at`). Ver a migração para a
+  // compensação (CSRF + reautenticação por senha + nunca derruba o último dono ativo + auditoria).
+  admin_users: ['INSERT', 'UPDATE'],
   devices: ['INSERT', 'UPDATE'],
   driver_applications: ['INSERT', 'UPDATE'],
   email_settings: ['INSERT', 'UPDATE'],
@@ -125,13 +130,11 @@ describe('matriz de privilégios do papel vuumbora_api', () => {
     const denied = async (sql: string, params: unknown[] = []) => {
       await assert.rejects(pool.query(sql, params), (err: { code?: string }) => err.code === '42501', sql);
     };
-    const hash = await bcrypt.hash('x', 4);
-    await denied(`INSERT INTO admin_users (name, email, password_hash, role) VALUES ('Invasor', 'invasor@x.com', $1, 'dono')`, [hash]);
-    await denied(`UPDATE admin_users SET role = 'dono'`);
-    await denied(`UPDATE admin_users SET password_hash = $1`, [hash]);
+    // 0023 (F07): INSERT/UPDATE em `admin_users` e INSERT/DELETE em `admin_enrollment_tokens` passaram a ser
+    // permitidos (a gestão de usuários do painel precisa escrever as duas) — ver a prova positiva abaixo
+    // ("gestão de usuários... funciona COM o papel restrito"). DELETE em `admin_users` continua recusado: ninguém
+    // é apagado, só desativado.
     await denied(`DELETE FROM admin_users`);
-    await denied(`INSERT INTO admin_enrollment_tokens (admin_id, token_hash, expires_at) VALUES (gen_random_uuid(), repeat('a', 64), now() + interval '1 day')`);
-    await denied(`DELETE FROM admin_enrollment_tokens`);
     await denied(`UPDATE admin_login_failures SET admin_id = NULL`);
     await denied(`DELETE FROM accounts`);
     await denied(`DELETE FROM account_credentials`);
@@ -204,6 +207,37 @@ describe('o que a API precisa continua funcionando COM o papel restrito', () => 
 
     const out = await send(h.t.app, 'POST', '/auth/logout', { cookie: session.cookie, csrf: session.csrf });
     assert.equal(out.status, 200, JSON.stringify(out.body));
+  });
+
+  test('0023 (F07): gestão de usuários do painel (criar, desativar, reativar, trocar papel, ativar) funciona COM o papel restrito', async () => {
+    const ownerEmail = `dono2-${randomUUID().slice(0, 8)}@teste.vuumbora.dev`;
+    const created = await owner.query<{ id: string }>(
+      `INSERT INTO admin_users (name, email, password_hash, role) VALUES ('Dono Dois', $1, $2, 'dono') RETURNING id`,
+      [ownerEmail, await bcrypt.hash(PASSWORD, 4)],
+    );
+    const ownerId = created.rows[0]!.id;
+    await owner.query(`INSERT INTO admin_totp (admin_id, secret_encrypted, confirmed_at) VALUES ($1, $2, now())`, [ownerId, encryptSecret(base32Encode(TOTP_SECRET), KEY, ownerId)]);
+
+    const login = await send(h.t.app, 'POST', '/auth/login', { body: { email: ownerEmail, password: PASSWORD } });
+    const verified = await send(h.t.app, 'POST', '/auth/2fa/verify', { body: { challengeToken: login.body.data.challengeToken, code: hotp(TOTP_SECRET, totpStep(Date.now())) } });
+    const session = { cookie: verified.sessionCookie!, csrf: verified.body.data.csrfToken as string };
+
+    // INSERT em admin_users + admin_enrollment_tokens (0023): recusado antes da migração, agora precisa funcionar de verdade.
+    const newEmail = `criado2-${randomUUID().slice(0, 8)}@teste.vuumbora.dev`;
+    const createdUser = await send(h.t.app, 'POST', '/users', { ...session, body: { name: 'Pessoa', email: newEmail, role: 'suporte', password: PASSWORD } });
+    assert.equal(createdUser.status, 201, JSON.stringify(createdUser.body));
+    const activationToken = createdUser.body.data.activationToken as string;
+
+    // UPDATE em admin_users (desativar/reativar/trocar papel) e consumo do token (UPDATE em admin_enrollment_tokens).
+    const deactivated = await send(h.t.app, 'POST', `/users/${createdUser.body.data.id}/deactivate`, { ...session, body: { password: PASSWORD } });
+    assert.equal(deactivated.status, 200, JSON.stringify(deactivated.body));
+    const reactivated = await send(h.t.app, 'POST', `/users/${createdUser.body.data.id}/reactivate`, { ...session, body: { password: PASSWORD } });
+    assert.equal(reactivated.status, 200, JSON.stringify(reactivated.body));
+    const roleChanged = await send(h.t.app, 'POST', `/users/${createdUser.body.data.id}/role`, { ...session, body: { role: 'operacao', password: PASSWORD } });
+    assert.equal(roleChanged.status, 200, JSON.stringify(roleChanged.body));
+
+    const activated = await send(h.t.app, 'POST', '/auth/activate', { body: { email: newEmail, token: activationToken, newPassword: 'Senha-Ativada-Via-Papel-Restrito-1' } });
+    assert.equal(activated.status, 200, JSON.stringify(activated.body));
   });
 
   test('identidade dos apps: cadastro, verificação, login, renovação, redefinição de senha e logout', async () => {

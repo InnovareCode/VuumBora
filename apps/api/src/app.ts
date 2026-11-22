@@ -8,7 +8,7 @@ import { pool } from './db.js';
 import { env } from './env.js';
 import type { MailPort } from './lib/mail-port.js';
 import { BCRYPT_BUSY_RETRY_AFTER_SECONDS, BcryptBusyError, closeBcryptPools } from './lib/bcrypt-pool.js';
-import { hashIpForLog, rateLimitKey } from './lib/ip-bucket.js';
+import { hashIpForLog, rateLimitKey, routeRateLimitKey } from './lib/ip-bucket.js';
 import { loadLegalConfig } from './lib/legal-config.js';
 import { twoFactorConfig } from './lib/two-factor-config.js';
 import { describeErrorForLog } from './lib/safe-error.js';
@@ -18,6 +18,7 @@ import { registerAdminAuthRoutes } from './routes/admin-auth-route.js';
 import { registerAdminTwoFactorRoutes } from './routes/admin-two-factor-route.js';
 import { registerAdminEmailSettingsRoutes } from './routes/admin-email-settings-route.js';
 import { registerAdminDriverApplicationRoutes } from './routes/admin-driver-application-route.js';
+import { registerAdminUserActivationRoute, registerAdminUserRoutes } from './routes/admin-user-route.js';
 import { registerDriverApplicationRoute } from './routes/driver-application-route.js';
 import { registerHealthRoute } from './routes/health-route.js';
 import { registerLegalRoutes } from './routes/legal-route.js';
@@ -244,6 +245,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     registerAdminTwoFactorRoutes(instance);
     registerAdminEmailSettingsRoutes(instance);
     registerAdminDriverApplicationRoutes(instance);
+    registerAdminUserRoutes(instance);
+    // Primeiro acesso (F07): SEM sessão, mesma classe de limite do login (pré-autenticação, mesmo risco de martelo).
+    registerAdminUserActivationRoute(instance, {
+      config: { rateLimit: { max: env.ADMIN_LOGIN_RATE_LIMIT_MAX, timeWindow: env.ADMIN_LOGIN_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000, keyGenerator: routeRateLimitKey } },
+    });
   }, { prefix: '/v1/admin' });
 
   return app;

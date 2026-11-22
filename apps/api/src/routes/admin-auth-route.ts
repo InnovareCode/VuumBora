@@ -6,6 +6,7 @@ import { env } from '../env.js';
 import { ADMIN_SESSION_COOKIE } from '../domain/admin.js';
 import { requireAdmin } from '../hooks/require-admin.js';
 import { insertAuditLog } from '../repositories/admin-audit-repository.js';
+import { adminRouteRateLimit } from '../lib/admin-rate-limit.js';
 import { routeRateLimitKey } from '../lib/ip-bucket.js';
 import { twoFactorConfig } from '../lib/two-factor-config.js';
 import { loginAdmin, logoutAdmin } from '../services/admin-auth-service.js';
@@ -90,7 +91,7 @@ export function registerAdminAuthRoutes(app: FastifyInstance): void {
     },
   );
 
-  app.post('/auth/logout', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.post('/auth/logout', adminRouteRateLimit(), async (request: FastifyRequest, reply: FastifyReply) => {
     const rawToken = request.cookies[ADMIN_SESSION_COOKIE];
     if (rawToken) {
       const admin = await logoutAdmin(pool, rawToken);
@@ -111,7 +112,7 @@ export function registerAdminAuthRoutes(app: FastifyInstance): void {
     reply.code(200).send({ ok: true, data: {} });
   });
 
-  app.get('/me', { preHandler: requireAdmin }, async (request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/me', { ...adminRouteRateLimit(), preHandler: requireAdmin }, async (request: FastifyRequest, reply: FastifyReply) => {
     // Também devolve `csrfToken` — é como o painel RECUPERA o token depois
     // de um F5 (ele só vivia em memória no browser, nunca em cookie/
     // localStorage). Sessão criada antes da migração 0009 devolve `null`;

@@ -9,8 +9,12 @@
  * Papéis aprovados pelo dono em 20/11/2026 (docs/decisoes-do-dono.md →
  * "Proposta de papéis"). Substituem o conjunto provisório
  * `support`/`finance`/`superadmin` da migração 0003 — ver migração 0006.
+ * Lista em tempo de execução (não só o tipo) para a validação de entrada
+ * (`admin-user-route.ts`) e os scripts nunca divergirem do CHECK do banco.
  */
-export type AdminRole = 'dono' | 'operacao' | 'revisor_documentos' | 'financeiro' | 'suporte';
+export const ADMIN_ROLES = ['dono', 'operacao', 'revisor_documentos', 'financeiro', 'suporte'] as const;
+
+export type AdminRole = (typeof ADMIN_ROLES)[number];
 
 /** Formato exposto ao cliente HTTP — nunca inclui `passwordHash`. */
 export interface AdminUser {

@@ -10,6 +10,14 @@ import { insertEnrollmentToken } from '../repositories/admin-enrollment-token-re
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 export const ENROLLMENT_TOKEN_DEFAULT_TTL_HOURS = 48;
+/**
+ * Token do PRIMEIRO ACESSO (F07, `admin-user-service.ts::createAdminUser`) — mesmo mecanismo (tabela, formato,
+ * uso único), finalidade diferente: em vez de liberar o enrolamento do 2FA, libera a troca da senha inicial
+ * (nenhum admin criado pelo painel nasce com senha que alguém conhece). TTL mais longo que o do 2FA: é entregue
+ * pelo dono a uma pessoa que ainda não tem acesso nenhum ao sistema, por um canal fora de banda — convém dar mais
+ * folga que as 48h pensadas para quem já tem conta e só precisa reenrolar o 2FA.
+ */
+export const ACCOUNT_ACTIVATION_TTL_HOURS = 24 * 7;
 
 export function normalizeEnrollmentToken(input: string): string {
   return input.replace(/[\s-]/g, '').toUpperCase();
