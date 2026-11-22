@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
 import { BrandLogo, focusRingStyle, theme, textStyle, useKeyboardFocusRing } from '@vuumbora/ui';
 
@@ -7,6 +7,14 @@ export interface AuthHeaderProps {
   readonly title: string;
   readonly subtitle?: string;
   readonly onBack?: () => void;
+  /**
+   * `lockup` (ícone + nome + tagline) é o lockup de entrada, só para a tela-âncora sem seta de voltar (M01, ficha:
+   * "lockup md 240"). `selo` (só o ícone, 44pt) é para as telas de fluxo COM seta de voltar (M02 em diante, ficha
+   * M02: "selo do logo 44"). Padrão `lockup` para não quebrar quem já chama sem a prop.
+   */
+  readonly logoVariant?: 'lockup' | 'selo';
+  /** M01 pede o título à esquerda (prancha); as demais telas de conta mantêm centralizado. Padrão `center`. */
+  readonly titleAlign?: 'center' | 'left';
 }
 
 /**
@@ -15,17 +23,27 @@ export interface AuthHeaderProps {
  * não importam um do outro, `scripts/check-boundaries.mjs`). Layout diferente do `ScreenHeader` genérico (que coloca o
  * título ao lado da seta), por isso fica local em vez de forçar uma variação no pacote compartilhado.
  */
-export const AuthHeader = memo(function AuthHeader({ title, subtitle, onBack }: AuthHeaderProps) {
+export const AuthHeader = memo(function AuthHeader({
+  title,
+  subtitle,
+  onBack,
+  logoVariant = 'lockup',
+  titleAlign = 'center',
+}: AuthHeaderProps) {
+  const { height } = useWindowDimensions();
+  // Direção de arte §6 (mesmo corte usado em `boas-vindas.tsx` do passageiro): lockup menor em tela baixa
+  // (<640pt de altura) pra abrir espaço pro formulário. O `selo` já nasce pequeno (44pt) e não precisa encolher.
+  const lockupSize = height < 640 ? 'sm' : 'md';
   return (
     <View style={styles.root}>
       {onBack ? <BackButton onPress={onBack} /> : null}
       <View style={styles.logoRow}>
-        <BrandLogo variant="lockup" size="sm" />
+        <BrandLogo variant={logoVariant} size={logoVariant === 'lockup' ? lockupSize : 'md'} />
       </View>
-      <Text style={styles.title} accessibilityRole="header">
+      <Text style={[styles.title, titleAlign === 'left' && styles.titleLeft]} accessibilityRole="header">
         {title}
       </Text>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      {subtitle ? <Text style={[styles.subtitle, titleAlign === 'left' && styles.subtitleLeft]}>{subtitle}</Text> : null}
     </View>
   );
 });
@@ -67,10 +85,12 @@ const styles = StyleSheet.create({
   },
   logoRow: { alignItems: 'center', marginBottom: theme.spacing['2'] },
   title: { color: theme.role.textPrimary, ...textStyle('bold', 'heading'), textAlign: 'center' },
+  titleLeft: { textAlign: 'left' },
   subtitle: {
     color: theme.role.textSecondary,
     ...textStyle('regular', 'body'),
     textAlign: 'center',
     marginTop: theme.spacing['1'],
   },
+  subtitleLeft: { textAlign: 'left' },
 });

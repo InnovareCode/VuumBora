@@ -115,9 +115,9 @@ export default function EntrarScreen() {
   const submit = handleSubmit(onSubmit);
 
   return (
-    <AppShell scroll testID="entrar-screen">
+    <AppShell scroll glow testID="entrar-screen">
       <View style={styles.content}>
-        <AuthHeader title="Entrar" subtitle="Acesse sua conta de motorista." />
+        <AuthHeader title="Acesse sua conta" titleAlign="left" />
 
         {signedOutNotice === 'session_expired' ? (
           <InlineAlert
@@ -184,13 +184,6 @@ export default function EntrarScreen() {
               />
             )}
           />
-
-          <LinkButton
-            label="Esqueci minha senha"
-            onPress={() => router.push('/esqueci-senha')}
-            align="flex-end"
-            testID="entrar-forgot-link"
-          />
         </View>
 
         <View style={styles.actions}>
@@ -211,6 +204,11 @@ export default function EntrarScreen() {
             disabled={locked}
             accessibilityLabel={locked ? `Entrar, disponível em ${formatWait(waitSeconds)}` : 'Entrar'}
             testID="entrar-submit-button"
+          />
+          <LinkButton
+            label="Esqueci minha senha"
+            onPress={() => router.push('/esqueci-senha')}
+            testID="entrar-forgot-link"
           />
           <View style={styles.footerRow}>
             <Text style={styles.footerText}>Ainda não tem conta?</Text>

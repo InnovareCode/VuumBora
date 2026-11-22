@@ -7,6 +7,7 @@ import { CalendarDays, Lock, Mail, Phone, User } from 'lucide-react-native';
 import {
   AppShell,
   DateInput,
+  FooterActions,
   InlineAlert,
   LinkButton,
   PasswordInput,
@@ -191,12 +192,54 @@ export default function CriarContaScreen() {
   const showSummary = submitCount > 0 && invalidLabels.length > 0 && failure === null;
 
   return (
-    <AppShell scroll testID="criar-conta-screen">
+    <AppShell
+      scroll
+      glow
+      testID="criar-conta-screen"
+      footer={
+        // Ficha M02, §2: "320×568: o formulário rola; o CTA vai para o FooterActions (C-04) depois dos aceites" —
+        // o CTA (e os avisos que dependem dele) ficam sempre alcançáveis, mesmo com o formulário de 5 campos rolando.
+        <FooterActions testID="conta-footer">
+          {failure !== null ? (
+            <AuthErrorAlert
+              key={failure.attempt}
+              view={failure.view}
+              waitSeconds={waitSeconds}
+              onAction={handleAction}
+              alertRef={alertRef}
+              testID="conta-alert"
+            />
+          ) : null}
+          {showSummary ? (
+            <InlineAlert
+              key={submitCount}
+              tone="danger"
+              message={`Revise os campos destacados: ${invalidLabels.join(', ')}.`}
+              testID="conta-summary"
+            />
+          ) : null}
+          <PrimaryButton
+            label={locked ? `Aguarde ${formatWait(waitSeconds)}` : 'Criar conta'}
+            onPress={() => void submit()}
+            loading={submitting}
+            // Sem os textos na tela não há o que aceitar: o envio só vale com `pronto` (carregando e erro desligam).
+            disabled={locked || legal.status !== 'ready'}
+            accessibilityLabel={locked ? `Criar conta, disponível em ${formatWait(waitSeconds)}` : 'Criar conta'}
+            testID="conta-submit-button"
+          />
+          <View style={styles.footerRow}>
+            <Text style={styles.footerText}>Já tem uma conta?</Text>
+            <LinkButton label="Entrar" onPress={() => router.dismissTo('/entrar')} testID="conta-go-to-entrar-link" />
+          </View>
+        </FooterActions>
+      }
+    >
       <View style={styles.content}>
         <AuthHeader
-          title="Criar conta"
+          title="Criar sua conta"
           subtitle="Informe seus dados para criar a sua conta de motorista."
           onBack={() => goBackOr('/entrar')}
+          logoVariant="selo"
         />
 
         <RegistrationNotice context="create_account" testID="conta-registration-notice" />
@@ -314,41 +357,6 @@ export default function CriarContaScreen() {
         </View>
 
         <LegalConsentFields control={control} legal={legal} disabled={submitting} />
-
-        <View style={styles.actions}>
-          {failure !== null ? (
-            <AuthErrorAlert
-              key={failure.attempt}
-              view={failure.view}
-              waitSeconds={waitSeconds}
-              onAction={handleAction}
-              alertRef={alertRef}
-              testID="conta-alert"
-            />
-          ) : null}
-          {showSummary ? (
-            <InlineAlert
-              key={submitCount}
-              tone="danger"
-              message={`Revise os campos destacados: ${invalidLabels.join(', ')}.`}
-              testID="conta-summary"
-            />
-          ) : null}
-          <PrimaryButton
-            label={locked ? `Aguarde ${formatWait(waitSeconds)}` : 'Criar conta'}
-            onPress={() => void submit()}
-            loading={submitting}
-            // Sem os textos na tela não há o que aceitar: o envio só vale com `pronto` (carregando e erro desligam).
-            disabled={locked || legal.status !== 'ready'}
-            accessibilityLabel={locked ? `Criar conta, disponível em ${formatWait(waitSeconds)}` : 'Criar conta'}
-            testID="conta-submit-button"
-          />
-
-          <View style={styles.footerRow}>
-            <Text style={styles.footerText}>Já tem uma conta?</Text>
-            <LinkButton label="Entrar" onPress={() => router.dismissTo('/entrar')} testID="conta-go-to-entrar-link" />
-          </View>
-        </View>
       </View>
     </AppShell>
   );
@@ -357,7 +365,6 @@ export default function CriarContaScreen() {
 const styles = StyleSheet.create({
   content: { gap: theme.spacing['6'] },
   form: { gap: theme.spacing['4'] },
-  actions: { gap: theme.spacing['3'] },
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' },
   footerText: { color: theme.role.textSecondary, ...textStyle('regular', 'small') },
 });
