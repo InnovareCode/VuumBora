@@ -11,6 +11,17 @@ por IP) só depois do 2 funcionar, senão você se tranca para fora do painel. O
 passo 7 só depois de republicar `vuumbora-admin` e `vuumbora-frontend` com o
 `nginx.conf` novo (HSTS e cabeçalhos do site entraram em 21/11/2026).
 
+> **ATENÇÃO — não republique `vuumbora-admin` a partir do `main` antes de a API
+> do S1 estar no ar.** O painel do `main` (a partir do commit `5273769`) só faz
+> login contra a API do S1: ele exige `status: "authenticated"` na resposta, e a
+> API antiga não manda esse campo. Com a API antiga e a senha certa, o login
+> **não conclui** (a tela fica sem passo válido), e as telas de segurança e de
+> e-mail dão 404. Achado de 21/11/2026, depois de um redeploy do painel com a
+> API ainda antiga. Saídas: (a) publicar a API do S1 **e** as migrações
+> 0010–0020 juntas (`docs/publicar-o-backend.md`) e só então o painel; ou (b)
+> reverter o painel para o commit `da9db50`, o último antes do S1. Esta
+> restrição é do painel: o `nginx.conf` do site é estático e não depende da API.
+
 ---
 
 ## 1. CI no GitHub: PR vermelho tem de barrar — AÇÃO DO DONO (uma vez)

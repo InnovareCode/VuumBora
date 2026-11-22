@@ -4,9 +4,10 @@ Estado do projeto entre sessões. Atualizar ao fim de cada marco.
 
 ## S1 (fundação do backend) e fecho do Admin v0 — NO REPOSITÓRIO, NÃO PUBLICADO (21/11/2026)
 
-Tudo abaixo está commitado e enviado para `origin/main`, **mas nada foi
-publicado**: nenhuma migração rodou em produção e nenhuma variável nova foi
-criada no Easypanel. As migrações 0010–0020 e o código novo **só podem ir
+Tudo abaixo está commitado e enviado para `origin/main`. **A API e as
+migrações não foram publicadas**: nenhuma migração rodou em produção e nenhuma
+variável nova foi criada no Easypanel. O painel e o site foram republicados em
+21/11/2026 (ver "Situação em produção" mais abaixo). As migrações 0010–0020 e o código novo **só podem ir
 juntos** (o cadastro dos apps depende da 0019 e do código que envia a data de
 nascimento).
 
@@ -52,6 +53,20 @@ e deixa a decisão 17, contas de loja da Apple e do Google, como bloqueio de iPh
 - Unicidade do e-mail por tipo de conta (hipótese em uso) e regra de 29/02.
 - Taxa da plataforma (cortes exatos), gateway com split, cidade, orçamento e
   prazo: ver `docs/plano-sistema.md` §14.
+
+**Situação em produção (21/11/2026, conferida por curl, só leitura):**
+- **Site (`www`)**: `nginx.conf` novo no ar e correto. HSTS (max-age=300) uma
+  só vez, nosniff, Referrer-Policy e X-Frame-Options também na home, no CSS e
+  no `/healthz`; `.js` inexistente dá 404. A Cloudflare reescreve o `max-age` do
+  CSS e do 404 para 14400 (4 h); o `?v=hash` dos links evita CSS velho.
+- **Painel (`admin`)**: `nginx.conf` novo no ar (CSP, HSTS uma vez, demais
+  cabeçalhos) e é o **código do S1**.
+- **API: ainda a antiga** (`GET /v1/auth/me` = 404). **Problema:** o painel do
+  S1 não conclui o login contra a API antiga (a resposta não traz `status`).
+  Pendente decisão do dono: publicar a API do S1 com as migrações, ou reverter o
+  painel para `da9db50`. Não é consequência do nginx: é o painel novo.
+- Observação menor: um `.js` inexistente na raiz do painel responde 200 com
+  HTML (fallback de SPA; `nosniff` impede a execução).
 
 **Pendente para publicar (ordem em `docs/producao-passo-a-passo-dono.md` e
 `docs/publicar-o-backend.md`)**
