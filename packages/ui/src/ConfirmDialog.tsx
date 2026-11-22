@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
 import { theme } from '@vuumbora/tokens';
 import { withAlpha } from './colorAlpha';
 import { DangerButton } from './DangerButton';
@@ -25,19 +25,33 @@ export interface ConfirmDialogProps {
 /**
  * Confirmação com consequência (C-03, `docs/padrao-premium-telas.md` §15: "Cancelar" agia no
  * primeiro toque em `buscando.tsx`). Usa o `Modal` do React Native (nativo e web via
- * react-native-web) — o scrim fecha ao tocar fora (equivalente a "Cancelar").
+ * react-native-web).
  *
- * ⚠ Pendência honesta (handoff): não há armadilha de foco (focus trap) de teclado aqui —
- * o `Modal` nativo tira o conteúdo de trás da árvore de acessibilidade em iOS/Android, mas
- * isso não foi medido no React Native Web. Antes de usar em produção, repetir a medição que
- * achou o mesmo defeito no painel admin (`bug_overlay_sem_focus_trap_escapa_para_fundo`).
+ * **Sem "tocar fora fecha"** (mudança deliberada, achada medindo no navegador em 22/11/2026):
+ * o scrim é um `View` sem toque — Esc (`Modal.onRequestClose`, já embutido no RNW) e os dois
+ * botões são os únicos jeitos de fechar. Dois motivos, não só um:
+ *  1. Produto: uma confirmação com CONSEQUÊNCIA (cancelar corrida, sair da conta) não devia
+ *     fechar sozinha com um toque sem querer fora dela — forçar a escolha explícita é o
+ *     comportamento mais seguro para este componente específico (`EstimateLabel`/`ConfirmDialog`
+ *     não são a mesma coisa que um menu solto, que pode fechar ao tocar fora).
+ *  2. Técnico: o scrim precisava ser um `Pressable` pra "tocar fora fecha" funcionar, mas TODO
+ *     `Pressable` do react-native-web sai com `tabIndex` (0 ou -1 — `Pressable/index.js:193-198`,
+ *     nunca ausente) — e `tabIndex` de QUALQUER valor, inclusive -1, é focável por `.focus()`
+ *     (confirmado medindo: `document.activeElement` muda). Isso fazia o `focusFirstDescendant`
+ *     do `ModalFocusTrap` embutido do RNW (ver próximo parágrafo) parar no scrim — o primeiro
+ *     nó "focável" que ele encontra — em vez de chegar aos botões de verdade.
  *
- * O scrim e o `Pressable` que absorve o toque dentro do cartão são decorativos — toda AÇÃO
- * real é um `ButtonCore` (já tem o anel de foco compartilhado, `useKeyboardFocusRing`).
- * `focusable={false}` tira os dois da ordem de Tab de propósito (pedido do Atlas, achado
- * Q1 da Íris: todo clicável novo usa o anel por padrão — aqui a resposta certa é NÃO ser
- * um alvo de Tab, em vez de um alvo sem anel. Sem isso, o backdrop virava um botão
- * "Cancelar" fantasma e duplicado para quem navega por teclado/leitor de tela).
+ * Foco de teclado: o `Modal` do react-native-web JÁ TEM armadilha de foco e devolução de foco
+ * embutidas (`react-native-web/src/exports/Modal/ModalFocusTrap.js` — Tab não escapa do
+ * diálogo, e ao desmontar devolve o foco a quem o abriu). Eu tinha construído uma armadilha
+ * própria (`useWebFocusTrap`) achando que faltava — competia com a de dentro do RNW (as duas
+ * tentavam focar coisas ao mesmo tempo) e criava um salto de foco errado por ~250-400ms (a
+ * duração do fade do `ModalAnimation`) antes de o foco assentar no lugar certo. Removida. A
+ * única peça que faltava de verdade era o alvo do foco INICIAL: sem nada, o RNW foca o
+ * primeiro elemento focável de dentro (`focusFirstDescendant`) — que seria o botão de
+ * CONFIRMAR, perigoso quando `destructive`. Resolvido sem código de foco nenhum: o botão de
+ * CANCELAR vem primeiro no JSX (`actions` abaixo), então é nele que o foco inicial pousa
+ * sozinho.
  */
 export const ConfirmDialog = memo(function ConfirmDialog({
   visible,
@@ -54,22 +68,20 @@ export const ConfirmDialog = memo(function ConfirmDialog({
   const ConfirmButton = destructive ? DangerButton : PrimaryButton;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent testID={testID}>
-      <Pressable style={styles.scrim} onPress={onCancel} focusable={false}>
-        <Pressable onPress={(event) => event.stopPropagation()} focusable={false}>
-          <View accessibilityViewIsModal>
-            <SurfaceRaised style={styles.card}>
-              <Text style={styles.title} accessibilityRole="header">
-                {title}
-              </Text>
-              {description ? <Text style={styles.description}>{description}</Text> : null}
-              <View style={styles.actions}>
-                <ConfirmButton label={confirmLabel} onPress={onConfirm} loading={loading} />
-                <SecondaryButton label={cancelLabel} onPress={onCancel} disabled={loading} />
-              </View>
-            </SurfaceRaised>
-          </View>
-        </Pressable>
-      </Pressable>
+      <View style={styles.scrim}>
+        <View accessibilityViewIsModal>
+          <SurfaceRaised style={styles.card}>
+            <Text style={styles.title} accessibilityRole="header">
+              {title}
+            </Text>
+            {description ? <Text style={styles.description}>{description}</Text> : null}
+            <View style={styles.actions}>
+              <SecondaryButton label={cancelLabel} onPress={onCancel} disabled={loading} />
+              <ConfirmButton label={confirmLabel} onPress={onConfirm} loading={loading} />
+            </View>
+          </SurfaceRaised>
+        </View>
+      </View>
     </Modal>
   );
 });

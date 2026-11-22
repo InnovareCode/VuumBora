@@ -562,7 +562,8 @@
       "base": { "$type": "number", "$value": 200, "$description": "Erro de campo (mensagem desce)." },
       "panel": { "$type": "number", "$value": 250, "$description": "Painel inferior abre/fecha (BottomSheet, C-02)." },
       "screen": { "$type": "number", "$value": 300, "$description": "Troca de tela." },
-      "pulse": { "$type": "number", "$value": 1400, "$description": "Pulso de busca, em laço (já usado por SearchingPulse antes deste token existir)." }
+      "pulse": { "$type": "number", "$value": 1400, "$description": "Pulso de busca, em laço (já usado por SearchingPulse antes deste token existir)." },
+      "toast": { "$type": "number", "$value": 2600, "$description": "C-05 (`Toast`): tempo visível antes do auto-dismiss. Sem medição na referência — valor de julgamento da Lyra (pedido do Atlas em 22/11/2026 para o duration deixar de ser um número solto no componente)." }
     },
     "easing": {
       "out": {

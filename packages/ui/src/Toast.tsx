@@ -8,13 +8,11 @@ export interface ToastProps {
   readonly visible: boolean;
   /** Chamado quando o tempo acaba — quem renderiza decide o que fazer (normalmente `setVisible(false)`). */
   readonly onDismiss: () => void;
-  /** ms visível antes de `onDismiss`. Sem token próprio no padrão premium (§4/§7) — valor
-   * de julgamento da Lyra, pendente de revisão visual (ver handoff). */
+  /** ms visível antes de `onDismiss`. Padrão: `theme.motion.duration.toast` (PP-7 — valor de
+   * julgamento da Lyra, sem medição na referência, pendente de revisão visual). */
   readonly duration?: number;
   readonly testID?: string;
 }
-
-const DEFAULT_DURATION = 2600;
 
 /**
  * Confirmação curta sem mudar de tela (C-05, `docs/padrao-premium-telas.md` §15: "Avaliação
@@ -25,7 +23,7 @@ const DEFAULT_DURATION = 2600;
  * (normalmente por cima do conteúdo, perto do rodapé, dentro do próprio `AppShell`), porque
  * a distância certa do CTA/tab bar varia de tela pra tela e ainda não foi medida.
  */
-export const Toast = memo(function Toast({ message, visible, onDismiss, duration = DEFAULT_DURATION, testID }: ToastProps) {
+export const Toast = memo(function Toast({ message, visible, onDismiss, duration = theme.motion.duration.toast, testID }: ToastProps) {
   useEffect(() => {
     if (!visible) return;
     if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(message);
