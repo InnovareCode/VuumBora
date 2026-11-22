@@ -9,7 +9,9 @@ verificação** de cada passo, que não depende do nome do menu.
 Ordem recomendada: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8. O passo 3 (fechar o acesso
 por IP) só depois do 2 funcionar, senão você se tranca para fora do painel. O
 passo 7 só depois de republicar `vuumbora-admin` e `vuumbora-frontend` com o
-`nginx.conf` novo (HSTS e cabeçalhos do site entraram em 21/11/2026).
+`nginx.conf` novo (HSTS e cabeçalhos do site entraram em 21/11/2026). O passo 9
+(textos legais, CPU e e-mail) vale **antes de divulgar o cadastro dos apps**, e o
+10 (builds dos apps) na hora do primeiro build.
 
 > **ATENÇÃO — não republique `vuumbora-admin` a partir do `main` antes de a API
 > do S1 estar no ar.** O painel do `main` (a partir do commit `5273769`) só faz
@@ -18,7 +20,8 @@ passo 7 só depois de republicar `vuumbora-admin` e `vuumbora-frontend` com o
 > **não conclui** (a tela fica sem passo válido), e as telas de segurança e de
 > e-mail dão 404. Achado de 21/11/2026, depois de um redeploy do painel com a
 > API ainda antiga. Saídas: (a) publicar a API do S1 **e** as migrações
-> 0010–0020 juntas (`docs/publicar-o-backend.md`) e só então o painel; ou (b)
+> 0010–0021 juntas e só então o painel (a ordem completa está em
+> `docs/publicar-o-backend.md`, seção 3, "Ordem do primeiro deploy do S1"); ou (b)
 > reverter o painel para a branch `producao-admin-estavel` (commit `f79b0fe`, o
 > Admin v0 que combina com a API de produção; roteiro logo abaixo). **Não** use
 > o `da9db50`: ele traz os botões de aprovar e recusar, e essas rotas não
@@ -44,7 +47,7 @@ passo 7 só depois de republicar `vuumbora-admin` e `vuumbora-frontend` com o
 |---|---|---|
 | `f79b0fe` (Admin v0) | a API de produção de hoje | combina; é a branch `producao-admin-estavel` |
 | `da9db50` | aprovar e recusar candidatura, com CSRF (migração 0009) | a produção **não** tem |
-| `5273769` em diante (`main`) | API do S1 (`40d78cb` em diante) e migrações 0010–0020 | a produção **não** tem |
+| `5273769` em diante (`main`) | API do S1 (`40d78cb` em diante) e migrações 0010–0021 | a produção **não** tem |
 
 ---
 
@@ -164,7 +167,10 @@ Antes, confira no `vuumbora-backend` (aba Ambiente) a variável do 2FA:
 - `ADMIN_TOTP_ENCRYPTION_KEY`: gere com `openssl rand -base64 32` (no terminal
   do seu computador ou do servidor). **Guarde-a no gerenciador de senhas**; perder
   a chave invalida o 2FA de todos. Sem ela, quem exige 2FA (dono, financeiro)
-  recebe erro 503 no login: o sistema recusa entrar sem segundo fator.
+  recebe erro 503 no login: o sistema recusa entrar sem segundo fator. **Nunca
+  troque essa chave sem salvar de novo a senha do SMTP no painel:** a mesma chave
+  cifra a senha do e-mail, e com outra chave o envio dos códigos dos apps falha sem
+  aviso (passo 9.2).
 
 Depois:
 
@@ -201,9 +207,14 @@ Em `vuumbora-backend`, aba Ambiente (detalhes e o porquê em `docs/publicar-o-ba
 | `ADMIN_ALLOWED_ORIGINS` | `https://admin.vuumbora.com.br` |
 | `ADMIN_TOTP_ENCRYPTION_KEY` | a chave do passo 5 |
 | `TRUST_PROXY` | `1` (quantos proxies ficam na frente da API; `true` antigo vale como `1`) |
+| `LEGAL_DOCUMENTS_BASE_URL` | endereço-base dos Termos e da Política, sem barra no fim (sugestão: `https://www.vuumbora.com.br/legal`); sem ela o cadastro dos apps responde 503 (passo 9.1) |
+| `AUTH_BCRYPT_CONCURRENCY` | `1` ou `2`, pela cota de CPU do serviço (passo 9.3) |
+| `AUTH_BCRYPT_QUEUE_MAX` | `8` |
 
 - **Preencha `ADMIN_ALLOWED_ORIGINS` antes de publicar**: a API não sobe sem ela e
   derrubaria junto o formulário do site.
+- **`AUTH_TERMS_VERSION` e `AUTH_PRIVACY_VERSION` não existem mais**: a versão
+  vigente dos textos mora no banco. Se estiverem no ambiente, apague.
 - **Sem barra no final** de nenhuma origem: `https://admin.vuumbora.com.br`, não
   `.../`. O navegador compara o texto exato e a barra faz o CORS recusar tudo.
 - **Nunca** ponha o domínio do admin em `ALLOWED_ORIGINS` nem o do site em
@@ -393,6 +404,107 @@ middleware não está valendo (ou o IP visto é o da CDN). Seu IP fica barrado p
 alguns segundos; é normal. O monitor externo (passo 4) não é afetado: pede a cada
 5 minutos.
 
+## 9. Antes de divulgar o cadastro dos apps — AÇÃO DO DONO
+
+Achados B-7 e B-5 da Órion (`docs/revisao-seguranca-s1-rodada3b.md`). Os comandos completos e o porquê de cada detalhe estão em
+`docs/publicar-o-backend.md`, seção 3; aqui vão o roteiro e a verificação. Nada disto foi executado contra o seu servidor: a
+equipe não o acessa.
+
+### 9.1 Textos legais: hospedar e publicar a primeira versão dos 4 pares
+
+Sem isto o cadastro dos apps responde **503 `consent_unavailable`**, de propósito (login e o resto seguem). Os 4 pares são
+Termos e Política, cada um para passageiro e motorista.
+
+1. `LEGAL_DOCUMENTS_BASE_URL` preenchida (passo 6).
+2. Os 4 arquivos hospedados em `<base>/terms/passenger/<versão>`, `<base>/privacy/passenger/<versão>`,
+   `<base>/terms/driver/<versão>` e `<base>/privacy/driver/<versão>`. O nome do arquivo é a versão, sem extensão (por exemplo
+   `2026-12-01`). No site: pasta `apps/site/public/legal/` e republicar o `vuumbora-frontend`. Os textos e a versão são seus e
+   do jurídico.
+3. Pegue o hash do que o **endereço devolve** (`curl -s -o arquivo <endereço>` e depois `sha256sum arquivo`) e confira que o
+   arquivo começa pelo texto, não por `<!DOCTYPE html>`: o nginx do site responde **200 com a página inicial** para arquivo
+   que não existe, então o status não prova nada.
+4. No terminal do `vuumbora-backend`, com `MIGRATION_DATABASE_URL` só durante o comando (credencial dona, como no passo 5), um
+   comando por documento. Rode antes cada um com `--dry-run` no fim, que não grava nada:
+
+   ```
+   MIGRATION_DATABASE_URL="postgres://dono:SENHA@host:5432/vuumbora" node scripts/publish-legal.mjs --document=terms   --audience=passenger,driver --version=2026-12-01 --sha256=<hash-dos-termos>
+   MIGRATION_DATABASE_URL="postgres://dono:SENHA@host:5432/vuumbora" node scripts/publish-legal.mjs --document=privacy --audience=passenger,driver --version=2026-12-01 --sha256=<hash-da-politica>
+   ```
+
+   (É o que `npm run legal:publish` chama.) São 2 comandos para os 4 pares quando o texto é o mesmo nos dois perfis; se forem
+   textos diferentes, 4 comandos, um `--audience=` por perfil. A publicação **não se edita nem se apaga**: errou, publica-se a
+   versão seguinte.
+
+Verificação, de fora:
+
+```
+curl -s "https://api.vuumbora.com.br/v1/legal/current?audience=passenger"
+curl -s "https://api.vuumbora.com.br/v1/legal/current?audience=driver"
+```
+
+Esperado: `200`, com o `sha256` de cada texto igual ao hash do passo 3. `503 consent_unavailable` = falta a variável ou a
+versão publicada daquele perfil.
+
+### 9.2 Chave do 2FA e senha do SMTP
+
+Trocar `ADMIN_TOTP_ENCRYPTION_KEY` quebra o 2FA de todos **e** a senha do SMTP salva no painel: o envio dos códigos de
+verificação e de redefinição de senha dos apps passa a falhar sem aviso na tela. Se a chave precisar mudar, o roteiro está em
+`docs/publicar-o-backend.md`, seção 3. A regra de bolso: depois de **qualquer** mudança de chave, entre no painel, salve a senha
+do SMTP de novo e use **enviar e-mail de teste**.
+
+### 9.3 CPU do serviço e `AUTH_BCRYPT_CONCURRENCY`
+
+Veja a cota de CPU do `vuumbora-backend` (limites de recursos do serviço no Easypanel). Até 2 CPUs: `AUTH_BCRYPT_CONCURRENCY=1`.
+3 CPUs ou mais: `2`. `AUTH_BCRYPT_QUEUE_MAX=8` nos dois casos. Depois **meça**: o script de `docs/publicar-o-backend.md`
+(seção 3, "CPU do contêiner e a pista do bcrypt") roda no console do contêiner e mostra o tempo do `/healthz` durante 30
+logins ao mesmo tempo. Aceite: todos `200` e pior tempo abaixo de ~1 s. Os valores da tabela são ponto de partida; a medida de
+verdade é a sua.
+
+### 9.4 Uma conferência no banco: usuário SMTP antigo na trilha
+
+Rode a contagem de `docs/publicar-o-backend.md` (seção 3, "Uma conferência no banco real"). `0` = nada a fazer. Maior que 0:
+não apague nada; o texto de lá diz o que fazer (a trilha é imutável de propósito).
+
+## 10. Builds dos apps no EAS: perfis e variáveis — AÇÃO DO DONO (no primeiro build)
+
+`apps/passenger/eas.json` e `apps/driver/eas.json` (criados em 22/11/2026, iguais nos dois apps) têm três perfis. Cada um grava
+`VUUMBORA_BUILD_PROFILE` **com o mesmo nome do perfil**, e o `metro.config.js` de cada app decide por essa variável o que entra
+no pacote:
+
+| Perfil | Para quê | `VUUMBORA_BUILD_PROFILE` | Telas de desenvolvimento no pacote | Ambiente das variáveis no EAS |
+|---|---|---|---|---|
+| `development` | cliente de desenvolvimento no aparelho (o Mapbox exige um; não roda no Expo Go) | `development` | dentro | `development` |
+| `preview` | teste interno, APK | `preview` | dentro | `preview` |
+| `production` | loja, `.aab` | `production` | **fora** | `production` |
+
+- O valor de `VUUMBORA_BUILD_PROFILE` **tem de ser igual ao nome do perfil**. Perfil novo = copie e troque o valor. Um valor
+  inválido (por exemplo `prod`) o `metro.config.js` recusa e aborta a build.
+- **`EXPO_PUBLIC_*`: lembrete, nunca no git.** Essas variáveis entram **dentro do pacote** (qualquer pessoa lê), então só
+  valor público. Hoje: `EXPO_PUBLIC_MAPBOX_TOKEN` (nos dois apps; token público `pk.`, nunca o secreto `sk.`) e
+  `EXPO_PUBLIC_API_URL` (endereço da API; hoje só aparece em comentário, a fatia B4 a liga). Os valores ficam no **EAS**
+  (expo.dev, projeto, variáveis de ambiente, ou `eas env:create`), **um por ambiente** (`development`, `preview`,
+  `production`; o `eas.json` liga cada perfil ao ambiente de mesmo nome), para a build de loja nunca herdar o endereço ou o
+  token de teste. O `.env` da raiz é só do seu computador e está no `.gitignore`: o EAS não o recebe, então sem a variável no
+  EAS a build sai sem token do Mapbox. O valor é gravado na build: mudou, gere outra.
+- **A build `production` aborta de propósito enquanto o app tiver identidade simulada** (no passageiro) **ou ainda não tiver
+  cliente de identidade para a guarda ler** (no motorista). Não contorne trocando para `preview`: seria entregar à loja um app
+  sem login real. A guarda estava na árvore de trabalho (não commitada) quando escrevi; o estado está no `PROGRESSO.md`.
+
+**O que eu validei:** o JSON de cada arquivo; o schema com o validador oficial (`@expo/eas-json` 27.11.0, rodado offline): os 3
+perfis resolvem para Android e iOS, nos dois apps; e carregando o `metro.config.js` real de cada app com as variáveis que cada
+perfil define: `development` e `preview` mantêm as telas de desenvolvimento, e `production` não gera pacote porque a guarda de
+identidade aborta antes, nos dois apps (controle: `prod` também aborta). Ou seja: o `eas.json` está certo, e quem barra a
+build de loja hoje é a guarda, não ele.
+
+**O que eu NÃO validei (ainda não há conta Expo):** nenhum `eas build` de verdade; que os ambientes `development`, `preview` e
+`production` existem no seu projeto Expo (confira ao criar o projeto); que o EAS exporta `EAS_BUILD_PROFILE` com o nome do
+perfil (está na documentação da Expo, não foi testado; o `metro.config.js` usa como segunda rede); e a versão do EAS CLI da sua
+máquina, que pode ser outra e recusar um campo (nesse caso não improvise, chame o Vulcano). Pendências que dependem de você ou
+de outra pessoa da equipe: `expo-dev-client` não está nas dependências dos apps e o perfil `development` pede cliente de
+desenvolvimento (o EAS CLI vai avisar ou pedir para instalar; não mexi em `package.json`); o `projectId` do EAS entra em
+`extra.eas.projectId` do `app.config.ts`, provavelmente à mão (o `eas init` não edita configuração em TypeScript; não testado);
+identificadores de loja definitivos e contas, em `docs/build-e-deploy.md`.
+
 ---
 
 ## Checklist final
@@ -408,3 +520,9 @@ alguns segundos; é normal. O monitor externo (passo 4) não é afetado: pede a 
 - [ ] Cabeçalhos conferidos com `curl -sI` em admin e site; `strict-transport-security` aparece **uma vez** (passo 7.1)
 - [ ] HSTS subindo por etapas (300 s → 1 semana → 1 ano), sem `includeSubDomains`/`preload` por enquanto (passo 7.2)
 - [ ] Limite por IP na borda decidido e testado, ou a pendência A-1/M-1 registrada como aberta (passo 8)
+- [ ] `LEGAL_DOCUMENTS_BASE_URL` preenchida, 4 pares publicados, e `GET /v1/legal/current` devolve 200 nos dois perfis com o `sha256` do arquivo (passo 9.1)
+- [ ] `AUTH_TERMS_VERSION` e `AUTH_PRIVACY_VERSION` removidas do ambiente da API
+- [ ] E-mail de teste do painel feito depois de qualquer mudança de `ADMIN_TOTP_ENCRYPTION_KEY` (passo 9.2)
+- [ ] `AUTH_BCRYPT_CONCURRENCY` definida pela cota de CPU e `/healthz` medido sob rajada (passo 9.3)
+- [ ] Contagem de linhas antigas com usuário SMTP na trilha: 0, ou aceite registrado (passo 9.4)
+- [ ] `EXPO_PUBLIC_*` só no EAS, um ambiente por perfil, nada no git (passo 10)

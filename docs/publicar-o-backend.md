@@ -14,6 +14,10 @@ autossuficiente (a API não depende de nenhum pacote interno, só de bibliotecas
 externas), e `scripts/check-docker-context.mjs` confere os três Dockerfiles do
 projeto a cada `npm run check`.
 
+Atualizado em 22/11/2026 (rodada 3b da Órion, achados B-5 e B-7): o fim da seção 3 ganhou cinco subseções, sobre os
+Termos e a Política (sem versão publicada o cadastro responde 503), a CPU do contêiner e a pista do bcrypt, a chave do 2FA
+e a senha do SMTP, uma conferência da trilha de auditoria e a ordem do primeiro deploy do S1.
+
 ---
 
 ## 1. O banco
@@ -169,6 +173,241 @@ Passo a passo (infraestrutura — Vulcano):
    contêiner continua legível por quem tem acesso ao contêiner.
 5. Confira: com `DATABASE_URL` da API, `INSERT INTO admin_users ...` deve falhar com `permission denied`.
    (`apps/api/test/runtime-role.test.ts` prova isso contra Postgres real a cada execução do CI.)
+
+### Termos de Uso e Política: `LEGAL_DOCUMENTS_BASE_URL` e a primeira versão publicada
+
+Achado B-7 da Órion (`docs/revisao-seguranca-s1-rodada3b.md`). **Sem isto o cadastro dos apps responde 503
+`consent_unavailable`**, de propósito: o app não pode registrar "aceitei" de um texto que não conseguiu mostrar. Login,
+renovação de sessão e o resto continuam funcionando, então no primeiro deploy parece só que "o cadastro não funciona".
+Duas coisas têm de existir **antes do primeiro cadastro**: o endereço dos textos e uma versão publicada para cada um destes
+4 pares:
+
+| Par (documento e perfil) | Arquivo que tem de existir |
+|---|---|
+| Termos do passageiro | `<base>/terms/passenger/<versão>` |
+| Política do passageiro | `<base>/privacy/passenger/<versão>` |
+| Termos do motorista | `<base>/terms/driver/<versão>` |
+| Política do motorista | `<base>/privacy/driver/<versão>` |
+
+1. **Variável no serviço da API:** `LEGAL_DOCUMENTS_BASE_URL` = o endereço-base, **sem barra no fim**. Onde hospedar é decisão
+   do dono (a API não tem valor padrão); a sugestão que já está no `.env.example` é `https://www.vuumbora.com.br/legal`.
+   Regras: `https` em produção, sem usuário e senha, sem `?` nem `#`. Fora disso a API recusa a variável e responde 503 do
+   mesmo jeito, e o boot avisa no log (`legal_unavailable`). **`AUTH_TERMS_VERSION` e `AUTH_PRIVACY_VERSION` saíram:** a
+   versão vigente mora no banco (`legal_document_versions`) e o código não lê mais as duas (busca em `apps/api/src`, `test` e
+   `scripts`, sem ocorrência). Se estiverem no ambiente de produção, apague.
+
+2. **Hospedar os textos.** Se for no site, os arquivos ficam em
+   `apps/site/public/legal/<terms|privacy>/<passenger|driver>/<versão>` e vão ao ar quando o `vuumbora-frontend` for
+   republicado. O nome do arquivo **é** a versão, **sem extensão** (por exemplo `2026-12-01`; letras, dígitos e `. _ : + -`,
+   até 64 caracteres). O arquivo é **imutável**: texto novo = versão nova. O mesmo texto pode servir aos dois perfis (dois
+   arquivos com os mesmos bytes). Os textos e a versão são do dono e do jurídico (em aberto em `docs/decisoes-do-dono.md`);
+   a equipe não os redige.
+
+   **Atenção: o nginx do site não devolve 404 para arquivo que falta.** O `apps/site/nginx.conf` manda qualquer caminho sem
+   arquivo para o `index.html`, com **status 200**. Versão digitada errada ou site ainda não republicado resulta na página
+   inicial do site, não num erro. Por isso a conferência abaixo é pelo **hash do que o endereço devolve**, nunca pelo status.
+   (Li o `nginx.conf`; não medi em produção.) Sem extensão, o arquivo provavelmente sai como `application/octet-stream`
+   (padrão do nginx, também não medido): o app lê como texto, mas um navegador baixaria o arquivo em vez de abri-lo. Se
+   quiser que o link abra na tela, peça um ajuste no nginx.
+
+3. **Pegar o hash dos bytes que o endereço de fato serve**, depois de republicar o site. Não use o arquivo do seu computador:
+   um espaço ou uma quebra de linha diferente muda o hash (o repositório normaliza para LF; um arquivo fora do git pode estar
+   em CRLF).
+
+   ```
+   curl -s -o terms-passenger.txt https://www.vuumbora.com.br/legal/terms/passenger/2026-12-01
+   head -c 100 terms-passenger.txt     # tem de ser o TEXTO; "<!DOCTYPE html>" é o index.html do site (arquivo não publicado)
+   sha256sum terms-passenger.txt       # Git Bash/Linux/Mac. PowerShell: (Get-FileHash -Algorithm SHA256 .\terms-passenger.txt).Hash.ToLower()
+   ```
+
+   Guarde o hash (64 caracteres hexadecimais, minúsculos) e repita para os 4 arquivos. Se o texto é o mesmo nos dois perfis,
+   os hashes saem iguais.
+
+4. **Publicar a versão no catálogo, com a credencial dona.** O papel `vuumbora_api` só **lê** o catálogo, de propósito: quem
+   vazasse o ambiente da API não poderia trocar o texto "aceito". No terminal do `vuumbora-backend`, com a mesma regra do
+   `create-admin` (a `MIGRATION_DATABASE_URL` existe só durante o comando; o contêiner de produção usa `node` direto, que é o
+   que o `npm run legal:publish` chama):
+
+   ```
+   # 1o, sem gravar nada (não conecta ao banco; mostra o hash e confere os argumentos):
+   node scripts/publish-legal.mjs --document=terms --audience=passenger,driver --version=2026-12-01 --sha256=<hash-dos-termos> --dry-run
+
+   # valendo: um comando por documento (a lista em --audience grava os dois perfis, com o mesmo hash):
+   MIGRATION_DATABASE_URL="postgres://dono:SENHA@host:5432/vuumbora" node scripts/publish-legal.mjs --document=terms   --audience=passenger,driver --version=2026-12-01 --sha256=<hash-dos-termos>
+   MIGRATION_DATABASE_URL="postgres://dono:SENHA@host:5432/vuumbora" node scripts/publish-legal.mjs --document=privacy --audience=passenger,driver --version=2026-12-01 --sha256=<hash-da-politica>
+   ```
+
+   São 2 comandos para os 4 pares quando o texto é o mesmo nos dois perfis. Se o do passageiro difere do do motorista, rode um
+   comando por par (`--audience=passenger` e depois `--audience=driver`, cada um com o hash do seu arquivo): 4 comandos. A
+   saída diz, por perfil, `PUBLICADA` e `é a vigente`.
+
+   - A publicação é **imutável**: erro de texto ou de hash não se edita nem se apaga, publica-se a versão seguinte. Por isso o
+     `--dry-run` e a conferência do passo 3 vêm antes.
+   - Repetir o mesmo comando é inofensivo (mesma versão e mesmo hash: "nada mudou"); com hash diferente o script RECUSA.
+   - Na primeira publicação não há conta para pedir novo aceite, então o padrão `--requires-reacceptance=true` não incomoda
+     ninguém.
+
+5. **Conferir, de fora** (um por perfil):
+
+   ```
+   curl -s "https://api.vuumbora.com.br/v1/legal/current?audience=passenger"
+   curl -s "https://api.vuumbora.com.br/v1/legal/current?audience=driver"
+   ```
+
+   Esperado: `200`, com `terms` e `privacy` trazendo `version`, `sha256` e `url`. Têm de bater: (a) o `sha256` igual ao hash do
+   arquivo; (b) baixar a `url` devolvida e refazer o hash (passo 3). `503 consent_unavailable` = faltou a variável (ou está
+   inválida) **ou** não há versão publicada para aquele perfil.
+
+6. **Conferir que o papel da API só lê o catálogo** (credencial dona):
+
+   ```sql
+   SELECT has_table_privilege('vuumbora_api', 'legal_document_versions', 'SELECT') AS le,
+          has_table_privilege('vuumbora_api', 'legal_document_versions', 'INSERT') AS insere,
+          has_table_privilege('vuumbora_api', 'legal_document_versions', 'UPDATE') AS altera,
+          has_table_privilege('vuumbora_api', 'legal_document_versions', 'DELETE') AS apaga;
+   ```
+
+   Esperado: `t`, `f`, `f`, `f`.
+
+**O que não foi provado:** os argumentos e a lógica do `legal:publish` vêm do código (`apps/api/scripts/publish-legal.mjs`,
+`apps/api/src/lib/legal-publish.ts`). Eu não rodei o comando contra um banco (não há Postgres nesta máquina) nem os `curl`
+contra produção.
+
+### CPU do contêiner e a pista do bcrypt
+
+Achado B-5 da Órion. Login, cadastro, verificação de e-mail e redefinição de senha dos apps passam por uma **pista** de bcrypt,
+em threads separadas do resto da API. Duas variáveis opcionais a regulam:
+
+| Variável | Padrão no código | O que faz |
+|---|---|---|
+| `AUTH_BCRYPT_CONCURRENCY` | `min(2, max(1, núcleos - 1))` | quantos hashes rodam ao mesmo tempo (1 a 8). Cada um ocupa **uma CPU inteira** enquanto roda |
+| `AUTH_BCRYPT_QUEUE_MAX` | `8` | quantos esperam vaga (0 a 64); o seguinte recebe `503 server_busy` com `Retry-After: 3` |
+
+`núcleos` é o que o Node enxerga (`os.availableParallelism()`). Num contêiner com cota de CPU isso pode ser o número de
+núcleos do **servidor** e não a cota; não medi como o Node 22 lê a cota do Easypanel. Valor ilegível ou fora da faixa **volta
+ao padrão sem erro**: confira a grafia depois de salvar.
+
+Por isso, em produção, **preencha `AUTH_BCRYPT_CONCURRENCY` de forma explícita**, a partir da cota de CPU do serviço
+`vuumbora-backend` (nos limites de recursos do serviço no Easypanel; se o serviço não tem limite, conte os núcleos do
+servidor):
+
+| Cota de CPU | `AUTH_BCRYPT_CONCURRENCY` | `AUTH_BCRYPT_QUEUE_MAX` |
+|---|---|---|
+| menos de 1, 1 ou 2 CPUs | `1` | `8` |
+| 3 CPUs ou mais | `2` | `8` |
+
+É a regra do próprio código (concorrência = CPUs menos uma, que fica para o laço principal e o banco), aplicada à **cota** e
+não ao servidor, com teto 2. A espera máxima de quem entra na fila é de uns fila ÷ concorrência × 0,5 s (custo 12): 4 s com 1
+vaga, 2 s com 2, abaixo do limite de 15 s do app. A pista do painel é separada (1 vaga, fila de 4), então com `1` podem rodar
+até 2 hashes ao mesmo tempo, e com `2` até 3. Estes números são **ponto de partida, não medida de produção**: meça.
+
+`AUTH_BCRYPT_COST`: não preencha (padrão 12). O código aceita de 4 a 15, e um valor baixo enfraqueceria todos os hashes novos
+sem avisar; em produção use 12 ou mais. O piso no código é pendência da Vega (B-5 da Órion).
+
+**Medir o `/healthz` sob rajada.** O `/healthz` é o que o Docker e o Easypanel usam para decidir se o serviço está vivo (o
+`HEALTHCHECK` da imagem dá 3 s de limite e reprova depois de 3 falhas seguidas). Rode **dentro do contêiner** (Easypanel >
+`vuumbora-backend` > Console), onde a CPU é a da cota de verdade e o IP é o de loopback: não gasta a cota de login do seu IP
+nem a dos usuários.
+
+```
+node -e '
+const base = "http://127.0.0.1:" + (process.env.PORT || 3000);
+const medir = async (url, opcoes) => { const t0 = performance.now(); const r = await fetch(url, opcoes); await r.arrayBuffer(); return { status: r.status, ms: Math.round(performance.now() - t0) }; };
+const login = (n) => medir(base + "/v1/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ accountType: "passenger", identifier: "carga-" + n + "@example.com", password: "senha-qualquer-123" }) });
+const contar = (xs) => xs.reduce((m, x) => { m[x.status] = (m[x.status] || 0) + 1; return m; }, {});
+(async () => {
+  const antes = await medir(base + "/healthz");
+  console.log("healthz sem carga:", antes.status, antes.ms + " ms");
+  const rajada = Promise.all(Array.from({ length: 30 }, (_, i) => login(i)));
+  const saude = [];
+  for (let i = 0; i < 15; i++) saude.push(await medir(base + "/healthz"));
+  const logins = await rajada;
+  console.log("30 logins ao mesmo tempo:", JSON.stringify(contar(logins)));
+  console.log("healthz durante a rajada:", JSON.stringify(contar(saude)), "| pior tempo:", Math.max(...saude.map((x) => x.ms)) + " ms");
+})();
+'
+```
+
+Como ler:
+
+- **"30 logins ao mesmo tempo"** deve ter `401` (o bcrypt rodou: o e-mail não existe) e `503` (a pista encheu; com o padrão,
+  uns 20 dos 30). Só `400`: o corpo foi recusado antes do bcrypt e o teste não mediu nada (o contrato mudou). `429`: limite por
+  IP, vale uma rajada por 15 minutos. Nenhum `503`: a pista não encheu, o teste foi fraco, não conclua nada.
+- **"healthz durante a rajada"**: todos `200`. Pior tempo **abaixo de ~1 s** é confortável (regra minha); perto de **3 s** o
+  `HEALTHCHECK` começa a reprovar o contêiner. Acima de ~1 s: baixe `AUTH_BCRYPT_CONCURRENCY` uma vaga (mínimo 1), salve, espere
+  reiniciar e meça de novo. Já em `1` e ainda lento: falta CPU ao serviço, suba a cota; não há como proteger o laço
+  principal dividindo menos de uma CPU.
+- **Efeito colateral:** grava até 30 tentativas de login falhas (e-mails fictícios `carga-N@example.com`, só como HMAC); a
+  retenção diária (`identity:retention`) as limpa. Faça fora do horário de pico.
+
+**O que não foi provado:** o script foi provado só contra um servidor falso local (sintaxe, contagem por status, e o caso de
+corpo recusado aparecendo como `400`). **Não foi executado contra a API real nem contra o contêiner do Easypanel:** esta
+máquina não tem Postgres nem Docker, e a equipe não acessa o seu servidor. Os números de verdade saem da sua execução.
+
+### `ADMIN_TOTP_ENCRYPTION_KEY`: nunca troque sem salvar de novo a senha do SMTP
+
+A mesma chave cifra **duas** coisas no banco: os segredos do 2FA de dono e financeiro **e a senha do SMTP** salva no painel
+(Configurações > E-mail). Com uma chave diferente nenhuma das duas decifra:
+
+- **2FA:** dono e financeiro não conseguem entrar (`docs/break-glass-admin.md`, seção 6).
+- **E-mail:** o envio dos códigos de verificação e de redefinição de senha dos apps **falha, e a tela não avisa**. No log da
+  API só aparece `EmailDeliveryError`; no cadastro o app recebe `emailSent: false`. A Íris viu o e-mail não sair numa API que
+  lia a configuração do painel cifrada por outra chave (`docs/veredito-iris-s1-passada-2.md`, limite 7). Ela não isolou a
+  causa, mas o código se comporta exatamente assim: `apps/api/src/services/mailer.ts` trata a senha ilegível como falha de
+  entrega (`password_unreadable`, "chave de cifra trocada? Salve a senha de novo").
+
+Se a chave **tiver** de mudar, ou mudou sem querer, nesta ordem:
+
+1. Ainda tem a chave antiga? Volte com ela: resolve as duas coisas de uma vez.
+2. Senão: ponha a chave nova, cada pessoa com 2FA refaz o enrolamento (`docs/break-glass-admin.md`, seção 3; sem o 2FA
+   ninguém abre o painel), entre no painel, **Configurações > E-mail > salve a senha do SMTP de novo** (pede a senha atual e um
+   código do autenticador) e use **enviar e-mail de teste**.
+3. Toda vez que a chave mudar, o e-mail de teste do painel faz parte da checagem.
+
+Guarde a chave fora do Easypanel (gerenciador de senhas).
+
+### Uma conferência no banco real: usuário SMTP antigo na trilha de auditoria
+
+Achado B-1 da Órion, resolvido no código (commit `16c147a`): a API passou a gravar na auditoria só se há usuário SMTP
+(`userConfigured`) e se ele mudou (`userChanged`). **Mas** linhas gravadas **antes** daquele commit levam o usuário em claro
+(chave `user` em `before` e `after`, ação `email_settings.updated`), e a trilha é imutável: o banco recusa `UPDATE`, `DELETE` e
+`TRUNCATE`, até para a credencial dona (gatilho da migração 0012; só quem desliga o gatilho consegue). Se a API do S1 nunca
+salvou SMTP pelo painel em produção antes do `16c147a`, o resultado abaixo é `0`. Eu não sei se aconteceu: só o banco de
+produção diz. Com a credencial dona, **só contando, sem mostrar o valor**:
+
+```sql
+SELECT count(*) AS linhas_com_usuario
+FROM admin_audit_log
+WHERE action = 'email_settings.updated'
+  AND ((before ->> 'user') IS NOT NULL OR (after ->> 'user') IS NOT NULL);
+```
+
+- `0`: nada a fazer.
+- Maior que 0: não "limpe" por impulso. O que vazou é um nome de usuário, nunca a senha (a senha nunca foi para a trilha). Se
+  for um nome comum, aceite e registre em `docs/decisoes-do-dono.md`. Se o provedor usa o próprio **token como usuário**
+  (alguns relays), gire a credencial no provedor: é isso que de fato desfaz a exposição. Apagar o valor da trilha é alterar um
+  registro imutável (desligar o gatilho com a credencial dona, `UPDATE`, religar): só com a Vega ou o Cronos, com backup antes,
+  anotando o que foi feito.
+
+### Ordem do primeiro deploy do S1 (API com migrações e painel juntos)
+
+A API nova, as migrações **0010 a 0021** e o painel novo formam um conjunto. O painel do `main` só funciona com a API nova (o
+aviso no topo de `docs/producao-passo-a-passo-dono.md` explica), e a API nova sem as migrações não atende a identidade. Em ordem:
+
+1. **Backup do banco**, restaurado ao menos uma vez (`docs/backup-e-restauracao.md`).
+2. **Variáveis** no `vuumbora-backend`, antes de publicar: `ADMIN_ALLOWED_ORIGINS`, `ADMIN_TOTP_ENCRYPTION_KEY`, `AUTH_PEPPER` e
+   `AUTH_JWT_SECRET` (diferentes entre si; `openssl rand -base64 48`), `LEGAL_DOCUMENTS_BASE_URL`, `AUTH_BCRYPT_CONCURRENCY` e
+   `AUTH_BCRYPT_QUEUE_MAX`. Apagar `AUTH_TERMS_VERSION` e `AUTH_PRIVACY_VERSION`.
+3. **Textos hospedados:** republicar o `vuumbora-frontend` com os 4 arquivos e conferir os hashes (passos 2 e 3 da seção dos
+   Termos). Não depende da API.
+4. **API e migrações no mesmo deploy.** Conferir `GET /healthz` = 200. Se for usar o papel restrito, siga "Duas credenciais de
+   banco" acima. Nunca deixe a API antiga com o banco já migrado, nem a nova sem as migrações: não provei a compatibilidade da
+   API antiga com o esquema novo.
+5. **`legal:publish`** dos 4 pares e conferir `GET /v1/legal/current` nos dois perfis.
+6. **Painel** (`vuumbora-admin`, branch `main`) logo em seguida, **na mesma janela**: o painel antigo
+   (`producao-admin-estavel`) foi feito para o login da API antiga, sem 2FA, e eu não o provei contra a API nova. Depois, o
+   passo 5 de `docs/producao-passo-a-passo-dono.md` (administrador com 2FA) e o e-mail de teste do painel.
+7. **Só então** divulgar o cadastro.
 
 ## 4. O endereço da API
 
