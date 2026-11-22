@@ -874,3 +874,24 @@ truncar. Consequência registrada: o banco não permite apagar essas linhas
 (trilha inviolável), então a base legal e o prazo de guarda do IP precisam
 constar na Política de Privacidade (finalidade: segurança e auditoria
 administrativa). Resposta ao ponto aberto da rodada 2 do Órion.
+
+## Plataforma dos aplicativos — decisão do dono (21/11/2026)
+
+**Quando chegar a fase de desenvolvimento dos aplicativos, eles serão feitos em
+React Native, para Android e iOS.** Uma só base de código para as duas lojas.
+
+- **Não muda a arquitetura:** o repositório já parte de React Native via Expo
+  (SDK 58, Expo Router, `packages/ui`, `packages/tokens`) e o plano
+  (`docs/plano-sistema-arquitetura.md` §4.1) já trata isso como base decidida.
+  Esta decisão a confirma e a torna do dono, não só da squad.
+- **Escopo, como entendido:** "aplicativo" são os dois apps, passageiro e
+  motorista. O painel admin e o site continuam web (SPA React e HTML), fora
+  desta decisão. A confirmar se o dono quis dizer outra coisa.
+- **Consequência que já pesa nas decisões abertas:** iOS exige conta de
+  desenvolvedor da Apple e passagem pela revisão da App Store, além da conta do
+  Google Play. É a decisão 17 (contas de loja), que continua em aberto e passa
+  a bloquear o teste em iPhone real e a entrega do S8.
+- **Consequência de teste:** como o produto roda nas duas plataformas, o
+  critério do S4 (corridas de campo com dois Android e um iPhone) e o teste de
+  localização em segundo plano passam a ser obrigatórios nas duas, não só no
+  Android.

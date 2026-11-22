@@ -21,23 +21,29 @@ nascimento).
   no login em vez de bloqueio duro. Log sem dado pessoal e sem `err.message`.
 - **Painel:** telas do 2FA, tela "E-mail" (só dono), cabeçalhos de segurança
   (CSP etc.) e correção do foco em todos os diálogos.
-- **CI e backup:** `.github/workflows/ci.yml` (nunca rodou no GitHub), backup
-  cifrado com restauração provada, guias de produção e de emergência.
+- **CI e backup:** `.github/workflows/ci.yml` (rodou no GitHub em 21/11/2026:
+  os 4 jobs passaram no `ff7af13`), backup cifrado com restauração provada,
+  guias de produção e de emergência.
 
 **Provado:** 255/255 testes da API em Postgres 18 recriado do zero (duas
-vezes); Íris validou de forma independente a versão anterior ao último ciclo
-de correções (`docs/veredito-iris-s1.md`); Órion auditou duas rodadas, 0
-críticos (`docs/revisao-seguranca-s1*.md`).
-**Não provado:** passada final da Íris sobre o código commitado; SMTP real
-com TLS; SPF/DKIM; CI no GitHub; imagem Docker; leitor de tela; Safari/iPhone;
-produção (papel restrito, proxy, `TRUST_PROXY`).
+vezes). **Íris, passada final: APROVADO** sobre `ff7af13`
+(`docs/veredito-iris-s1-final.md`): banco do zero, 255/255, tela "E-mail" em
+Chromium, WebKit e Firefox, CI verde. **Órion, três rodadas, 0 críticos**; a
+rodada 3 (`docs/revisao-seguranca-s1-rodada3.md`) deixou 1 alto (A-1, teto de
+concorrência do bcrypt), 5 médios e 7 baixos, em correção (A-1, B-1 e M-3 já
+delegados; M-1, M-2 e M-5 dependem de decisão do dono).
+**Não provado:** SMTP real com TLS; SPF/DKIM; imagem Docker (o `nginx -t` dos
+dois `nginx.conf` entrou no CI); leitor de tela; aparelho físico; produção
+(papel restrito, proxy, `TRUST_PROXY`).
 
 **Decisões do dono (21/11/2026, em `docs/decisoes-do-dono.md`):** contas
 separadas; e-mail verificado obrigatório; recuperação só por e-mail; e-mail
 repetido avisa que já existe; SMTP do próprio domínio, configurado no painel;
 bloqueio de 15 min do código do 2FA aceito, com procedimento de emergência;
 atraso progressivo no login; sem CAPTCHA por enquanto; idade mínima 18 anos;
-IP em claro na auditoria do admin.
+IP em claro na auditoria do admin. **Apps em React Native para Android e iOS**
+(registrado em `docs/decisoes-do-dono.md`; confirma a base Expo que já existe,
+e deixa a decisão 17, contas de loja da Apple e do Google, como bloqueio de iPhone real).
 
 **Decisões em aberto (do dono)**
 - Textos e versões dos Termos de Uso e da Política de Privacidade (o cadastro
@@ -61,6 +67,19 @@ IP em claro na auditoria do admin.
   S-3 (usuário SMTP em claro na auditoria) e demais sugestões.
 - Apps móveis (quando forem ligados à API): serializar a renovação do token,
   porque duas renovações simultâneas com o mesmo token derrubam a sessão.
+
+## Apps — estado real e plano (21/11/2026)
+
+**Fonte: [`docs/plano-apps-execucao.md`](docs/plano-apps-execucao.md)** (Nova, com
+18 fatias em 5 blocos). O bloco "Estado atual (2026-11-18)" mais abaixo está
+**defasado**: o app do passageiro tem cerca de 18 telas de protótipo e o do
+motorista é só esqueleto, mas **nenhum app fala com a API** (zero import de
+`@vuumbora/api-client`, zero `fetch`): "tela pronta" aqui é desenho navegável.
+Decisão do dono: React Native para Android e iOS.
+**Em andamento:** A1 (higiene e rotas protegidas, Lyra) e A2 (identidade e
+renovação de token em voo único no `api-client`, Vega). **Depois:** A5, telas de
+identidade (B1/B2), versões dos Termos (B3). **Do dono:** conta Apple
+Developer (empresa pede D-U-N-S), conta Expo, Google Play, textos legais.
 
 ## Admin v0 — ENTREGUE E APROVADO (20/11/2026)
 
