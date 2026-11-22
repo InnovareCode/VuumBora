@@ -384,6 +384,18 @@ recusa ou deixa a oferta vencer já viu o que ela mostra. Por isso o dono decidi
 Vale para o contrato da oferta (`RideOffer`, fatia F08) e para a tela de
 oferta do motorista (M06).
 
+### Complemento: o destino na oferta também é só o bairro ✅ (decidido pelo dono em 22/11/2026)
+
+A Nova apontou, na reconferência da F08, que o destino tem o mesmo problema
+do embarque: na volta, costuma ser a casa do passageiro, e a oferta chega
+também a quem recusa. O dono decidiu igual ao embarque:
+
+- **Antes do aceite**, o motorista vê **o bairro do destino** (e, se o mapa
+  precisar, um ponto arredondado). A decisão de 18/11 continua valendo: ele
+  sabe para onde vai, o que segue sendo o diferencial para o motorista.
+- **Depois do aceite**, o endereço completo e o ponto exato do destino
+  aparecem **só para o motorista atribuído**.
+
 ## Decisão de produto: só o passageiro avalia (18/11/2026)
 
 Confirmado pelo dono. O app já implementa assim — a tela de corrida
