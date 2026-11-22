@@ -1,3 +1,7 @@
+# relatorios com achados de seguranca AINDA ABERTOS (o repositorio e publico: so entram no git depois de corrigidos
+# ou de o repositorio virar privado)
+docs/privado/
+
 # estado de sessao da squad (nunca versionar)
 .missao-atual
 .claude/settings.local.json
