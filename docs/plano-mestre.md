@@ -172,7 +172,7 @@ Toda tela, nova ou existente, só é "pronta" com **cada** item medido (não lid
 3. **Superfície premium:** cartões em `SurfaceRaised` com borda iluminada, não o "chapado" legado; amarelo **só em ação**;
    brilho de topo onde a direção de arte pede (`docs/auditoria-premium.md:20-27, 219-239`). Só tokens: o
    `check:boundaries` já barra HEX solto.
-4. **Tipografia:** Poppins nas escalas do design system; nenhum texto abaixo do corpo mínimo do kit.
+4. **Tipografia:** Plus Jakarta Sans nos apps e no painel (decisão do dono de 22/11/2026; o site usa Poppins), nas escalas do design system, com algarismos tabulares em todo número que muda; nenhum texto abaixo do corpo mínimo do kit.
 5. **Acessibilidade:** alvo de toque ≥ 44 pt; contraste WCAG AA medido; anel de foco **de teclado** visível nos três motores;
    ordem de Tab igual à visual (lição do Admin v0, `PROGRESSO.md:192-195`); erro de campo anunciado.
 6. **Copy:** "candidatura" ≠ "cadastro"; "conta" ≠ "cadastro" no motorista; nenhum percentual de taxa; suporte humano de

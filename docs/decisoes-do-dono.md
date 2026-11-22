@@ -968,3 +968,6 @@ Sobre as decisões PP-2 a PP-9 de `docs/padrao-premium-telas.md` §0, tomadas pa
 **Do dono, em aberto:** **PP-1, a fonte dos apps.** O registro diz Plus Jakarta Sans (linha da tabela de 18/11 acima, "Plus
 Jakarta Sans confirmada") e é o que os apps e o painel carregam; o site usa Poppins, a pedido do dono em 19/11. Recomendação:
 manter Plus Jakarta Sans nos apps (tem algarismos tabulares para preço, tempo e placa) e Poppins no site.
+
+**PP-1 — decidido pelo dono em 22/11/2026:** apps e painel com **Plus Jakarta Sans**; o site continua com **Poppins** ("no app
+diferente do site"). Vale para todas as fichas de tela e para o portão de qualidade (algarismos tabulares em todo número que muda).
