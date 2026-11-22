@@ -11,3 +11,21 @@ const DRIVER_APPLICATION_DECISION_ROLES: readonly AdminRole[] = ['dono', 'operac
 export function canDecideDriverApplications(role: AdminRole | null | undefined): boolean {
   return !!role && DRIVER_APPLICATION_DECISION_ROLES.includes(role);
 }
+
+/**
+ * Espelha `requireAdminRole('dono')` em `apps/api/src/routes/admin-user-route.ts` — a gestão de usuários e papéis é
+ * só do `dono`. O backend devolve 403 para os demais; isto só evita oferecer uma tela que o papel não abre.
+ */
+export function canManageAdminUsers(role: AdminRole | null | undefined): boolean {
+  return role === 'dono';
+}
+
+/**
+ * Espelha `roleRequiresTwoFactor` em `apps/api/src/domain/two-factor.ts`: o servidor só exige (e checa) o TOTP de
+ * quem está chamando quando o papel ENVOLVIDO na mutação (criar/promover, ou o papel ATUAL ao reativar) é
+ * `dono`/`financeiro` (revisão S1 rodada 3g, ponto 3 de docs/contrato-admin-usuarios.md). A tela usa isto só para
+ * decidir se mostra o campo de código — quem protege de verdade é o 401 `invalid_second_factor` do servidor.
+ */
+export function roleRequiresSecondFactorGate(role: AdminRole): boolean {
+  return role === 'dono' || role === 'financeiro';
+}

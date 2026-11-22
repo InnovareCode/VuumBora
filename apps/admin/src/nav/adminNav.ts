@@ -1,4 +1,4 @@
-import { Mail, ShieldCheck, UserCheck } from 'lucide-react';
+import { Mail, ShieldCheck, UserCheck, Users } from 'lucide-react';
 import type { NavGroup, NavItem } from './types';
 import { flattenNav, matchNavItem } from './types';
 
@@ -37,6 +37,15 @@ export const ADMIN_NAV: readonly NavGroup[] = [
   {
     title: 'Configurações',
     items: [
+      {
+        label: 'Usuários',
+        href: '/users',
+        icon: Users,
+        hint: 'Contas do painel administrativo e os papéis de cada uma',
+        // Espelha `requireAdminRole('dono')` em apps/api/src/routes/admin-user-route.ts (ver também
+        // `lib/permissions.ts` → `canManageAdminUsers`). O backend devolve 403 para os demais.
+        roles: ['dono'],
+      },
       {
         label: 'E-mail',
         href: '/email',

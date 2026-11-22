@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { AppShell } from './components/AppShell';
 import { LoginPage } from './pages/LoginPage';
+import { ActivateAccountPage } from './pages/ActivateAccountPage';
 import { DriverApplicationsListPage } from './pages/DriverApplicationsListPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { LoadingState } from './components/RequestState';
@@ -19,6 +20,9 @@ const SecuritySettingsPage = lazy(() =>
 );
 
 const EmailSettingsPage = lazy(() => import('./pages/EmailSettingsPage').then((m) => ({ default: m.EmailSettingsPage })));
+
+// Gestão de usuários: só o papel `dono` abre, e não é a primeira tela de ninguém — lazy por rota.
+const UsersPage = lazy(() => import('./pages/UsersPage').then((m) => ({ default: m.UsersPage })));
 
 /**
  * Rota de layout: decide entre checando/deslogado/logado e, só quando
@@ -42,8 +46,19 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={status === 'signedIn' ? <Navigate to={postLoginPath ?? '/driver-applications'} replace /> : <LoginPage />} />
+      {/* Pública, sem cookie (docs/contrato-admin-usuarios.md §6) — mas se a pessoa já está logada, não faz
+          sentido oferecer "ativar conta" de novo; manda para a área de sempre, igual `/login` faz. */}
+      <Route path="/activate" element={status === 'signedIn' ? <Navigate to="/" replace /> : <ActivateAccountPage />} />
       <Route element={<RequireAuth />}>
         <Route path="/driver-applications" element={<DriverApplicationsListPage />} />
+        <Route
+          path="/users"
+          element={
+            <Suspense fallback={<LoadingState label="Carregando…" />}>
+              <UsersPage />
+            </Suspense>
+          }
+        />
         <Route
           path="/driver-applications/:id"
           element={

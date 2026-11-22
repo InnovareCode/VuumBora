@@ -2,15 +2,7 @@ import { ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { AdminRole } from '../api/types';
 import type { NavItem } from '../nav/types';
-
-/** Rótulo em português de cada papel — só para mensagem de tela, não é lógica de negócio. */
-const ROLE_LABEL: Record<AdminRole, string> = {
-  dono: 'Dono',
-  operacao: 'Operação',
-  revisor_documentos: 'Revisor de documentos',
-  financeiro: 'Financeiro',
-  suporte: 'Suporte',
-};
+import { ROLE_LABEL } from '../lib/roleLabel';
 
 /**
  * Tela mostrada quando o papel logado digita/acessa direto a URL de uma área

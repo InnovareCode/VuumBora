@@ -49,10 +49,20 @@ export function EnrollmentStep({
   challenge,
   onDone,
   onBackToCredentials,
+  initialEnrollmentToken,
 }: {
   readonly challenge: SecondFactorChallenge;
   readonly onDone: (admin: AdminUser, origin: DataOrigin) => void;
   readonly onBackToCredentials: (message?: string) => void;
+  /**
+   * Primeiro acesso de quem acabou de ativar a conta (`/auth/activate`,
+   * docs/contrato-admin-usuarios.md §6): o `enrollmentToken` já está em mãos
+   * (a resposta da ativação o entregou), então a tela não pede de novo o
+   * código que o responsável técnico mandaria por fora — pula direto para o
+   * QR, como se tivesse acabado de digitá-lo. Ausente (login normal): fluxo
+   * igual a sempre, pedindo o campo.
+   */
+  readonly initialEnrollmentToken?: string;
 }) {
   const api = useApi();
   const headingId = useId();
@@ -60,8 +70,8 @@ export function EnrollmentStep({
   const errorId = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const tokenRef = useRef<HTMLInputElement>(null);
-  const [phase, setPhase] = useState<Phase>({ name: 'activation' });
-  const [enrollmentToken, setEnrollmentToken] = useState('');
+  const [phase, setPhase] = useState<Phase>(initialEnrollmentToken ? { name: 'restarting' } : { name: 'activation' });
+  const [enrollmentToken, setEnrollmentToken] = useState(initialEnrollmentToken ?? '');
   const [submitting, setSubmitting] = useState(false);
   const { feedback, report, clear, locked, remaining } = useTwoFactorFeedback();
 
@@ -81,6 +91,30 @@ export function EnrollmentStep({
     const result = await api.auth.startEnrollment({ challengeToken: challenge.challengeToken, enrollmentToken });
     return result.ok ? { enrollment: result.data } : { error: result.error };
   }, [api, challenge.challengeToken, enrollmentToken]);
+
+  // `initialEnrollmentToken`: pula o campo de "digite o código de ativação" e já pede o QR com o token em mãos.
+  useEffect(() => {
+    if (!initialEnrollmentToken) return;
+    let cancelled = false;
+    (async () => {
+      const outcome = await start();
+      if (cancelled) return;
+      if ('enrollment' in outcome) {
+        setPhase({ name: 'scan', enrollment: outcome.enrollment, notice: null });
+        return;
+      }
+      if (outcome.error.kind === 'challenge_invalid') {
+        expired();
+        return;
+      }
+      report(outcome.error);
+      setPhase({ name: 'activation' });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só uma vez, no primeiro acesso vindo da ativação.
+  }, []);
 
   async function handleActivation(event: FormEvent) {
     event.preventDefault();
