@@ -1,0 +1,4 @@
+# Linha de base e saída são estado local/de execução, não código. Ver docs/qualidade-tela.md
+# para onde a linha de base "de verdade" (compartilhada com o time) deveria morar.
+.baseline/
+.saida/
