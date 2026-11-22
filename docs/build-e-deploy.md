@@ -25,20 +25,32 @@ descreve o caminho manual, hoje.
    `app.config.ts`). EAS builda sem eles (usa placeholder padrão do Expo), mas
    não é o artefato final de loja.
 
-## Perfil de build e guarda de identidade (o que o `production` faz)
+## Perfil de build e guarda de identidade (o que `preview`/`production` fazem)
 
-O `metro.config.js` de cada app decide o perfil (`VUUMBORA_BUILD_PROFILE`, preenchido pelo `eas.json`) e, em `production`:
+O `metro.config.js` de cada app decide o perfil (`VUUMBORA_BUILD_PROFILE`, preenchido pelo `eas.json`) e:
 
-- **tira as telas de desenvolvimento do bundle**: tudo sob `app/(dev)/` (hoje `catalogo` e `mapbox-check`, em `passenger`);
-- **aborta se a identidade for simulada**: `IDENTITY_MODE` precisa ser `'http'`. Hoje o passageiro está em `'mock'` e o
-  motorista não tem `src/identity/`. Resultado: `npx eas build --platform android --profile production` **falha** nos dois
-  apps enquanto não houver identidade real (B4/A3 no passageiro; B2 no motorista; ver `docs/plano-apps-execucao.md`).
-  Isso segue do código do Metro; o comportamento num build real do EAS não foi testado (a confirmar).
+- **`production` tira as telas de desenvolvimento do bundle**: tudo sob `app/(dev)/` (hoje `catalogo` e `mapbox-check`,
+  em `passenger`);
+- **`preview` e `production` exigem identidade real**: o modo (`mock`/`http`) é escolhido por TROCA DE MÓDULO em tempo
+  de build — `identityClient.ts` importa `./mode`, e o `resolver.resolveRequest` do `metro.config.js` o redireciona para
+  `./mode.mock.ts` (padrão de `development`, dados de demonstração) ou `./mode.http.ts` (`preview`/`production`, sempre;
+  em `development`, só com `VUUMBORA_IDENTITY=http` no ambiente real). Fora de `development`, o resolver SÓ aponta para
+  `mode.http`, sem exceção — `npx eas build --platform android --profile preview|production` **aborta** se isso não
+  valer (bug de configuração, não um caso esperado desde a F02/B4: os dois apps já têm `mode.http.ts`). Isso segue do
+  código do Metro; o comportamento num build real do EAS não foi testado (a confirmar).
+- **`preview` e `production` exigem `EXPO_PUBLIC_API_URL` em `https:`**: a build aborta sem isso, sempre — senha e
+  tokens nunca podem viajar em texto claro por causa de uma URL errada numa build que sai do laptop.
 
-Escape temporário, só para exportar e provar a A1: `VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION=1` (só o valor `1`; cada uso
-imprime aviso). Não pode ir para a loja. Como o EAS injeta essa variável no build: a confirmar (o Metro só lê
-`process.env`, verificado; o caminho pelo painel do EAS não foi testado). Detalhes e linhas: `docs/mapbox.md`, seção
-"Perfil de build e telas de desenvolvimento".
+Não existe mais escape para identidade simulada fora de `development` (`VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION`
+foi removido na F02/B4, 22/11/2026) — nenhuma variável de ambiente libera `preview`/`production` com mock. Detalhes e
+arquivos: `docs/mapbox.md`, seção "Perfil de build e telas de desenvolvimento".
+
+## `eas submit` travado fora de `production`
+
+`eas.json` só declara `submit.production` (Android e iOS); `eas submit --profile development|preview` falha porque o
+perfil não existe no arquivo — não há lógica extra para isso, é o próprio comportamento do EAS CLI sem o perfil
+declarado. Credenciais de loja (service account do Google Play, API key da App Store) ainda não foram configuradas
+(a confirmar quando o dono tiver as contas).
 
 ## Build Android (.aab)
 

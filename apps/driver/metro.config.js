@@ -33,8 +33,10 @@ expoEnv.load(path.resolve(__dirname, '../..'));
 //     build de loja que esqueça a variável cai em `production`, nunca em `development`.
 //   • Sem variável E sem NODE_ENV: só `development` se a sessão for interativa (terminal, sem CI). Numa build
 //     não interativa isto ABORTA e pede o perfil explícito — mesma política de apps/admin/vite.config.ts.
-//   • `preview` (distribuição interna) NÃO esconde telas de dev nem exige identidade real; uma build interna
-//     que rode com NODE_ENV=production precisa declarar `VUUMBORA_BUILD_PROFILE=preview` para não cair em production.
+//   • `preview` (distribuição interna) NÃO esconde telas de dev, mas (F02/B4) EXIGE identidade real
+//     (`IDENTITY_MODE = 'http'`) e `EXPO_PUBLIC_API_URL` em https, igual à `production` — é o que o dono instala no
+//     aparelho para testar de verdade, não pode levar login simulado. Uma build interna que rode com
+//     NODE_ENV=production precisa declarar `VUUMBORA_BUILD_PROFILE=preview` para não cair em production.
 //
 // De ONDE a decisão lê: só do AMBIENTE REAL do processo (eas.json, CI, o terminal de quem roda o build) — o perfil é
 // decisão de quem constrói, não de um arquivo que pode ter ficado na máquina. Qualquer `VUUMBORA_*` vindo de `.env*`
@@ -53,7 +55,7 @@ function filled(value) {
 const BUILD_ENV_PREFIX = 'VUUMBORA_';
 
 /**
- * O ambiente que a decisão do perfil e o escape podem ler: uma cópia de `env` em que cada `VUUMBORA_*` vale o que tinha
+ * O ambiente que a decisão do perfil pode ler: uma cópia de `env` em que cada `VUUMBORA_*` vale o que tinha
  * ANTES de qualquer `.env` ser carregado (`getOriginalEnvValue` do `@expo/env`, que guarda o valor original de toda chave
  * que um arquivo `.env*` tocou — tanto as que o CLI carregou antes deste arquivo quanto as do `load()` acima). Chave que só
  * existe por causa de arquivo some da cópia. As outras variáveis (`NODE_ENV`, `EAS_BUILD_PROFILE`...) passam como estão.
@@ -87,8 +89,8 @@ function buildEnvFrom(env, getOriginalEnvValue, warn) {
   }
   if (ignored.length > 0) {
     warn(
-      `[vuumbora] ATENÇÃO: ${ignored.sort().join(', ')} veio de um arquivo .env e foi IGNORADA. O perfil de build e o escape ` +
-        'só valem se vierem do AMBIENTE do processo (eas.json, CI ou o terminal que roda o build), nunca de arquivo.',
+      `[vuumbora] ATENÇÃO: ${ignored.sort().join(', ')} veio de um arquivo .env e foi IGNORADA. O perfil de build ` +
+        'só vale se vier do AMBIENTE do processo (eas.json, CI ou o terminal que roda o build), nunca de arquivo.',
     );
   }
   return trusted;
@@ -109,6 +111,15 @@ function resolveBuildProfile(env, interactive) {
       throw new Error(
         'VUUMBORA_BUILD_PROFILE=development com NODE_ENV=production: isto é uma build de release com as telas de ' +
           'desenvolvimento e a identidade simulada dentro. Use VUUMBORA_BUILD_PROFILE=production (loja) ou preview (interna).',
+      );
+    }
+    // Espelho da guarda acima (rodada 3f do Órion): preview/production com NODE_ENV de desenvolvimento
+    // (ex.: `expo export --dev`) gera um bundle rotulado de release com __DEV__ verdadeiro, que liga
+    // allowInsecureHttp e o gancho de depuração da identidade. Aborta em vez de sair "quase produção".
+    if (explicit !== 'development' && (nodeEnv === 'development' || nodeEnv === 'test')) {
+      throw new Error(
+        `VUUMBORA_BUILD_PROFILE=${explicit} com NODE_ENV=${nodeEnv} (por exemplo, expo export --dev): uma build de ` +
+          'release não pode sair com __DEV__ ligado. Rode sem --dev, ou use VUUMBORA_BUILD_PROFILE=development.',
       );
     }
     if (explicit !== 'production' && eas === 'production') {
@@ -136,56 +147,79 @@ function resolveBuildProfile(env, interactive) {
 }
 
 // ───────────────────────────────────────────────────────────────────────────────────────────────
-// Guarda de identidade: build `production` com identidade SIMULADA aborta (mesmo desenho do
-// `failBuildOnMockApi` de apps/admin/vite.config.ts).
+// Modo da identidade (F02/B4) — TROCA DE MÓDULO, não um `if` em runtime. `identityClient.ts` importa
+// `./mode`; este resolver intercepta ESSE pedido específico e o redireciona para `./mode.mock` ou
+// `./mode.http` ANTES do Metro tentar resolver `./mode` de verdade — o arquivo perdedor nunca entra no
+// grafo de dependências (ver o porquê em src/identity/mode.ts: um `if (mode === 'mock')` dentro de um
+// arquivo só NÃO tira o código do branch morto do bundle, porque `identity.mode` só se resolve em
+// runtime; a troca de módulo tira de verdade, em tempo de build).
 //
-// A fonte do modo é a declaração `const IDENTITY_MODE = '...'` de `src/identity/identityClient.ts` — uma
-// só, lida daqui por texto, então a guarda e o app não podem divergir. Só passa com o literal 'http'.
-// Arquivo ausente (o motorista ainda não tem cliente de identidade: a sessão dele é de demonstração),
-// declaração duplicada ou que não seja um literal ('mock', 'http') ⇒ modo DESCONHECIDO ⇒ trata como mock.
-// Quem trocar a forma da declaração (B4) vê o aborto e atualiza esta guarda junto.
-//
-// ESCAPE TEMPORÁRIO — VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION=1.
-// Existe só porque o export de produção da A1 precisa seguir verde enquanto `IDENTITY_MODE` é fixo em
-// 'mock' (passageiro: troca na A3/B4; motorista: A2). NUNCA numa build de loja. Só o valor exato `1` vale
-// (`true`, `yes`, `0` ou vazio NÃO liberam), e cada uso imprime um aviso. REMOVER: quando passageiro e
-// motorista tiverem `IDENTITY_MODE = 'http'`, apague `MOCK_IDENTITY_ESCAPE` e o ramo que o lê.
+// `development`: `./mode.mock` (dado de demonstração, sem API nem banco — é o que a F09/Íris precisam
+// para capturas e baterias). `preview`/`production`: SEMPRE `./mode.http`, sem escape — identidade
+// simulada não autentica ninguém numa build que sai do laptop. Em `development`, `VUUMBORA_IDENTITY=http`
+// no ambiente REAL (nunca em `.env`, mesma regra do perfil de build) força `./mode.http` para testar
+// contra uma API local.
 // ───────────────────────────────────────────────────────────────────────────────────────────────
-const IDENTITY_CLIENT_FILE = path.join('src', 'identity', 'identityClient.ts');
-const MOCK_IDENTITY_ESCAPE = 'VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION';
+const IDENTITY_MODULE_SPECIFIER = './mode';
+const IDENTITY_CLIENT_FILE_ABS = path.join(__dirname, 'src', 'identity', 'identityClient.ts');
 
-function readIdentityMode(appRoot) {
-  let source;
-  try {
-    source = fs.readFileSync(path.join(appRoot, IDENTITY_CLIENT_FILE), 'utf8');
-  } catch {
-    return undefined;
+function resolveIdentityModeTarget(profile, env) {
+  if (profile === 'preview' || profile === 'production') return 'mode.http';
+
+  const explicit = filled(env.VUUMBORA_IDENTITY);
+  if (explicit === undefined) return 'mode.mock';
+  if (explicit !== 'http' && explicit !== 'mock') {
+    throw new Error(`VUUMBORA_IDENTITY="${explicit}" é inválida. Use "http" ou "mock" (ausente = mock).`);
   }
-  const declaration = /^[ \t]*(?:export[ \t]+)?const[ \t]+IDENTITY_MODE[ \t]*(?::[^=\n]+)?=[ \t]*(['"])([A-Za-z_-]+)\1/gm;
-  const found = [...source.matchAll(declaration)];
-  return found.length === 1 ? found[0][2] : undefined;
+  return explicit === 'http' ? 'mode.http' : 'mode.mock';
 }
 
-function assertIdentityIsNotMock(appRoot, env, warn) {
-  const mode = readIdentityMode(appRoot);
-  if (mode === 'http') return;
+function identityModeFileExists(target) {
+  return fs.existsSync(path.join(__dirname, 'src', 'identity', `${target}.ts`));
+}
 
-  const reason =
-    mode === undefined
-      ? `não foi possível ler um único \`const IDENTITY_MODE = '...'\` literal em ${IDENTITY_CLIENT_FILE} (arquivo ausente ou fora do formato); sem isso o modo é tratado como simulado`
-      : `IDENTITY_MODE vale '${mode}' em ${IDENTITY_CLIENT_FILE}`;
-
-  if (env[MOCK_IDENTITY_ESCAPE] === '1') {
-    warn(
-      `[vuumbora] ATENÇÃO: build "production" com identidade SIMULADA liberada por ${MOCK_IDENTITY_ESCAPE}=1 (${reason}). ` +
-        'Isto NÃO pode ir para a loja: o login não autentica ninguém. Escape temporário até a identidade real (A3/B4; motorista: A2).',
-    );
-    return;
-  }
+/**
+ * Guarda de identidade (F02/B4): build `preview` OU `production` cujo resolver NÃO aponte `./mode` para
+ * `./mode.http` ABORTA, sem escape (mesmo desenho do `failBuildOnMockApi` de apps/admin/vite.config.ts). O
+ * escape temporário `VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION`, que existia aqui enquanto os dois apps
+ * tinham `IDENTITY_MODE = 'mock'` fixo, morreu nesta fatia — não volta a existir sem decisão explícita.
+ * Por construção `resolveIdentityModeTarget` já garante isto para estes dois perfis; esta função é o
+ * cinto-e-suspensório que falha alto se algum dia isso deixar de ser verdade.
+ */
+function assertIdentityModeIsHttp(target, profile) {
+  if (target === 'mode.http') return;
   throw new Error(
-    `Build "production" abortada: ${reason}. A build de loja não pode levar identidade simulada. ` +
-      `Troque para identidade real ('http'). Só para exportar/provar a A1 e SÓ enquanto a identidade real não chega: ${MOCK_IDENTITY_ESCAPE}=1.`,
+    `Build "${profile}" abortada: o resolver de identidade apontaria "./mode" para "./${target}.ts", não ` +
+      '"./mode.http.ts". Preview e production não podem levar identidade simulada — sem escape: ' +
+      'VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION não existe mais (F02).',
   );
+}
+
+/**
+ * Guarda de HTTPS (F02/B4): build `preview` ou `production` só pode falar com a API em `https:` — a build ABORTA
+ * sem isso, para senha e tokens nunca viajarem em texto claro por causa de uma `EXPO_PUBLIC_API_URL` errada.
+ * `EXPO_PUBLIC_API_URL` é pública (vai dentro do pacote; ver docs/producao-passo-a-passo-dono.md) e vem do
+ * ambiente de cada perfil no EAS — nunca um valor fixo aqui.
+ */
+function assertApiUrlIsHttps(env, profile) {
+  const apiUrl = filled(env.EXPO_PUBLIC_API_URL);
+  if (apiUrl === undefined) {
+    throw new Error(
+      `Build "${profile}" abortada: EXPO_PUBLIC_API_URL não está definida. Defina-a (https) no ambiente do perfil "${profile}" no EAS.`,
+    );
+  }
+  let parsed;
+  try {
+    parsed = new URL(apiUrl);
+  } catch {
+    throw new Error(`Build "${profile}" abortada: EXPO_PUBLIC_API_URL="${apiUrl}" não é uma URL válida.`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error(
+      `Build "${profile}" abortada: EXPO_PUBLIC_API_URL deve ser https (recebido "${parsed.protocol}"). ` +
+        'Preview e production não podem falar com a API em texto claro.',
+    );
+  }
 }
 
 function escapeRegExp(text) {
@@ -196,11 +230,32 @@ const buildEnv = buildEnvFrom(process.env, expoEnv.getOriginalEnvValue, (message
 
 const { profile, source } = resolveBuildProfile(buildEnv, Boolean(process.stdout.isTTY) && !process.env.CI);
 
+const identityModeTarget = resolveIdentityModeTarget(profile, buildEnv);
+if (!identityModeFileExists(identityModeTarget)) {
+  throw new Error(
+    `src/identity/${identityModeTarget}.ts não existe — o resolver de identidade não tem para onde redirecionar "./mode".`,
+  );
+}
+
 const config = getDefaultConfig(__dirname);
 
-if (profile === 'production') {
-  assertIdentityIsNotMock(__dirname, buildEnv, (message) => console.warn(message));
+// Intercepta SÓ o pedido "./mode" feito por identityClient.ts; tudo o mais segue a resolução padrão do Metro
+// (`context.resolveRequest` é o algoritmo default — delegar para ele em vez de reimplementar resolução).
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === IDENTITY_MODULE_SPECIFIER && path.normalize(context.originModulePath) === IDENTITY_CLIENT_FILE_ABS) {
+    return context.resolveRequest(context, `./${identityModeTarget}`, platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
 
+if (profile === 'preview' || profile === 'production') {
+  // F02/B4: preview e production exigem identidade real e API em https — só production esconde as telas de dev
+  // (abaixo). Preview é o que o dono instala no aparelho para testar de verdade.
+  assertIdentityModeIsHttp(identityModeTarget, profile);
+  assertApiUrlIsHttps(buildEnv, profile);
+}
+
+if (profile === 'production') {
   // `resolver.blockList` também alimenta o mapa de arquivos do Metro (createFileMap), que é de onde
   // o Expo Router monta a lista de rotas — por isso a rota some, não só o import. A convenção é a pasta
   // `app/(dev)/` (em qualquer nível): tela de desenvolvimento nova nasce lá e já fica fora da loja, sem
