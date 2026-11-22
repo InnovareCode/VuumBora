@@ -11,17 +11,17 @@
  *    desmarca os aceites: o app NUNCA reenvia sozinho.
  *
  * Em `mode: 'mock'` o texto é PROVISÓRIO e fica marcado (o mock tem `url` `.invalid` e `sha256` zerado). Em `http` a
- * tela abre o texto da `url` (`openLegalDocument`).
+ * tela baixa o texto da `url`, confere o SHA-256 dos bytes com o `sha256` da resposta e SÓ ENTÃO o exibe
+ * (`VerifiedTextView`, `@vuumbora/ui`; B-6 da revisão de segurança): este arquivo não entrega `url` a ninguém.
  */
 import { useEffect, useMemo } from 'react';
-import { Linking } from 'react-native';
 import { create } from 'zustand';
 import type { ApiError } from '@vuumbora/api-client';
 import type { CurrentLegal } from '@vuumbora/api-client/identity';
 import { describeAuthError, type AuthErrorView } from '../identity/authErrors';
 import { identity } from '../identity/identityClient';
 import { safeCall } from '../identity/safeCall';
-import { openableUrl, toLegalDocuments, type LegalDocuments, type LegalDocumentView } from './legalModel';
+import { toLegalDocuments, type LegalDocuments } from './legalModel';
 
 export { LEGAL_LABELS, consentPayload, type LegalDocuments, type LegalDocumentView, type LegalKind } from './legalModel';
 
@@ -149,24 +149,4 @@ export function refreshLegalAfterOutdated(error: ApiError): void {
   const store = useLegalStore.getState();
   if (error.current !== undefined) store.adopt(error.current);
   else void store.load();
-}
-
-export type OpenDocumentResult = 'opened' | 'unavailable';
-
-/**
- * Abre o texto de uma versão no navegador do sistema. Único ponto que entrega `url` ao sistema.
- *
- * TODO(A3 · B-6 da Órion): ANTES de abrir, baixar o texto de `document.url`, calcular o SHA-256 (A3 traz o
- * `expo-crypto`) e comparar com `document.sha256`; divergência = não mostrar o texto e avisar. Hoje NADA confere o
- * hash: o `url` é aberto como a API o entregou (por isso só `https`).
- */
-export async function openLegalDocument(document: LegalDocumentView): Promise<OpenDocumentResult> {
-  const url = openableUrl(document.url, __DEV__);
-  if (url === null) return 'unavailable';
-  try {
-    await Linking.openURL(url);
-    return 'opened';
-  } catch {
-    return 'unavailable';
-  }
 }

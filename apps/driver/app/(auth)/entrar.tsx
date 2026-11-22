@@ -22,7 +22,7 @@ import { useAuthFlowStore } from '../../src/identity/authFlowStore';
 import { identity } from '../../src/identity/identityClient';
 import { safeCall } from '../../src/identity/safeCall';
 import { useRetryLock } from '../../src/identity/useRetryLock';
-import { useFocusAfterRender } from '../../src/lib/focusAfterRender';
+import { useFocusAfterRender, useFocusWhenScreenFocused } from '../../src/lib/focusAfterRender';
 import { loginSchema, type LoginFormValues } from '../../src/schemas/authSchemas';
 import { fieldErrorProps } from '../../src/lib/fieldErrorProps';
 import { useSession } from '../../src/session/SessionProvider';
@@ -75,6 +75,13 @@ export default function EntrarScreen() {
   useEffect(() => {
     if (loginHint !== null) setValue('identifier', loginHint);
   }, [loginHint, setValue]);
+
+  // Chegou com o e-mail já preenchido ("Entrar na minha conta" do cadastro, e-mail confirmado, senha trocada): leva o
+  // foco ao primeiro campo. Sem isto ele fica no <body> da tela que saiu (N6 da passada 4 da Íris).
+  useFocusWhenScreenFocused(
+    () => setFocus('identifier'),
+    () => useAuthFlowStore.getState().loginHint !== null,
+  );
 
   async function onSubmit(values: LoginFormValues) {
     if (submitting || locked) return;

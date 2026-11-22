@@ -125,3 +125,11 @@ export { driverDemoAvatarSource } from './demoAssets';
 
 export { OnboardingBackground } from './OnboardingBackground';
 export type { OnboardingBackgroundProps } from './OnboardingBackground';
+
+// Camada do APARELHO compartilhada pelos dois apps (A3/B-6; não é visual): cofre da sessão e "baixar e conferir".
+// Cada app cria o seu cofre uma vez, em `src/identity/identityClient.ts`; a lógica fica em `src/device/`.
+export { createDeviceSessionStorage } from './device/deviceSessionStorage';
+export type { DeviceAccountType } from './device/sessionKeys';
+export type { GuardedSessionStorage } from './device/sessionVault';
+export { VerifiedTextView } from './VerifiedTextView';
+export type { VerifiedTextViewProps } from './VerifiedTextView';

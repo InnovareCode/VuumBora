@@ -51,8 +51,8 @@ export interface LegalDocumentView {
   /** Endereço do texto daquela versão (imutável). No mock é `.invalid`: não abre. */
   readonly url: string;
   /**
-   * SHA-256 do arquivo em `url`. Guardado para a conferência da A3 (B-6 da Órion, ver `openLegalDocument`); hoje nada
-   * o compara. No mock é zerado (fictício).
+   * SHA-256 (hexadecimal minúsculo) do arquivo em `url`. A tela só EXIBE o texto baixado se os bytes baterem com ele
+   * (B-6 da Órion, ver `VerifiedTextView` em `@vuumbora/ui`). No mock é zerado (fictício) e o texto é o provisório.
    */
   readonly sha256: string;
   /**
@@ -141,17 +141,6 @@ export function reacceptPayload(shown: readonly LegalDocumentView[]): AcceptCons
     ...(terms !== undefined ? { termsVersion: terms.version } : {}),
     ...(privacy !== undefined ? { privacyVersion: privacy.version } : {}),
   };
-}
-
-/**
- * Só abre texto servido por `https` (e `http` em desenvolvimento, onde a API local pode não ter TLS). O `api-client` já
- * recusou esquemas como `javascript:`; isto é a segunda trava, na hora de entregar o endereço ao sistema.
- */
-export function openableUrl(url: string, allowHttp: boolean): string | null {
-  const lower = url.slice(0, 8).toLowerCase();
-  if (lower === 'https://') return url;
-  if (allowHttp && lower.startsWith('http://')) return url;
-  return null;
 }
 
 /** "os Termos de Uso", "a Política de Privacidade" ou "os Termos de Uso e a Política de Privacidade". */

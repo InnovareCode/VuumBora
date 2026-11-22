@@ -1,7 +1,7 @@
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { InlineAlert, MockBadge, SecondaryButton, theme, textStyle } from '@vuumbora/ui';
-import { openLegalDocument, type LegalDocumentView } from '../../legal/legalDocuments';
+import { MockBadge, VerifiedTextView, theme, textStyle } from '@vuumbora/ui';
+import type { LegalDocumentView } from '../../legal/legalDocuments';
 
 export interface LegalDocumentBodyProps {
   readonly document: LegalDocumentView;
@@ -13,19 +13,13 @@ export interface LegalDocumentBodyProps {
  * Usada na tela pública do documento (`/termos`, `/privacidade`) e na tela de reaceite, que abre o mesmo texto sem
  * rota (as rotas de `(auth)` não existem com sessão).
  *
- *  - texto PROVISÓRIO (fonte = mock): mostra o texto marcado, com o selo "texto provisório";
- *  - texto real (fonte = API): o texto completo vive na `url` daquela versão; o botão a abre. A tela não finge que o
- *    texto está aqui dentro. A conferência do SHA-256 antes de abrir é da A3 (ver `openLegalDocument`).
+ *  - texto PROVISÓRIO (fonte = mock): mostra o texto marcado, com o selo "texto provisório"; não baixa nada;
+ *  - texto real (fonte = API): `VerifiedTextView` baixa o arquivo da `url` daquela versão, confere o SHA-256 dos bytes
+ *    com o `sha256` da MESMA resposta e só então o mostra, dentro do app (B-6 da revisão de segurança). Divergiu ou não
+ *    deu para conferir: aviso claro e nenhum trecho do texto. NADA abre o endereço no navegador do sistema — o que o
+ *    navegador mostraria seria o que o servidor entregar NAQUELE momento, não o que foi conferido.
  */
 export const LegalDocumentBody = memo(function LegalDocumentBody({ document, testID }: LegalDocumentBodyProps) {
-  const [openFailed, setOpenFailed] = useState(false);
-
-  async function handleOpen() {
-    setOpenFailed(false);
-    const result = await openLegalDocument(document);
-    if (result === 'unavailable') setOpenFailed(true);
-  }
-
   return (
     <View style={styles.root}>
       <View style={styles.meta}>
@@ -44,18 +38,14 @@ export const LegalDocumentBody = memo(function LegalDocumentBody({ document, tes
           ))}
         </View>
       ) : (
-        <View style={styles.body}>
-          <Text style={styles.paragraph}>O texto completo desta versão fica num endereço próprio e abre no seu navegador.</Text>
-          <SecondaryButton label="Abrir o texto completo" onPress={() => void handleOpen()} testID={`${testID}-open-button`} />
-          {openFailed ? (
-            <InlineAlert
-              tone="danger"
-              title="Não foi possível abrir o texto"
-              message="Confira sua conexão e tente de novo."
-              testID={`${testID}-open-failed`}
-            />
-          ) : null}
-        </View>
+        // `key` pela versão+hash: uma troca de versão com a tela aberta (409 no cadastro) recomeça a conferência do zero.
+        <VerifiedTextView
+          key={`${document.version}|${document.sha256}`}
+          url={document.url}
+          sha256={document.sha256}
+          allowHttp={__DEV__}
+          testID={`${testID}-body`}
+        />
       )}
     </View>
   );

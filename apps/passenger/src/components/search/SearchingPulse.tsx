@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef } from 'react';
-import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 import { Car } from 'lucide-react-native';
 import { SurfaceRaised, theme } from '@vuumbora/ui';
 
@@ -23,7 +23,7 @@ export const SearchingPulse = memo(function SearchingPulse() {
 
       const pulse = (value: Animated.Value) =>
         Animated.loop(
-          Animated.timing(value, { toValue: 1, duration: 1800, easing: Easing.out(Easing.ease), useNativeDriver: true })
+          Animated.timing(value, { toValue: 1, duration: 1800, easing: Easing.out(Easing.ease), useNativeDriver: Platform.OS !== 'web' })
         );
 
       loop1 = pulse(ring1);

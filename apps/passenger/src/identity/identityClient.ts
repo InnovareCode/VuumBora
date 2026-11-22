@@ -2,14 +2,18 @@
  * O ÚNICO cliente de identidade do app do passageiro (fatia B1). Tudo que fala de conta — cadastro, código,
  * login, recuperação, sair, estado da sessão — passa por `identity`; nenhuma tela monta o próprio cliente.
  *
- * ESTADO ATUAL (B1): `mode: 'mock'` + armazenamento em MEMÓRIA.
+ * ESTADO ATUAL (A3): `mode: 'mock'` + cofre do aparelho.
  *  - O mock segue as regras e os códigos de erro do contrato (`docs/contrato-identidade-apps.md`); o código de
  *    e-mail dele é sempre `123456` (por isso a tela do código avisa, enquanto `identity.mode === 'mock'`).
- *  - Em memória, a sessão some ao fechar o app: o cofre seguro (SecureStore) é a fatia A3, e a API real em HTTPS
- *    é a B4. Quem trocar uma dessas coisas troca AQUI, num lugar só — as telas só leem `identity.mode`.
+ *  - `storage` é `createDeviceSessionStorage` (`@vuumbora/ui`, `src/device/`): no iOS/Android o `expo-secure-store`
+ *    (Keychain/Keystore), com a limpeza da primeira execução depois de instalar (o Keychain do iOS sobrevive à
+ *    desinstalação); no web SÓ memória (a sessão some ao recarregar a página; nunca localStorage/sessionStorage).
+ *    A API real em HTTPS é a B4. Quem trocar uma dessas coisas troca AQUI, num lugar só — as telas só leem `identity.mode`.
+ *  - Em `mock` a persistência não se vê num aparelho: o servidor simulado vive na memória do processo, então a sessão
+ *    restaurada do cofre é rejeitada na primeira chamada autenticada e o app reabre na tela de entrada ("sessão
+ *    expirada"). Só em `http` (B4) "fechar à força e reabrir mantém a sessão".
  *
  * Fatias que mexem neste arquivo:
- *  - A3: `storage` passa a ser a implementação do SecureStore (nativo) / memória (web).
  *  - B4: `IDENTITY_MODE` vira `'http'` com `baseUrl` vindo de `EXPO_PUBLIC_API_URL`.
  *
  * GUARDA DE BUILD (`metro.config.js`): build `production` com `IDENTITY_MODE !== 'http'` ABORTA, porque o modo
@@ -24,11 +28,11 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import {
   createIdentityClient,
-  createMemorySessionStorage,
   type DevicePlatform,
   type IdentityClient,
   type MockLegalVersions,
 } from '@vuumbora/api-client/identity';
+import { createDeviceSessionStorage } from '@vuumbora/ui';
 
 /**
  * Mock com atraso artificial: dá para ver o estado "carregando" (e testar o duplo toque) sem API.
@@ -61,8 +65,8 @@ function createPassengerIdentity(): IdentityClient {
     accountType: 'passenger',
     platform: devicePlatform(),
     ...(appVersion() !== undefined ? { appVersion: appVersion() as string } : {}),
-    // Explícito (e não o padrão do pacote) para a A3 ter um único ponto de troca.
-    storage: createMemorySessionStorage(),
+    // Cofre do aparelho (A3). Um por processo: guarda a verificação da primeira execução, que roda uma vez.
+    storage: createDeviceSessionStorage({ accountType: 'passenger' }),
     // O Hermes não tem `crypto` global: `uuid` do `expo` usa o gerador nativo (e `crypto.randomUUID` no web).
     randomId: () => uuid.v4(),
     mock: { latencyMs: MOCK_LATENCY_MS, ...(mockLegal !== undefined ? { legal: mockLegal } : {}) },

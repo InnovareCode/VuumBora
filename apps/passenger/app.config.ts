@@ -34,6 +34,10 @@ const config: ExpoConfig = {
     'expo-status-bar',
     'expo-font',
     'expo-image',
+    // Cofre da sessão (A3). O plugin exclui o arquivo do SecureStore do backup automático do Android (sem isso o
+    // backup restauraria dados cifrados sem a chave do Keystore). `faceIDPermission: false`: o app não usa
+    // autenticação biométrica, então o plugin não deve declarar o `NSFaceIDUsageDescription` (texto em inglês).
+    ['expo-secure-store', { faceIDPermission: false }],
     [
       'expo-splash-screen',
       {
