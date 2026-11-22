@@ -724,7 +724,14 @@ comparação, não detalhe.
 
 ---
 
-## Proposta de papéis (para o dono cortar ou aprovar)
+## Papéis do painel administrativo ✅ (aprovado pelo dono em 22/11/2026)
+
+**Decidido:** o dono aprovou a proposta abaixo **como está**, sem cortes, em
+22/11/2026. Ela destrava a fatia F07 do plano mestre (usuários e papéis no
+painel). O banco já tem os cinco papéis (migração 0006: `dono`, `operacao`,
+`revisor_documentos`, `financeiro`, `suporte`) e a desativação sem apagar
+(`admin_users.deactivated_at`, migração 0003). O que falta é a API de
+usuários, a tela e a aplicação da tabela abaixo em cada rota.
 
 Nasce de `docs/plano-sistema.md` §5 (rotas de admin já desenhadas com o papel
 exigido entre colchetes). O princípio é **menor privilégio**: ninguém vê dado
