@@ -5,6 +5,7 @@
  * (4) falha de thread e desligamento não deixam nada pendurado.
  */
 import assert from 'node:assert/strict';
+import { availableParallelism } from 'node:os';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { describe, test } from 'node:test';
@@ -122,8 +123,14 @@ describe('teto de concorrência e fila limitada', () => {
 });
 
 describe('o laço de eventos não é ocupado pelo bcrypt', () => {
-  test('6 comparações de custo 12 em paralelo: o atraso máximo do laço fica abaixo de 100 ms (na principal passava de 1 s)', async () => {
-    await withPool(new BcryptPool('laco', 2, 6), async (pool) => {
+  test('6 comparações de custo 12 em paralelo: o atraso máximo do laço fica abaixo de 250 ms (na principal passava de 1 s)', async () => {
+    // Mesmo dimensionamento da produção (defaultAppConcurrency em lib/bcrypt-pool.ts): no máximo 2 threads e SEMPRE uma CPU livre
+    // para a thread principal. Com 2 threads fixas num runner de 2 vCPUs, são 3 threads disputando 2 núcleos e o laço atrasa por
+    // falta de CPU, não por bcrypt na principal (o CI do 2ca1658 falhou aqui; não reproduzi localmente). O limite de 250 ms ainda
+    // separa o defeito que o teste caça: um compare de custo 12 na principal trava o laço por 400 ms ou mais, e um runner
+    // compartilhado oscila acima dos 100 ms antigos.
+    const threads = Math.min(2, Math.max(1, availableParallelism() - 1));
+    await withPool(new BcryptPool('laco', threads, 6), async (pool) => {
       const hash = await pool.hash('Senha-de-teste-123', 12);
       await pool.compare('Senha-de-teste-123', hash); // aquece as duas threads
       await Promise.all([pool.compare('x', hash), pool.compare('y', hash)]);
@@ -138,7 +145,7 @@ describe('o laço de eventos não é ocupado pelo bcrypt', () => {
       assert.deepEqual(results, [true, false, false, false, false, false]);
       assert.ok(elapsed > 800, `o trabalho de bcrypt tem que ter acontecido de verdade (levou ${elapsed.toFixed(0)} ms)`);
       const maxMs = delay.max / 1e6;
-      assert.ok(maxMs < 100, `o laço de eventos parou por ${maxMs.toFixed(0)} ms enquanto o bcrypt rodava`);
+      assert.ok(maxMs < 250, `o laço de eventos parou por ${maxMs.toFixed(0)} ms enquanto o bcrypt rodava (${threads} thread(s))`);
     });
   });
 });
