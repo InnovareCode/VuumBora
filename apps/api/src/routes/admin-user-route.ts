@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { pool } from '../db.js';
 import { ADMIN_ROLES } from '../domain/admin.js';
 import { adminRouteRateLimit } from '../lib/admin-rate-limit.js';
+import { twoFactorConfig } from '../lib/two-factor-config.js';
 import { requireAdminRole, requireCsrfToken } from '../hooks/require-admin.js';
 import {
   activateAdminUser,
@@ -22,7 +23,7 @@ import {
   listAdminUsers,
   reactivateAdminUser,
   type MutateAdminUserOutcome,
-  type PasswordGateFailure,
+  type StepUpFailure,
 } from '../services/admin-user-service.js';
 
 const roleEnum = z.enum(ADMIN_ROLES);
@@ -38,8 +39,13 @@ const listQuerySchema = z.object({
 
 const idParamSchema = z.object({ id: z.string().uuid('Identificador inválido.') });
 
-// Senha ATUAL de quem está chamando (reautenticação, M-3) — nunca a senha do usuário alvo.
-const actorPasswordSchema = z.object({ password: z.string().min(1, 'Informe sua senha.').max(200, 'Senha inválida.') });
+// Senha ATUAL de quem está chamando (reautenticação, M-3) — nunca a senha do usuário alvo. `code` (TOTP) é
+// opcional AQUI: só é exigido (e checado) quando a mutação envolve o papel `dono`/`financeiro` — ponto 3 da
+// revisão S1 rodada 3g. O serviço decide; a rota só repassa o que veio.
+const actorPasswordSchema = z.object({
+  password: z.string().min(1, 'Informe sua senha.').max(200, 'Senha inválida.'),
+  code: z.string().trim().min(6, 'Código inválido.').max(32, 'Código inválido.').optional(),
+});
 
 const createBodySchema = actorPasswordSchema.extend({
   name: z.string().trim().min(2, 'Informe o nome completo.').max(120, 'Nome muito longo.'),
@@ -64,13 +70,30 @@ function sendValidationFailed(reply: FastifyReply, message = 'Dados inválidos.'
   reply.code(400).send({ ok: false, error: { code: 'validation_failed', message } });
 }
 
-function sendPasswordGateFailure(reply: FastifyReply, failure: PasswordGateFailure): void {
-  if (failure.kind === 'account_locked') {
-    reply.header('Retry-After', String(failure.retryAfterSeconds));
-    reply.code(423).send({ ok: false, error: { code: 'account_locked', message: 'Muitas tentativas de senha. Tente novamente mais tarde.', retryAfterSeconds: failure.retryAfterSeconds } });
-    return;
+/** Falha do gate — senha sozinha, ou senha + TOTP quando a mutação envolve `dono`/`financeiro` (ponto 3). */
+function sendStepUpFailure(reply: FastifyReply, failure: StepUpFailure): void {
+  switch (failure.kind) {
+    case 'account_locked':
+      reply.header('Retry-After', String(failure.retryAfterSeconds));
+      reply.code(423).send({ ok: false, error: { code: 'account_locked', message: 'Muitas tentativas de senha. Tente novamente mais tarde.', retryAfterSeconds: failure.retryAfterSeconds } });
+      return;
+    case 'password_invalid':
+      reply.code(401).send({ ok: false, error: { code: 'password_invalid', message: 'Senha incorreta.' } });
+      return;
+    case 'invalid_code':
+      reply.code(401).send({ ok: false, error: { code: 'invalid_second_factor', message: 'Código de verificação inválido.' } });
+      return;
+    case 'two_factor_locked':
+      reply.header('Retry-After', String(failure.retryAfterSeconds));
+      reply.code(429).send({ ok: false, error: { code: 'two_factor_locked', message: 'Muitas tentativas com código errado. Tente novamente mais tarde.', retryAfterSeconds: failure.retryAfterSeconds } });
+      return;
+    case 'two_factor_unavailable':
+      reply.code(503).send({ ok: false, error: { code: 'two_factor_unavailable', message: 'Verificação em duas etapas indisponível. Contate o responsável técnico.' } });
+      return;
+    case 'two_factor_not_enrolled':
+      reply.code(409).send({ ok: false, error: { code: 'two_factor_not_enrolled', message: 'Sua conta ainda não tem a verificação em duas etapas ativa; é preciso para esta ação.' } });
+      return;
   }
-  reply.code(401).send({ ok: false, error: { code: 'password_invalid', message: 'Senha incorreta.' } });
 }
 
 function sendMutationOutcome(reply: FastifyReply, outcome: MutateAdminUserOutcome): void {
@@ -84,8 +107,11 @@ function sendMutationOutcome(reply: FastifyReply, outcome: MutateAdminUserOutcom
     case 'last_owner':
       reply.code(409).send({ ok: false, error: { code: 'last_owner', message: 'Não é possível desativar ou rebaixar o último dono ativo.' } });
       return;
+    case 'retry':
+      reply.code(409).send({ ok: false, error: { code: 'concurrent_update', message: 'Outra alteração está em andamento para este usuário. Tente novamente em alguns segundos.' } });
+      return;
     default:
-      sendPasswordGateFailure(reply, outcome);
+      sendStepUpFailure(reply, outcome);
   }
 }
 
@@ -113,14 +139,14 @@ export function registerAdminUserRoutes(app: FastifyInstance): void {
     const outcome = await createAdminUser(
       pool,
       request.admin!,
-      { name: parsed.data.name, email: parsed.data.email, role: parsed.data.role, password: parsed.data.password },
-      { ipAddress: request.ip },
+      { name: parsed.data.name, email: parsed.data.email, role: parsed.data.role, password: parsed.data.password, code: parsed.data.code },
+      { ipAddress: request.ip, twoFactor: twoFactorConfig },
     );
     if (outcome.kind === 'email_taken') {
       reply.code(409).send({ ok: false, error: { code: 'email_taken', message: 'Já existe um usuário com este e-mail.' } });
       return;
     }
-    if (outcome.kind !== 'ok') return sendPasswordGateFailure(reply, outcome);
+    if (outcome.kind !== 'ok') return sendStepUpFailure(reply, outcome);
 
     reply.code(201).send({
       ok: true,
@@ -134,7 +160,7 @@ export function registerAdminUserRoutes(app: FastifyInstance): void {
     const parsedBody = actorPasswordSchema.safeParse(request.body);
     if (!parsedBody.success) return sendValidationFailed(reply);
 
-    const outcome = await deactivateAdminUser(pool, request.admin!, parsedParams.data.id, parsedBody.data.password, { ipAddress: request.ip });
+    const outcome = await deactivateAdminUser(pool, request.admin!, parsedParams.data.id, { password: parsedBody.data.password }, { ipAddress: request.ip });
     sendMutationOutcome(reply, outcome);
   });
 
@@ -144,7 +170,13 @@ export function registerAdminUserRoutes(app: FastifyInstance): void {
     const parsedBody = actorPasswordSchema.safeParse(request.body);
     if (!parsedBody.success) return sendValidationFailed(reply);
 
-    const outcome = await reactivateAdminUser(pool, request.admin!, parsedParams.data.id, parsedBody.data.password, { ipAddress: request.ip });
+    const outcome = await reactivateAdminUser(
+      pool,
+      request.admin!,
+      parsedParams.data.id,
+      { password: parsedBody.data.password, code: parsedBody.data.code },
+      { ipAddress: request.ip, twoFactor: twoFactorConfig },
+    );
     sendMutationOutcome(reply, outcome);
   });
 
@@ -154,7 +186,14 @@ export function registerAdminUserRoutes(app: FastifyInstance): void {
     const parsedBody = roleBodySchema.safeParse(request.body);
     if (!parsedBody.success) return sendValidationFailed(reply);
 
-    const outcome = await changeAdminUserRole(pool, request.admin!, parsedParams.data.id, parsedBody.data.role, parsedBody.data.password, { ipAddress: request.ip });
+    const outcome = await changeAdminUserRole(
+      pool,
+      request.admin!,
+      parsedParams.data.id,
+      parsedBody.data.role,
+      { password: parsedBody.data.password, code: parsedBody.data.code },
+      { ipAddress: request.ip, twoFactor: twoFactorConfig },
+    );
     sendMutationOutcome(reply, outcome);
   });
 }

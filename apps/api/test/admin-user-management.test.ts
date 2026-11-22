@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import type { AdminRole } from '../src/domain/admin.js';
 import { encryptSecret, parseEncryptionKey } from '../src/lib/secret-box.js';
-import { base32Encode } from '../src/lib/totp.js';
+import { base32Encode, hotp, totpStep } from '../src/lib/totp.js';
 import { startAdminSession } from '../src/services/admin-auth-service.js';
 import { PASSWORD, createAdmin, pool, prepareDatabase, send, shutdown, startApp, type TestApp } from './helpers/harness.js';
 
@@ -33,6 +33,12 @@ async function session(role: AdminRole = 'dono', label?: string) {
 }
 
 type Session = Awaited<ReturnType<typeof session>>;
+
+/** Código TOTP válido do ATOR (nunca do alvo — quem prova a identidade é quem está chamando). Zera o anti-replay a cada chamada. */
+async function totpCode(s: Session): Promise<string> {
+  await pool.query('UPDATE admin_totp SET last_used_step = NULL WHERE admin_id = $1', [s.admin.id]);
+  return hotp(TOTP_SECRET, totpStep(Date.now()));
+}
 
 const get = (s: Session, url: string) => send(t.app, 'GET', url, { cookie: s.cookie });
 const post = (s: Session, url: string, body: unknown) => send(t.app, 'POST', url, { cookie: s.cookie, csrf: s.csrf, body });
@@ -118,7 +124,9 @@ describe('primeiro acesso (ativação)', () => {
   test('papel que exige 2FA (financeiro) recebe o enrollmentToken JUNTO na ativação, e o login seguinte pede enrolamento', async () => {
     const owner = await session('dono', 'owner-activate-2');
     const email = `ativa-fin-${Date.now()}@teste.vuumbora.dev`;
-    const created = await post(owner, '/users', { name: 'Financeira', email, role: 'financeiro', password: PASSWORD });
+    // `financeiro` agora exige TOTP do dono para nascer (revisão S1 rodada 3g, ponto 3) — ver `totpCode`.
+    const created = await post(owner, '/users', { name: 'Financeira', email, role: 'financeiro', password: PASSWORD, code: await totpCode(owner) });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
     const token = created.body.data.activationToken as string;
 
     const activated = await send(t.app, 'POST', '/auth/activate', { body: { email, token, newPassword: 'Senha-Nova-Definida-2' } });
@@ -219,7 +227,8 @@ describe('último dono ativo: nunca pode ficar sem nenhum', () => {
     const audited = await pool.query(`SELECT before, after FROM admin_audit_log WHERE target_id = $1 AND action = 'admin.user.role_changed'`, [target2.id]);
     assert.equal(audited.rowCount, 1);
     assert.deepEqual(audited.rows[0].before, { role: 'dono' });
-    assert.deepEqual(audited.rows[0].after, { role: 'operacao' });
+    // `stepUp` registra qual gate valeu (ponto 3): aqui só senha, porque o papel NOVO ('operacao') não é sensível.
+    assert.deepEqual(audited.rows[0].after, { role: 'operacao', stepUp: 'password' });
   });
 
   test('trocar para o MESMO papel é idempotente (sem auditar de novo, sem acionar a trava)', async () => {
@@ -229,5 +238,184 @@ describe('último dono ativo: nunca pode ficar sem nenhum', () => {
     assert.equal(first.status, 200);
     const audited = await pool.query(`SELECT count(*)::int AS n FROM admin_audit_log WHERE target_id = $1 AND action = 'admin.user.role_changed'`, [target.id]);
     assert.equal(audited.rows[0].n, 0, 'trocar para o papel que já era não deveria gerar auditoria');
+  });
+});
+
+describe('troca de papel revoga a sessão do alvo (revisão S1 rodada 3g, ponto 2)', () => {
+  test('a sessão que o alvo tinha ANTES da troca não serve mais depois, mesmo trocando entre papéis não sensíveis', async () => {
+    const owner = await session('dono', 'owner-revoke-role');
+    const target = await session('suporte', 'target-revoke-role');
+
+    assert.equal((await get(target, '/me')).status, 200);
+
+    const changed = await post(owner, `/users/${target.admin.id}/role`, { role: 'operacao', password: PASSWORD });
+    assert.equal(changed.status, 200, JSON.stringify(changed.body));
+
+    assert.equal((await get(target, '/me')).status, 401, 'a sessão antiga do alvo deveria ter sido derrubada pela troca de papel');
+  });
+
+  test('trocar para o MESMO papel (idempotente) NÃO derruba a sessão do alvo', async () => {
+    const owner = await session('dono', 'owner-same-role-keeps-session');
+    const target = await session('suporte', 'target-same-role-keeps-session');
+
+    const first = await post(owner, `/users/${target.admin.id}/role`, { role: 'suporte', password: PASSWORD });
+    assert.equal(first.status, 200);
+
+    assert.equal((await get(target, '/me')).status, 200, 'papel igual ao atual não deveria derrubar nada');
+  });
+});
+
+describe('senha + TOTP para dono/financeiro (revisão S1 rodada 3g, ponto 3)', () => {
+  test('criar com papel dono ou financeiro sem código: 401 invalid_second_factor, nada é criado', async () => {
+    const owner = await session('dono', 'owner-create-sensitive-nocode');
+    for (const role of ['dono', 'financeiro'] as const) {
+      const email = `sens-nocode-${role}-${Date.now()}@teste.vuumbora.dev`;
+      const created = await post(owner, '/users', { name: 'Sensível', email, role, password: PASSWORD });
+      assert.equal(created.status, 401, JSON.stringify(created.body));
+      assert.equal(created.body.error.code, 'invalid_second_factor');
+      const row = await pool.query(`SELECT 1 FROM admin_users WHERE email = $1`, [email]);
+      assert.equal(row.rowCount, 0, 'sem o TOTP certo, o usuário não deveria existir');
+    }
+  });
+
+  test('criar com papel dono ou financeiro com código certo: funciona e audita o stepUp', async () => {
+    const owner = await session('dono', 'owner-create-sensitive-ok');
+    for (const role of ['dono', 'financeiro'] as const) {
+      const email = `sens-ok-${role}-${Date.now()}@teste.vuumbora.dev`;
+      const created = await post(owner, '/users', { name: 'Sensível', email, role, password: PASSWORD, code: await totpCode(owner) });
+      assert.equal(created.status, 201, JSON.stringify(created.body));
+
+      const audited = await pool.query(`SELECT after FROM admin_audit_log WHERE target_id = $1 AND action = 'admin.user.created'`, [created.body.data.id]);
+      assert.equal(audited.rows[0].after.stepUp, 'password+totp');
+    }
+  });
+
+  test('criar com papel NORMAL (ex.: suporte) nunca pede código, mesmo enviando um errado', async () => {
+    const owner = await session('dono', 'owner-create-normal');
+    const email = `normal-${Date.now()}@teste.vuumbora.dev`;
+    const created = await post(owner, '/users', { name: 'Normal', email, role: 'suporte', password: PASSWORD, code: 'CODIGO-QUALQUER' });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+  });
+
+  test('senha certa mas código TOTP errado: 401 invalid_second_factor', async () => {
+    const owner = await session('dono', 'owner-create-badcode');
+    const email = `badcode-${Date.now()}@teste.vuumbora.dev`;
+    const created = await post(owner, '/users', { name: 'Pessoa X', email, role: 'dono', password: PASSWORD, code: '000000' });
+    assert.equal(created.status, 401, JSON.stringify(created.body));
+    assert.equal(created.body.error.code, 'invalid_second_factor');
+  });
+
+  test('promover alguém para dono/financeiro exige TOTP; sem código, 401 e o papel não muda', async () => {
+    const owner = await session('dono', 'owner-promote-nocode');
+    const target = await createAdmin('suporte', 'promote-target-nocode');
+
+    const promoted = await post(owner, `/users/${target.id}/role`, { role: 'financeiro', password: PASSWORD });
+    assert.equal(promoted.status, 401, JSON.stringify(promoted.body));
+    assert.equal(promoted.body.error.code, 'invalid_second_factor');
+
+    const row = await pool.query(`SELECT role FROM admin_users WHERE id = $1`, [target.id]);
+    assert.equal(row.rows[0].role, 'suporte', 'sem o TOTP certo, o papel não deveria ter mudado');
+  });
+
+  test('promover alguém para dono/financeiro com TOTP certo: funciona, audita e derruba a sessão do alvo', async () => {
+    const owner = await session('dono', 'owner-promote-ok');
+    const target = await session('suporte', 'promote-target-ok');
+    assert.equal((await get(target, '/me')).status, 200);
+
+    const promoted = await post(owner, `/users/${target.admin.id}/role`, { role: 'financeiro', password: PASSWORD, code: await totpCode(owner) });
+    assert.equal(promoted.status, 200, JSON.stringify(promoted.body));
+    assert.equal(promoted.body.data.role, 'financeiro');
+
+    const audited = await pool.query(`SELECT after FROM admin_audit_log WHERE target_id = $1 AND action = 'admin.user.role_changed'`, [target.admin.id]);
+    assert.equal(audited.rows[0].after.stepUp, 'password+totp');
+
+    assert.equal((await get(target, '/me')).status, 401, 'a promoção deveria ter derrubado a sessão antiga do alvo');
+  });
+
+  test('rebaixar de dono para papel normal continua só com senha (não pede TOTP)', async () => {
+    const owner = await session('dono', 'owner-demote-nototp');
+    const other = await createAdmin('dono', 'demote-target');
+
+    const demoted = await post(owner, `/users/${other.id}/role`, { role: 'suporte', password: PASSWORD });
+    assert.equal(demoted.status, 200, JSON.stringify(demoted.body));
+  });
+
+  test('reativar um dono exige TOTP; reativar um papel normal não', async () => {
+    const owner = await session('dono', 'owner-reactivate-sensitive');
+    const otherOwner = await createAdmin('dono', 'reactivate-owner-target');
+    await post(owner, `/users/${otherOwner.id}/deactivate`, { password: PASSWORD });
+
+    const noCode = await post(owner, `/users/${otherOwner.id}/reactivate`, { password: PASSWORD });
+    assert.equal(noCode.status, 401, JSON.stringify(noCode.body));
+    assert.equal(noCode.body.error.code, 'invalid_second_factor');
+    assert.equal((await pool.query(`SELECT deactivated_at FROM admin_users WHERE id = $1`, [otherOwner.id])).rows[0].deactivated_at !== null, true);
+
+    const withCode = await post(owner, `/users/${otherOwner.id}/reactivate`, { password: PASSWORD, code: await totpCode(owner) });
+    assert.equal(withCode.status, 200, JSON.stringify(withCode.body));
+    assert.equal(withCode.body.data.deactivatedAt, null);
+
+    const audited = await pool.query(`SELECT after FROM admin_audit_log WHERE target_id = $1 AND action = 'admin.user.reactivated'`, [otherOwner.id]);
+    assert.equal(audited.rows[0].after.stepUp, 'password+totp');
+
+    // Papel normal: reativa só com senha, como antes desta fatia.
+    const suporte = await createAdmin('suporte', 'reactivate-normal-target');
+    await post(owner, `/users/${suporte.id}/deactivate`, { password: PASSWORD });
+    const reactivatedNormal = await post(owner, `/users/${suporte.id}/reactivate`, { password: PASSWORD });
+    assert.equal(reactivatedNormal.status, 200, JSON.stringify(reactivatedNormal.body));
+  });
+
+});
+
+describe('deadlock entre mutações concorrentes sobre donos diferentes vira 409, não 500 (ponto 4)', () => {
+  test('40P01 na trava do conjunto de donos: o serviço devolve "retry" (não deixa 500 subir), e nada muda', async () => {
+    const target = await createAdmin('dono', 'deadlock-target');
+    await createAdmin('dono', 'deadlock-target-other'); // outro dono ativo: sem a falha injetada, a desativação funcionaria.
+    const { deactivateAdminUser } = await import('../src/services/admin-user-service.js');
+
+    // Nunca troca o `pool.connect` da aplicação (tentado numa rodada anterior desta tarefa: o pg-pool se comporta mal
+    // quando o próprio método é substituído, mesmo restaurado depois — client chega `undefined` de volta). Em vez
+    // disso, o "pool" que o serviço recebe aqui é um objeto comum cujo `connect` CHAMA o `pool.connect()` de verdade
+    // (nunca mexido) e só embrulha o CLIENT devolvido pela 2ª chamada desta execução (a transação da mutação; a 1ª
+    // é a do gate de senha, `reserveFailureSlot`). Esse client ganha um `query` que lança 40P01 na 3ª query da
+    // transação (BEGIN, lock do alvo, trava do conjunto de donos — o ponto exato que o Órion viu no real), e
+    // `release` restaura o `query` original ANTES de devolver o client ao pool de verdade (que REUSA o objeto).
+    let connectionIndex = 0;
+    const faultyPool = {
+      query: (...args: unknown[]) => (pool.query as (...a: unknown[]) => unknown)(...args),
+      connect: async () => {
+        connectionIndex += 1;
+        const client = await pool.connect();
+        if (connectionIndex !== 2) return client;
+        const originalQuery = client.query.bind(client);
+        const originalRelease = client.release.bind(client);
+        let calls = 0;
+        (client as unknown as { query: unknown }).query = (...queryArgs: unknown[]) => {
+          calls += 1;
+          if (calls === 3) {
+            const err = Object.assign(new Error('deadlock detected (simulado)'), { code: '40P01' });
+            return Promise.reject(err);
+          }
+          return (originalQuery as (...a: unknown[]) => unknown)(...queryArgs);
+        };
+        (client as unknown as { release: unknown }).release = (...releaseArgs: unknown[]) => {
+          (client as unknown as { query: unknown }).query = originalQuery;
+          return (originalRelease as (...a: unknown[]) => unknown)(...releaseArgs);
+        };
+        return client;
+      },
+    } as unknown as typeof pool;
+
+    const outcome = await deactivateAdminUser(
+      faultyPool,
+      { id: target.id, name: 'Deadlock Target', email: target.email, role: 'dono' },
+      target.id,
+      { password: PASSWORD },
+      { ipAddress: '127.0.0.1' },
+    );
+    assert.deepEqual(outcome, { kind: 'retry' });
+
+    // A regra nunca foi violada: nem desativado, nem preso num estado inconsistente.
+    const row = await pool.query(`SELECT deactivated_at FROM admin_users WHERE id = $1`, [target.id]);
+    assert.equal(row.rows[0].deactivated_at, null);
   });
 });

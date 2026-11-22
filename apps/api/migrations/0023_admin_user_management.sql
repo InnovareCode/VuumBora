@@ -31,11 +31,15 @@
 -- 0012). `test/runtime-role.test.ts` tem a matriz atualizada; a prova de
 -- que DELETE em `admin_users` continua recusado está lá.
 --
--- Pendência registrada para o Órion revisar antes do deploy (não é
--- decisão unilateral desta migração, é só o que ela HABILITA): avaliar se a
--- reautenticação por senha é compensação suficiente para este privilégio
--- novo, ou se o painel merece um degrau extra (ex.: 2FA step-up também na
--- gestão de usuários, não só a senha).
+-- Revisado pelo Órion (S1 rodada 3g, docs/privado/revisao-seguranca-s1-rodada3g.md): classificação PARCIAL.
+-- As compensações acima (papel dono + CSRF + senha + trava do último dono + auditoria) protegem bem contra
+-- sessão/cookie roubado e CSRF; NENHUMA delas reabre a proteção original contra SQL livre com esta credencial
+-- (injeção, dependência comprometida, ambiente vazado) — isso exigiria reescrever a regra em PL/pgSQL, o que o
+-- Órion NÃO recomendou agora (nenhuma rodada até hoje achou SQL injetável). Em vez disso, ele recomendou — e o
+-- Atlas decidiu fazer, na mesma fatia que corrigiu esta revisão — senha E TOTP (reuso do `verifyStepUp` de
+-- `/settings/email`) nas três mutações mais perigosas: criar ou promover para `dono`/`financeiro`, e reativar
+-- um `dono` (`admin-user-service.ts::gateForRole`). As outras mutações (desativar, criar/promover papel normal,
+-- rebaixar um dono) continuam só com senha — degrau proporcional ao risco, não um step-up genérico em tudo.
 --
 -- Esta migração nunca derruba o boot: sem permissão para ajustar grants
 -- (a credencial que migra não é dona das tabelas) ou sem o papel, avisa
