@@ -349,7 +349,7 @@ export function EmailSettingsForm({
             <button
               type="button"
               onClick={() => setRemoveOpen(true)}
-              className="-mt-1 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-small font-bold text-danger outline-none transition-colors hover:bg-danger-fill hover:text-white focus-visible:ring-2 focus-visible:ring-info"
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-small font-bold text-danger outline-none transition-colors hover:bg-danger-fill hover:text-white focus-visible:ring-2 focus-visible:ring-info"
             >
               <Trash2 className="h-4 w-4" aria-hidden="true" />
               Remover a senha salva
