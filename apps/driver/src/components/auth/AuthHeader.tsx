@@ -52,13 +52,18 @@ const BackButton = memo(function BackButton({ onPress }: { readonly onPress: () 
 });
 
 const styles = StyleSheet.create({
-  root: { gap: theme.spacing['2'] },
+  root: { gap: theme.spacing['2'], position: 'relative' },
+  // Absoluto (não ocupa altura de fluxo) — ver o mesmo comentário em
+  // `apps/passenger/src/components/auth/AuthHeader.tsx` (os dois não importam um do outro).
   backButton: {
+    position: 'absolute',
+    top: 0,
+    left: -theme.spacing['2'],
     width: theme.layout.touchTarget,
     height: theme.layout.touchTarget,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: -theme.spacing['2'],
+    zIndex: 1,
   },
   logoRow: { alignItems: 'center', marginBottom: theme.spacing['2'] },
   title: { color: theme.role.textPrimary, ...textStyle('bold', 'heading'), textAlign: 'center' },

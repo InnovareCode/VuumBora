@@ -19,7 +19,10 @@
     "expo-linear-gradient": "*",
     "expo-image": "*",
     "expo-crypto": "*",
-    "expo-secure-store": "*"
+    "expo-secure-store": "*",
+    "@react-native-community/netinfo": "*",
+    "expo-haptics": "*",
+    "lucide-react-native": "*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

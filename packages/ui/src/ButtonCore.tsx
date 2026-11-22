@@ -12,23 +12,18 @@
  * motorista, "Recusar" — ver §3.1 do doc).
  */
 import { memo, useCallback, type ReactNode } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-  type GestureResponderEvent,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View, type GestureResponderEvent } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme, tokens, type BoxShadowValue } from '@vuumbora/tokens';
 import { withAlpha } from './colorAlpha';
 import { gradientColors, gradientLocations } from './gradient';
+import { PressableScale, type PressableScaleRenderState } from './PressableScale';
 import { glyphStyle, textStyle } from './typography';
 import { focusRingStyle, useKeyboardFocusRing } from './useFocusRing';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger';
+/** `prominent` força a altura de CTA principal (56pt, 52 com janela curta) em qualquer variante — §15: "Recusar e Aceitar da mesma altura" (M6). `primary` já é `prominent` por padrão. */
+export type ButtonSize = 'default' | 'prominent';
 
 const CTA_COLORS = gradientColors(theme.gradient.cta);
 const CTA_LOCATIONS = gradientLocations(theme.gradient.cta);
@@ -66,6 +61,8 @@ export interface ButtonCoreProps {
   readonly loading?: boolean;
   readonly error?: boolean;
   readonly errorMessage?: string;
+  /** `prominent`: altura de CTA (56/52pt) mesmo em `secondary`/`danger` — ver `ButtonSize`. */
+  readonly size?: ButtonSize;
   readonly accessibilityLabel?: string;
   readonly testID?: string;
 }
@@ -149,6 +146,7 @@ export const ButtonCore = memo(function ButtonCore({
   loading = false,
   error = false,
   errorMessage,
+  size,
   accessibilityLabel,
   testID,
 }: ButtonCoreProps) {
@@ -156,8 +154,11 @@ export const ButtonCore = memo(function ButtonCore({
   const { focusVisible, focusProps } = useKeyboardFocusRing();
   const { height: windowHeight } = useWindowDimensions();
   // Direção de arte §6/§9 item 3: 56pt de altura para o CTA principal, 52 quando a
-  // altura da janela aperta (< 640pt) — mesma régua usada para o onboarding.
+  // altura da janela aperta (< 640pt) — mesma régua usada para o onboarding. `primary`
+  // é sempre proeminente; `secondary`/`danger` só quando `size="prominent"` (§15: botões
+  // da mesma linha de decisão precisam da mesma altura, ex. Recusar/Aceitar em M6).
   const primaryHeight = windowHeight < 640 ? theme.layout.buttonHeight : theme.layout.buttonHeightProminent;
+  const isProminent = variant === 'primary' || size === 'prominent';
 
   const handlePress = useCallback(
     (event: GestureResponderEvent) => {
@@ -169,7 +170,7 @@ export const ButtonCore = memo(function ButtonCore({
 
   return (
     <View>
-      <Pressable
+      <PressableScale
         {...focusProps}
         onPress={handlePress}
         style={focusVisible ? FOCUS_RING : undefined}
@@ -180,14 +181,14 @@ export const ButtonCore = memo(function ButtonCore({
         aria-busy={loading}
         testID={testID}
       >
-        {({ pressed }) => {
+        {({ pressed }: PressableScaleRenderState) => {
           const v = getVisualState(variant, pressed, disabled, error);
           const content = loading ? (
             <ActivityIndicator color={v.text} />
           ) : (
             <View style={styles.content}>
               {icon ? <View style={styles.icon}>{icon}</View> : null}
-              <Text style={[styles.label, { color: v.text }]} numberOfLines={1}>
+              <Text style={[styles.label, { color: v.text }]} numberOfLines={2}>
                 {label}
               </Text>
             </View>
@@ -197,7 +198,7 @@ export const ButtonCore = memo(function ButtonCore({
           // numa View separada por fora, o shadow sai quadrado (sem acompanhar o radius).
           const base = [
             styles.base,
-            variant === 'primary' ? { minHeight: primaryHeight } : undefined,
+            isProminent ? { minHeight: primaryHeight } : undefined,
             {
               borderColor: v.borderColor,
               borderTopColor: v.borderTopColor,
@@ -224,7 +225,7 @@ export const ButtonCore = memo(function ButtonCore({
           }
           return <View style={base}>{content}</View>;
         }}
-      </Pressable>
+      </PressableScale>
       {error && errorMessage ? (
         <View style={styles.errorRow} accessibilityRole="alert">
           <Text style={styles.errorGlyph}>✕</Text>
@@ -245,7 +246,7 @@ const styles = StyleSheet.create({
   },
   content: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['2'] },
   icon: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
-  label: textStyle('semibold', 'body'),
+  label: { ...textStyle('semibold', 'body'), textAlign: 'center' },
   errorRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -3,27 +3,43 @@ import { StyleSheet, Text, View } from 'react-native';
 import {
   AppShell,
   BrandLogo,
+  ConfirmDialog,
   DangerButton,
   EmptyState,
   ErrorState,
+  EstimateLabel,
+  FooterActions,
   InfoCard,
+  LinkButton,
+  ListRow,
   LoadingSkeleton,
   MetricCard,
+  MoneyText,
+  NetworkBanner,
   PasswordInput,
   PhoneInput,
+  PressableScale,
   PrimaryButton,
   ScreenHeader,
   SearchInput,
   SecondaryButton,
+  SectionHeader,
+  SegmentedControl,
   StatusBadge,
   TextInput,
+  Toast,
+  focusRingStyle,
   textStyle,
   theme,
+  useKeyboardFocusRing,
 } from '@vuumbora/ui';
+import { Bell, CreditCard, Shield } from 'lucide-react-native';
 import { CatalogRow } from '../../src/components/catalog/CatalogRow';
 import { CatalogSection } from '../../src/components/catalog/CatalogSection';
 import { FocusedFieldPreview } from '../../src/components/catalog/FocusedFieldPreview';
 import { PressedButtonPreview } from '../../src/components/catalog/PressedButtonPreview';
+
+const LONG_BUTTON_LABEL = 'Confirmar corrida com motorista verificado';
 
 /**
  * Catálogo de componentes — tela de revisão visual (print), não é tela de produto.
@@ -55,10 +71,56 @@ export default function CatalogScreen() {
     }, 1200);
   }, []);
 
+  // Onda 0 (d) — componentes novos sem tela de produto ainda: amostras interativas de
+  // verdade (não só estática), para a sonda de anel de foco e a medição da Íris alcançarem.
+  const [toastVisible, setToastVisible] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [notifyToggle, setNotifyToggle] = useState(true);
+  const [periodFilter, setPeriodFilter] = useState('month');
+
+  const handleConfirm = useCallback(() => {
+    setConfirmLoading(true);
+    setTimeout(() => {
+      setConfirmLoading(false);
+      setConfirmVisible(false);
+    }, 900);
+  }, []);
+
   return (
     <AppShell scroll>
       <ScreenHeader title="Catálogo de componentes" subtitle="Design system VuumBora — @vuumbora/ui" />
       <View style={styles.spacer} />
+
+      <CatalogSection
+        title="ScreenHeader"
+        description="C-17: align='center' (padrão, caixa da direita espelha a esquerda) e align='left' (legado); com onBack a seta usa ChevronLeft do lucide."
+      >
+        <CatalogRow label="Centralizado (padrão), sem onBack" stacked>
+          <View style={styles.screenHeaderSample}>
+            <ScreenHeader title="Para onde vamos?" />
+          </View>
+        </CatalogRow>
+        <CatalogRow label="Centralizado, com onBack" stacked>
+          <View style={styles.screenHeaderSample}>
+            <ScreenHeader title="Confirmar corrida" onBack={() => undefined} />
+          </View>
+        </CatalogRow>
+        <CatalogRow label="Centralizado, onBack + rightSlot" stacked>
+          <View style={styles.screenHeaderSample}>
+            <ScreenHeader
+              title="Perfil"
+              onBack={() => undefined}
+              rightSlot={<Bell size={22} color={theme.role.textSecondary} strokeWidth={1.75} />}
+            />
+          </View>
+        </CatalogRow>
+        <CatalogRow label={'align="left" (legado), com onBack'} stacked>
+          <View style={styles.screenHeaderSample}>
+            <ScreenHeader title="Editar endereço" align="left" onBack={() => undefined} />
+          </View>
+        </CatalogRow>
+      </CatalogSection>
 
       <CatalogSection title="Marca" description="BrandLogo — recortes reais do Apolo (packages/ui/assets/brand), só funcionam sobre fundo escuro.">
         <CatalogRow label="Horizontal (cabeçalho) — sm/md">
@@ -102,6 +164,11 @@ export default function CatalogScreen() {
             onPress={() => undefined}
           />
         </CatalogRow>
+        <CatalogRow label="Rótulo longo (quebra em 2 linhas)" stacked>
+          <View style={styles.narrowBox}>
+            <PrimaryButton label={LONG_BUTTON_LABEL} onPress={() => undefined} />
+          </View>
+        </CatalogRow>
       </CatalogSection>
 
       <CatalogSection title="SecondaryButton" description="Ação de apoio. Tokens: surfaceElevated, surface. Borda: borderControl.">
@@ -119,6 +186,10 @@ export default function CatalogScreen() {
         </CatalogRow>
         <CatalogRow label="Erro">
           <SecondaryButton label="Ver detalhes" error errorMessage="Não foi possível carregar." onPress={() => undefined} />
+        </CatalogRow>
+        <CatalogRow label="size=&quot;prominent&quot; (mesma altura do CTA, M6: Recusar/Aceitar)">
+          <SecondaryButton label="Recusar" size="prominent" onPress={() => undefined} />
+          <DangerButton label="Cancelar corrida" size="prominent" onPress={() => undefined} />
         </CatalogRow>
       </CatalogSection>
 
@@ -300,6 +371,121 @@ export default function CatalogScreen() {
       </CatalogSection>
 
       <CatalogSection
+        title="NetworkBanner"
+        description="C-01: faixa de 'sem rede', role.warning tingido. Sem rede de verdade agora — some sozinha quando a conexão volta. Medir desligando a rede do navegador (Playwright context.setOffline), não um prop de demonstração."
+      >
+        <CatalogRow label="Montado (só aparece offline)" stacked>
+          <NetworkBanner testID="catalog-network-banner" />
+        </CatalogRow>
+      </CatalogSection>
+
+      <CatalogSection title="SectionHeader" description="C-07: título + ação opcional + MockBadge embaixo (nunca na mesma linha do título).">
+        <CatalogRow label="Só título" stacked>
+          <SectionHeader title="Destinos salvos" />
+        </CatalogRow>
+        <CatalogRow label="Com ação" stacked>
+          <SectionHeader title="Histórico" action={<LinkButton label="Ver tudo" onPress={() => undefined} />} />
+        </CatalogRow>
+        <CatalogRow label="Com selo de mock" stacked>
+          <SectionHeader title="Formas de pagamento" mock mockLabel="demonstração" />
+        </CatalogRow>
+      </CatalogSection>
+
+      <CatalogSection title="ListRow + ToggleSwitch" description="C-08: linha de lista (ícone + rótulo/valor + interruptor ou chevron) — promovidos do passageiro.">
+        <CatalogRow label="Com valor e chevron" stacked>
+          <ListRow icon={<CreditCard size={20} color={theme.role.textSecondary} strokeWidth={1.75} />} label="Forma de pagamento" value="Pix" onPress={() => undefined} />
+        </CatalogRow>
+        <CatalogRow label="Interruptor (linha inteira é o alvo)" stacked>
+          <ListRow
+            icon={<Bell size={20} color={theme.role.textSecondary} strokeWidth={1.75} />}
+            label="Receber notificações"
+            toggle={{ value: notifyToggle, onValueChange: setNotifyToggle }}
+            testID="catalog-listrow-toggle"
+          />
+        </CatalogRow>
+        <CatalogRow label="Sem ação (estático)" stacked>
+          <ListRow icon={<Shield size={20} color={theme.role.textSecondary} strokeWidth={1.75} />} label="Conta verificada" value="Desde 03/2025" />
+        </CatalogRow>
+      </CatalogSection>
+
+      <CatalogSection title="SegmentedControl" description="C-16: pílulas de filtro/período — a ativa em amarelo cheio com texto navy (único bloco amarelo além do CTA).">
+        <CatalogRow label="Período" stacked>
+          <SegmentedControl
+            options={[
+              { value: 'week', label: 'Esta semana' },
+              { value: 'month', label: 'Mês atual' },
+              { value: 'all', label: 'Anteriores' },
+            ]}
+            value={periodFilter}
+            onChange={setPeriodFilter}
+            accessibilityLabel="Filtrar por período"
+            testID="catalog-segmented"
+          />
+        </CatalogRow>
+      </CatalogSection>
+
+      <CatalogSection title="MoneyText + EstimateLabel" description="C-10: Intl.NumberFormat pt-BR + tabularNums; `estimated:true` exige `label` em tempo de compilação.">
+        <CatalogRow label="Valor final" stacked>
+          <MoneyText value={18.9} size="heading" />
+        </CatalogRow>
+        <CatalogRow label="Valor estimado (rótulo obrigatório)" stacked>
+          <MoneyText value={23.5} size="heading" estimated label="Preço estimado" />
+        </CatalogRow>
+        <CatalogRow label="EstimateLabel isolado (não é dinheiro)" stacked>
+          <EstimateLabel>Chega em cerca de 5 min</EstimateLabel>
+        </CatalogRow>
+      </CatalogSection>
+
+      <CatalogSection title="Toast" description="C-05: confirmação curta, auto-dismiss (theme.motion.duration.toast). Controlado — este botão liga `visible`.">
+        <CatalogRow label="Disparar" stacked>
+          <PrimaryButton label="Mostrar toast" onPress={() => setToastVisible(true)} testID="catalog-toast-trigger" />
+          <View style={styles.toastSlot}>
+            <Toast message="Endereço salvo" visible={toastVisible} onDismiss={() => setToastVisible(false)} testID="catalog-toast" />
+          </View>
+        </CatalogRow>
+      </CatalogSection>
+
+      <CatalogSection
+        title="ConfirmDialog"
+        description="C-03: confirmação com consequência. Foco preso dentro do diálogo no web (Tab não escapa), foco inicial no botão Cancelar, e o foco volta a este botão ao fechar."
+      >
+        <CatalogRow label="Destrutivo (DangerButton de confirmação)" stacked>
+          <SecondaryButton label="Cancelar corrida…" onPress={() => setConfirmVisible(true)} testID="catalog-confirm-trigger" />
+          <ConfirmDialog
+            visible={confirmVisible}
+            title="Cancelar esta corrida?"
+            description="O motorista já está a caminho. Cancelamentos frequentes podem afetar sua conta."
+            confirmLabel="Cancelar corrida"
+            cancelLabel="Manter corrida"
+            destructive
+            loading={confirmLoading}
+            onConfirm={handleConfirm}
+            onCancel={() => setConfirmVisible(false)}
+            testID="catalog-confirm-dialog"
+          />
+        </CatalogRow>
+      </CatalogSection>
+
+      <CatalogSection title="FooterActions" description="C-04: CTA fixo no rodapé — aqui mostrado inline (dentro do fluxo), o uso real é como `footer` do AppShell.">
+        <CatalogRow label="Padrão" stacked>
+          <View style={styles.footerActionsSample}>
+            <FooterActions elevated={false}>
+              <PrimaryButton label="Confirmar corrida" onPress={() => undefined} />
+            </FooterActions>
+          </View>
+        </CatalogRow>
+      </CatalogSection>
+
+      <CatalogSection
+        title="PressableScale"
+        description="C-13: resposta de toque (encolhe para 0,97 em 120ms) — já embutido no ButtonCore acima; aqui como primitivo isolado, com o próprio anel de foco (não vem de graça, ver nota do componente)."
+      >
+        <CatalogRow label="Alvo com escala" stacked>
+          <PressableScaleDemo />
+        </CatalogRow>
+      </CatalogSection>
+
+      <CatalogSection
         title="Demonstração ao vivo"
         description="Sem chamada de API real — só prova que carregamento e sucesso funcionam de fato (não é estático)."
       >
@@ -314,6 +500,31 @@ export default function CatalogScreen() {
   );
 }
 
+/**
+ * `PressableScale` NÃO inclui o anel de foco de teclado (documentado no próprio componente) —
+ * quem o usa direto precisa acrescentar, igual ao `ButtonCore`. Componente à parte para o hook
+ * não renderizar o catálogo inteiro a cada Tab (mesma razão de `ScreenHeader.BackButton`).
+ */
+function PressableScaleDemo() {
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
+  return (
+    <PressableScale
+      {...focusProps}
+      onPress={() => undefined}
+      accessibilityRole="button"
+      accessibilityLabel="Alvo de demonstração do PressableScale"
+      style={focusVisible ? pressableScaleFocusRing : undefined}
+      testID="catalog-pressablescale"
+    >
+      <View style={styles.pressableScaleBox}>
+        <Text style={styles.pressableScaleLabel}>Pressione e segure</Text>
+      </View>
+    </PressableScale>
+  );
+}
+
+const pressableScaleFocusRing = focusRingStyle('outside', theme.radius.md);
+
 const styles = StyleSheet.create({
   spacer: { height: theme.spacing['5'] },
   demoRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['4'] },
@@ -324,4 +535,37 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing['4'],
     marginBottom: theme.spacing['8'],
   },
+  screenHeaderSample: {
+    width: '100%',
+    maxWidth: 420,
+    borderWidth: 1,
+    borderColor: theme.role.border,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing['2'],
+  },
+  narrowBox: { width: 220 },
+  toastSlot: { alignItems: 'center', minHeight: 40, justifyContent: 'center' },
+  // SEM `overflow:'hidden'` de propósito: o anel de foco do PrimaryButton (C-13/ButtonCore) é
+  // desenhado POR FORA da caixa do botão — um contêiner com overflow cortaria o anel em algum
+  // lado (achado Q1 do Atlas: nenhum contêiner novo pode cortar o anel compartilhado).
+  footerActionsSample: {
+    width: '100%',
+    maxWidth: 420,
+    borderWidth: 1,
+    borderColor: theme.role.border,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing['1'],
+  },
+  pressableScaleBox: {
+    minHeight: theme.layout.buttonHeight,
+    minWidth: theme.layout.touchTarget,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.role.surfaceElevated,
+    borderWidth: 1.5,
+    borderColor: theme.role.borderControl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing['4'],
+  },
+  pressableScaleLabel: { color: theme.role.textPrimary, ...textStyle('semibold', 'body') },
 });

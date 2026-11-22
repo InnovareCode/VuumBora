@@ -78,6 +78,23 @@ function shadows<G extends { readonly [key: string]: Token<readonly BoxShadowVal
   return out as { readonly [K in keyof G]: readonly BoxShadowValue[] };
 }
 
+/** Curva de animação no formato `cubic-bezier(x1,y1,x2,y2)` (PP-7, `motion.easing.*`). */
+export type CubicBezier = readonly [number, number, number, number];
+function easingCurves<G extends { readonly [key: string]: Token<readonly number[]> }>(
+  group: G,
+  path: string
+): { readonly [K in keyof G]: CubicBezier } {
+  const out: Record<string, CubicBezier> = {};
+  for (const [key, token] of Object.entries(group)) {
+    const value = token.$value;
+    if (value.length !== 4) {
+      throw new Error(`[tokens] cubicBezier inválido em ${path}.${key}: esperado 4 números, recebeu ${value.length}`);
+    }
+    out[key] = value as unknown as CubicBezier;
+  }
+  return out as { readonly [K in keyof G]: CubicBezier };
+}
+
 export type FontWeight = '400' | '500' | '600' | '700';
 
 function fontWeights<G extends Group<number>>(group: G): { readonly [K in keyof G]: FontWeight } {
@@ -102,6 +119,10 @@ export const tokens = {
     overlay: colors(raw.color.overlay),
     semantic: colors(raw.color.semantic),
     map: colors(raw.color.map),
+    // PP-7 (docs/padrao-premium-telas.md §4): pastilha atrás de ícone amarelo de atalho.
+    tint: colors(raw.color.tint),
+    // PP-7: gráfico de ganhos (M11) — barra ativa/inativa/mock, grade e rótulo de eixo.
+    chart: colors(raw.color.chart),
   },
   spacing: dimensions(raw.spacing, 'spacing'),
   radius: dimensions(raw.radius, 'radius'),
@@ -119,6 +140,11 @@ export const tokens = {
   gradient: gradients(raw.gradient),
   elevation: shadows(raw.elevation),
   glow: shadows(raw.glow),
+  // PP-7 (docs/padrao-premium-telas.md §7/§4): movimento sem número mágico.
+  motion: {
+    duration: numbers(raw.motion.duration),
+    easing: easingCurves(raw.motion.easing, 'motion.easing'),
+  },
 } as const;
 
 /**

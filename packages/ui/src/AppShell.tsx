@@ -1,9 +1,11 @@
 import { memo, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ScrollView, StyleSheet, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '@vuumbora/tokens';
 import { gradientColors, gradientLocations } from './gradient';
+
+const COMPACT_WIDTH_BREAKPOINT = 375;
 
 const EDGES_WITH_FOOTER: readonly Edge[] = ['top', 'left', 'right'];
 const EDGES_DEFAULT: readonly Edge[] = ['top', 'right', 'bottom', 'left'];
@@ -46,13 +48,31 @@ export const AppShell = memo(function AppShell({
   style,
   testID,
 }: AppShellProps) {
+  // §3 do padrão premium: margem lateral 16pt abaixo de 375pt de largura (`screenPaddingCompact`),
+  // 20pt a partir daí (`screenPadding`) — o token compacto existia e ninguém usava (auditoria).
+  const { width: windowWidth } = useWindowDimensions();
+  const compact = windowWidth < COMPACT_WIDTH_BREAKPOINT;
+
   // Auditoria B1 (causa raiz do "scrim que acaba antes do fim da tela" nas boas-vindas):
   // com `scroll`, este wrapper NÃO crescia (`!scroll && styles.flexFill` nunca aplicava
   // flex a ele) — o `ScrollView.contentContainerStyle` já tinha `flexGrow:1`, mas isso só
   // estica o CONTAINER da rolagem; o filho único dentro dele (este `View`) só ocupa o
   // espaço quando ele mesmo também tem `flexGrow`. Sem isso, telas com `flex:1` no
   // próprio conteúdo (ex. `boas-vindas.tsx`) não tinham altura disponível pra crescer.
-  const content = <View style={[padded && styles.padded, scroll ? styles.scrollFill : styles.flexFill, style]}>{children}</View>;
+  const content = (
+    <View
+      style={[
+        padded && (compact ? styles.paddedCompact : styles.padded),
+        scroll ? styles.scrollFill : styles.flexFill,
+        // §4 (PP-7, `layout.contentMaxWidth`): em tablet/tela grande o conteúdo não estica
+        // além de 480pt — fica centrado, sem "buraco" de fundo entre ele e as bordas.
+        styles.contentWidth,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
 
   return (
     <SafeAreaView
@@ -93,6 +113,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.role.screen },
   rootTransparent: { backgroundColor: 'transparent' },
   padded: { padding: theme.layout.screenPadding },
+  paddedCompact: { padding: theme.layout.screenPaddingCompact },
+  contentWidth: { width: '100%', maxWidth: theme.layout.contentMaxWidth, alignSelf: 'center' },
   flexFill: { flex: 1 },
   scrollFill: { flexGrow: 1 },
   scrollContent: { flexGrow: 1 },

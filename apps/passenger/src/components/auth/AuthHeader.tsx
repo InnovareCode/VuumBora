@@ -52,13 +52,21 @@ const BackButton = memo(function BackButton({ onPress }: { readonly onPress: () 
 });
 
 const styles = StyleSheet.create({
-  root: { gap: theme.spacing['2'] },
+  root: { gap: theme.spacing['2'], position: 'relative' },
+  // Absoluto (não ocupa altura de fluxo): a seta fica no canto superior esquerdo sem empurrar a
+  // logo/título pra baixo — em 320×568 essa altura reservada (44 + gap) era o que sobrava do CTA
+  // de /login e /cadastro pra fora da tela (achado da auditoria do portão da onda 0, não é
+  // regressão dela: o mesmo corte já existia em `main` antes, só não tinha sido medido nessa
+  // largura). A logo é centralizada e começa em x=80 (320pt), a seta mora em x=8-52 — não colidem.
   backButton: {
+    position: 'absolute',
+    top: 0,
+    left: -theme.spacing['2'],
     width: theme.layout.touchTarget,
     height: theme.layout.touchTarget,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: -theme.spacing['2'],
+    zIndex: 1,
   },
   logoRow: { alignItems: 'center', marginBottom: theme.spacing['2'] },
   title: { color: theme.role.textPrimary, ...textStyle('bold', 'heading'), textAlign: 'center' },

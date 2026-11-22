@@ -154,6 +154,90 @@
       "userLocation": {
         "$type": "color",
         "$value": "#6EA8FF"
+      },
+      "land": {
+        "$type": "color",
+        "$value": "#0F2240",
+        "$description": "PP-7. Fundo do estilo de mapa escuro. Mesmo valor do placeholder já em uso (`tools/art-assets/map.html:7`) e medido em `docs/direcao-de-arte.md:266`."
+      },
+      "block": {
+        "$type": "color",
+        "$value": "#11264A",
+        "$description": "PP-7. Quadra urbana, levemente mais clara que `map.land` (`tools/art-assets/map.html:7,13`). Não medido em contraste (§19)."
+      },
+      "roadMinor": {
+        "$type": "color",
+        "$value": "#1A3560",
+        "$description": "PP-7. Rua secundária (`tools/art-assets/map.html:7,16`). Não medido em contraste."
+      },
+      "roadMajor": {
+        "$type": "color",
+        "$value": "#24477A",
+        "$description": "PP-7. Avenida (`tools/art-assets/map.html:7,21`). Não medido em contraste."
+      },
+      "water": {
+        "$type": "color",
+        "$value": "#081A33",
+        "$description": "PP-7. Mar/orla (`tools/art-assets/map.html:7,28`). Não medido em contraste."
+      },
+      "park": {
+        "$type": "color",
+        "$value": "#0F2A3A",
+        "$description": "PP-7. Área verde (`tools/art-assets/map.html:7,13`). Não medido em contraste."
+      },
+      "label": {
+        "$type": "color",
+        "$value": "#C7D4E6",
+        "$description": "PP-7. Rótulo de rua discreto (`docs/direcao-de-arte.md:91`). NÃO medido nem aprovado pelo dono — valor provisório da Lyra para destravar o componente; precisa de conferência de contraste contra `map.land`/`map.block` antes de ir a produção."
+      },
+      "balloon": {
+        "$type": "color",
+        "$value": "#010D19",
+        "$description": "PP-7. Fundo do balão de endereço sobre o mapa (`docs/direcao-de-arte.md:65`, medido 18,77:1 em `:265`)."
+      },
+      "balloonBorderTop": {
+        "$type": "color",
+        "$value": "#929BA6",
+        "$description": "PP-7. Borda de cima do balão (luz de cima, princípio 2) — `docs/direcao-de-arte.md:65`."
+      },
+      "balloonBorderBase": {
+        "$type": "color",
+        "$value": "#57687E",
+        "$description": "PP-7. Borda de baixo/laterais do balão — `docs/direcao-de-arte.md:65`."
+      }
+    },
+    "tint": {
+      "yellowSoft": {
+        "$type": "color",
+        "$value": "rgba(255,204,0,0.10)",
+        "$description": "PP-7 (`docs/padrao-premium-telas.md` §4). Pastilha atrás de ícone amarelo de atalho — nunca atrás de texto (regra de economia de amarelo, §2)."
+      }
+    },
+    "chart": {
+      "barActive": {
+        "$type": "color",
+        "$value": "#FFCC00",
+        "$description": "PP-7. Mesmo HEX de `brand.yellow` (nenhum HEX novo): barra do dia/período atual no gráfico de ganhos (M11), mesma semântica do item selecionado (§2, sinal permitido)."
+      },
+      "barInactive": {
+        "$type": "color",
+        "$value": "#2D3A4C",
+        "$description": "PP-7. Mesmo HEX de `border.default`: barra de dia passado, sem destaque."
+      },
+      "barMock": {
+        "$type": "color",
+        "$value": "rgba(141,154,172,0.35)",
+        "$description": "PP-7. Barra de dado de demonstração (acompanha o `MockBadge` do bloco, nunca substitui o selo)."
+      },
+      "grid": {
+        "$type": "color",
+        "$value": "rgba(255,255,255,0.08)",
+        "$description": "PP-7. Linha de grade do gráfico — discreta, nunca compete com a barra."
+      },
+      "label": {
+        "$type": "color",
+        "$value": "#8D9AAC",
+        "$description": "PP-7. Mesmo HEX de `text.muted`: rótulo de eixo do gráfico."
       }
     }
   },
@@ -341,6 +425,21 @@
       "$type": "dimension",
       "$value": "20px",
       "$description": "Altura do MockBadge neutro (direção de arte §4, mock.chip)."
+    },
+    "contentMaxWidth": {
+      "$type": "dimension",
+      "$value": "480px",
+      "$description": "PP-7 (`docs/padrao-premium-telas.md` §4/§14). Largura máxima do conteúdo em tablet/tela grande — usado pelo `AppShell` (§15: 'largura máxima de 480')."
+    },
+    "sheetHandleWidth": {
+      "$type": "dimension",
+      "$value": "36px",
+      "$description": "PP-7. Alça do `BottomSheet` (C-02, ainda não construído) — `docs/padrao-premium-telas.md` §4."
+    },
+    "sheetHandleHeight": {
+      "$type": "dimension",
+      "$value": "4px",
+      "$description": "PP-7. Altura da alça do `BottomSheet`."
     }
   },
   "opacity": {
@@ -417,6 +516,14 @@
         { "color": "#070D18", "position": 1 }
       ],
       "$description": "Direção de arte §7.1/§9 item 9. Vertical (180°), atrás de texto sobre foto (boas-vindas) — SEMPRE presente sob título/CTA quando há imagem de fundo. Aproximação do scrim da maquete (tools/art-assets/onboarding-premium.html: transparente -> rgba(7,13,24,.92) a 96px do topo do bloco -> #070D18 na base), convertido para frações porque o bloco de texto tem altura variável."
+    },
+    "promo": {
+      "$type": "gradient",
+      "$value": [
+        { "color": "#1D3A66", "position": 0 },
+        { "color": "#0F213D", "position": 1 }
+      ],
+      "$description": "PP-7 (`docs/direcao-de-arte.md` §4/§9.2, `docs/padrao-premium-telas.md` §4). Banner informativo/aviso de demanda, matiz navy da marca em vez de roxo. Medido a 135° na referência; os componentes que o usam precisam passar `start`/`end` em diagonal (expo-linear-gradient), porque os stops aqui só guardam cor+posição, sem ângulo (ver `gradient.ts`). ⚠ `#1D3A66` no topo reprova texto `textMuted` (3,97:1, `docs/direcao-de-arte.md:263`): só `textPrimary`/`textSecondary` por cima. Sem consumidor nesta fatia (o banner que o usaria saiu da tela por PP-6/D-07)."
     }
   },
   "elevation": {
@@ -446,6 +553,34 @@
       "$type": "shadow",
       "$value": [{ "offsetX": 0, "offsetY": 0, "blurRadius": 8, "spreadDistance": 1, "color": "rgba(255,204,0,0.30)" }],
       "$description": "Direção de arte §4/§9 item 4. Card selecionado (categoria, pagamento). Junto com borda 2pt brand.yellow."
+    }
+  },
+  "motion": {
+    "duration": {
+      "instant": { "$type": "number", "$value": 120, "$description": "PP-7 (`docs/padrao-premium-telas.md` §7/§4). Toque: botão encolhe para 0,97 e escurece." },
+      "fast": { "$type": "number", "$value": 150, "$description": "Seleção (borda acende, card sobe 2pt) e foco de campo." },
+      "base": { "$type": "number", "$value": 200, "$description": "Erro de campo (mensagem desce)." },
+      "panel": { "$type": "number", "$value": 250, "$description": "Painel inferior abre/fecha (BottomSheet, C-02)." },
+      "screen": { "$type": "number", "$value": 300, "$description": "Troca de tela." },
+      "pulse": { "$type": "number", "$value": 1400, "$description": "Pulso de busca, em laço (já usado por SearchingPulse antes deste token existir)." },
+      "toast": { "$type": "number", "$value": 2600, "$description": "C-05 (`Toast`): tempo visível antes do auto-dismiss. Sem medição na referência — valor de julgamento da Lyra (pedido do Atlas em 22/11/2026 para o duration deixar de ser um número solto no componente)." }
+    },
+    "easing": {
+      "out": {
+        "$type": "cubicBezier",
+        "$value": [0, 0, 0.2, 1],
+        "$description": "PP-7. 'Saída rápida' — curva padrão de desaceleração (Material 'decelerate'). Toque, seleção, foco, erro de campo."
+      },
+      "inOut": {
+        "$type": "cubicBezier",
+        "$value": [0.4, 0, 0.2, 1],
+        "$description": "PP-7. Entrada e saída simétricas (Material 'standard'). Painel inferior, troca de tela, esqueleto."
+      },
+      "linear": {
+        "$type": "cubicBezier",
+        "$value": [0, 0, 1, 1],
+        "$description": "PP-7. Pulso de busca (senoidal já é o próprio movimento; linear é a curva de base do laço)."
+      }
     }
   }
 }
