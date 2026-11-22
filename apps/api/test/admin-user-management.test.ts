@@ -97,13 +97,15 @@ describe('criar', () => {
     assert.equal(wrongPassword.body.error.code, 'password_invalid');
 
     // O par status + code é o contrato com o painel (apps/admin/src/api/client.ts), não só o code: regressão da QA da F07b.
+    // Um dono novo por rota: depois da 1ª senha errada a espera progressiva do par ator+IP responde 423, não 403.
     const target = await session('suporte', 'target-badpw');
-    for (const [path, body] of [
-      [`/users/${target.admin.id}/deactivate`, { password: 'senha-errada-123' }],
-      [`/users/${target.admin.id}/reactivate`, { password: 'senha-errada-123' }],
-      [`/users/${target.admin.id}/role`, { password: 'senha-errada-123', role: 'operacao' }],
+    for (const [label, path, body] of [
+      ['deactivate', `/users/${target.admin.id}/deactivate`, { password: 'senha-errada-123' }],
+      ['reactivate', `/users/${target.admin.id}/reactivate`, { password: 'senha-errada-123' }],
+      ['role', `/users/${target.admin.id}/role`, { password: 'senha-errada-123', role: 'operacao' }],
     ] as const) {
-      const res = await post(owner, path, body);
+      const actor = await session('dono', `owner-badpw-${label}`);
+      const res = await post(actor, path, body);
       assert.equal(res.status, 403, `${path}: ${JSON.stringify(res.body)}`);
       assert.equal(res.body.error.code, 'password_invalid', path);
     }
