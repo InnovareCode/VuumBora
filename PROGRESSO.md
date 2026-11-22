@@ -97,6 +97,26 @@ e deixa a decisão 17, contas de loja da Apple e do Google, como bloqueio de iPh
 - Apps móveis (quando forem ligados à API): serializar a renovação do token,
   porque duas renovações simultâneas com o mesmo token derrubam a sessão.
 
+## Estado em 22/11/2026 (madrugada)
+
+- **Íris, passada 2: APROVADO** sobre `79f41d8` (`docs/veredito-iris-s1-passada-2.md`): painel que falha fechado contra a API
+  real do S1 (Chromium e Firefox), botão do Firefox, A1 nos dois apps e A2 (114/114 e fluxo real). Duas lacunas de teste do
+  `SessionManager` (SF4 e SF10) com os testes prontos para incorporar. **Vale só para esse commit**: o `HEAD` andou depois.
+- **Órion, rodada 3b** (`docs/revisao-seguranca-s1-rodada3b.md`): **0 críticos, 0 altos, 4 médios, 9 baixos.** API liberada
+  para produção **fechada**. Médios: M-1 (pista de bcrypt sufocável por ~17 a ~35 IPv4 ou 1 bloco IPv6), M-2 (o cliente real não
+  manda as versões dos Termos: o cadastro real daria 400), M-3 (perfil de build abre telas de dev por omissão e nada barra
+  identidade simulada na loja), M-4 (o `SessionManager` apaga a sessão por status HTTP, sem olhar o `code`).
+- **No `main`:** A-1 e B-1, API do M-3 com a migração 0021, A1, A2, B1 (identidade do passageiro sobre o cliente mock), painel
+  que falha fechado, `nginx.conf` do admin e do site.
+- **CI:** o `HEAD` estava vermelho no teste de tempo do pool de bcrypt (2 threads fixas num runner de 2 vCPUs); ajustado em
+  `148dc8d` (pool dimensionado como em produção e limite de 250 ms; o defeito que o teste caça mede 606 ms). Não reproduzi a
+  falha localmente: diagnóstico plausível, não provado. Um commit meu levou de carona uma remoção staged da Lyra e quebrou o
+  `check`; corrigido em `0f6417a`. Regra nova: conferir `git diff --cached` antes de todo commit.
+- **Produção:** API **antiga** e painel do S1 incompatível com ela. Reverter o painel para `producao-admin-estavel` (ação do dono,
+  roteiro no guia) ou publicar API e painel juntos.
+- **Próxima leva:** M-2 e M-4 no `api-client` mais as lacunas SF4 e SF10; M-1, B-1 a B-5 na API; M-3 do perfil de build e B-9 no
+  painel; guias de produção e `eas.json`; depois B2 (identidade do motorista) e A3 (armazenamento seguro).
+
 ## Apps — estado real e plano (21/11/2026)
 
 **Fonte: [`docs/plano-apps-execucao.md`](docs/plano-apps-execucao.md)** (Nova, com
