@@ -20,10 +20,10 @@ import {
   textStyle,
   theme,
 } from '@vuumbora/ui';
-import { CatalogRow } from '../src/components/catalog/CatalogRow';
-import { CatalogSection } from '../src/components/catalog/CatalogSection';
-import { FocusedFieldPreview } from '../src/components/catalog/FocusedFieldPreview';
-import { PressedButtonPreview } from '../src/components/catalog/PressedButtonPreview';
+import { CatalogRow } from '../../src/components/catalog/CatalogRow';
+import { CatalogSection } from '../../src/components/catalog/CatalogSection';
+import { FocusedFieldPreview } from '../../src/components/catalog/FocusedFieldPreview';
+import { PressedButtonPreview } from '../../src/components/catalog/PressedButtonPreview';
 
 /**
  * Catálogo de componentes — tela de revisão visual (print), não é tela de produto.

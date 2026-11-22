@@ -8,7 +8,7 @@ export interface CatalogSectionProps {
   readonly children: ReactNode;
 }
 
-/** Agrupador visual do catálogo — título + descrição + conteúdo, só para apps/passenger/app/catalogo.tsx. */
+/** Agrupador visual do catálogo — título + descrição + conteúdo, só para apps/passenger/app/(dev)/catalogo.tsx. */
 export function CatalogSection({ title, description, children }: CatalogSectionProps) {
   return (
     <View style={styles.section}>

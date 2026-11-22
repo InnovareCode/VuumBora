@@ -64,22 +64,50 @@ function parseAdmin(source: Obj): Parsed<AdminUser> {
   return ok({ id: id.value, name: name.value, email: email.value, role });
 }
 
-/** `string` ou `null` são valores reais (`null` = sessão anterior à migração 0009); ausente é tratado como `null`. */
-function parseCsrfToken(source: Obj): Parsed<string | null> {
+/**
+ * Sessão NOVA (login autenticado, `2fa/verify`, `enroll/confirm`): o servidor acabou de emitir o cookie e SEMPRE manda o
+ * `csrfToken` (texto). Ausente, `null`, vazio ou de outro tipo é contrato quebrado: aceitar como `null` deixaria o painel
+ * logado com toda mutação falhando em 403, em vez de `contract_mismatch` (B-9 da revisão S1, rodada 3b).
+ */
+function parseNewCsrfToken(source: Obj): Parsed<string> {
+  const value = source['csrfToken'];
+  return typeof value === 'string' && value.length > 0 ? ok(value) : fail(`campo "csrfToken": esperado texto, veio ${typeOf(value)}`);
+}
+
+/**
+ * SÓ o `GET /me` aceita `null`: é uma sessão que já existia, e `null` = criada antes da migração 0009 (sem token). Ausente
+ * também vira `null` aqui (comportamento anterior, mantido); texto vazio ou de outro tipo falha.
+ */
+function parseExistingCsrfToken(source: Obj): Parsed<string | null> {
   const value = source['csrfToken'];
   if (value === undefined || value === null) return ok(null);
   return typeof value === 'string' && value.length > 0 ? ok(value) : fail(`campo "csrfToken": esperado texto ou null, veio ${typeOf(value)}`);
 }
 
+/** Sessão restaurada por `GET /me`: o token pode ser `null`. */
 export interface ParsedSession {
   readonly admin: AdminUser;
   readonly csrfToken: string | null;
 }
 
-function parseSession(source: Obj): Parsed<ParsedSession> {
+/** Sessão recém-emitida: o token é texto, sempre. */
+export interface ParsedNewSession {
+  readonly admin: AdminUser;
+  readonly csrfToken: string;
+}
+
+function parseNewSession(source: Obj): Parsed<ParsedNewSession> {
   const admin = parseAdmin(source);
   if (!admin.ok) return admin;
-  const csrfToken = parseCsrfToken(source);
+  const csrfToken = parseNewCsrfToken(source);
+  if (!csrfToken.ok) return csrfToken;
+  return ok({ admin: admin.value, csrfToken: csrfToken.value });
+}
+
+function parseExistingSession(source: Obj): Parsed<ParsedSession> {
+  const admin = parseAdmin(source);
+  if (!admin.ok) return admin;
+  const csrfToken = parseExistingCsrfToken(source);
   if (!csrfToken.ok) return csrfToken;
   return ok({ admin: admin.value, csrfToken: csrfToken.value });
 }
@@ -106,7 +134,7 @@ export function parseLoginResponse(raw: unknown): Parsed<{ readonly outcome: Log
     return fail(status === undefined ? 'login: campo "status" ausente' : `login: status desconhecido (${vocabulary(status)})`);
   }
   if (status === 'authenticated') {
-    const session = parseSession(body.value);
+    const session = parseNewSession(body.value);
     if (!session.ok) return fail(`login (authenticated): ${session.reason}`);
     return ok({ outcome: { status, admin: session.value.admin }, csrfToken: session.value.csrfToken });
   }
@@ -121,17 +149,17 @@ export function parseLoginResponse(raw: unknown): Parsed<{ readonly outcome: Log
 export function parseMeResponse(raw: unknown): Parsed<ParsedSession> {
   const body = requireObject(raw, 'me');
   if (!body.ok) return body;
-  const session = parseSession(body.value);
+  const session = parseExistingSession(body.value);
   return session.ok ? session : fail(`me: ${session.reason}`);
 }
 
 /** `POST /auth/2fa/verify`: sessão pronta + quantos códigos de recuperação restam (`null` se o servidor não disser). */
-export function parseSecondFactorVerifyResponse(raw: unknown): Parsed<ParsedSession & { readonly recoveryCodesRemaining: number | null }> {
+export function parseSecondFactorVerifyResponse(raw: unknown): Parsed<ParsedNewSession & { readonly recoveryCodesRemaining: number | null }> {
   const body = requireObject(raw, '2fa/verify');
   if (!body.ok) return body;
   const authenticated = requireAuthenticated(body.value, '2fa/verify');
   if (!authenticated.ok) return authenticated;
-  const session = parseSession(body.value);
+  const session = parseNewSession(body.value);
   if (!session.ok) return fail(`2fa/verify: ${session.reason}`);
   const remaining = body.value['recoveryCodesRemaining'];
   return ok({ ...session.value, recoveryCodesRemaining: typeof remaining === 'number' && Number.isFinite(remaining) ? remaining : null });
@@ -149,12 +177,12 @@ export function parseEnrollmentStartResponse(raw: unknown): Parsed<TotpEnrollmen
 }
 
 /** `POST /auth/2fa/enroll/confirm`: sessão pronta + os códigos de recuperação (única exibição — sem eles, não é sucesso). */
-export function parseEnrollmentConfirmResponse(raw: unknown): Parsed<ParsedSession & { readonly recoveryCodes: readonly string[] }> {
+export function parseEnrollmentConfirmResponse(raw: unknown): Parsed<ParsedNewSession & { readonly recoveryCodes: readonly string[] }> {
   const body = requireObject(raw, '2fa/enroll/confirm');
   if (!body.ok) return body;
   const authenticated = requireAuthenticated(body.value, '2fa/enroll/confirm');
   if (!authenticated.ok) return authenticated;
-  const session = parseSession(body.value);
+  const session = parseNewSession(body.value);
   if (!session.ok) return fail(`2fa/enroll/confirm: ${session.reason}`);
   const codes = body.value['recoveryCodes'];
   if (!Array.isArray(codes) || codes.length === 0 || !codes.every((code): code is string => typeof code === 'string' && code.length > 0)) {

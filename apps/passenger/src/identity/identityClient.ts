@@ -11,6 +11,13 @@
  * Fatias que mexem neste arquivo:
  *  - A3: `storage` passa a ser a implementação do SecureStore (nativo) / memória (web).
  *  - B4: `IDENTITY_MODE` vira `'http'` com `baseUrl` vindo de `EXPO_PUBLIC_API_URL`.
+ *
+ * GUARDA DE BUILD (`metro.config.js`): build `production` com `IDENTITY_MODE !== 'http'` ABORTA, porque o modo
+ * simulado não autentica ninguém. O `metro.config.js` lê a declaração `const IDENTITY_MODE = '...'` DESTE arquivo
+ * por texto: mantenha UMA declaração, com literal entre aspas. Se a B4 mudar a forma (ex.: ler de variável de
+ * ambiente), a build de produção aborta por "modo desconhecido" até a guarda ser atualizada junto — falha
+ * fechada de propósito. O escape `VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION=1` é temporário (export da A1) e
+ * morre quando este modo virar `'http'`.
  */
 import { uuid } from 'expo';
 import Constants from 'expo-constants';
@@ -22,7 +29,10 @@ import {
   type IdentityClient,
 } from '@vuumbora/api-client/identity';
 
-/** Mock com atraso artificial: dá para ver o estado "carregando" (e testar o duplo toque) sem API. */
+/**
+ * Mock com atraso artificial: dá para ver o estado "carregando" (e testar o duplo toque) sem API.
+ * Lido por texto pela guarda de build do `metro.config.js` — ver o aviso no topo do arquivo.
+ */
 const IDENTITY_MODE = 'mock' as const;
 const MOCK_LATENCY_MS = 350;
 

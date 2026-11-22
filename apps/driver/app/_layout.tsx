@@ -17,8 +17,9 @@ import { stackScreenOptions } from '../src/navigation/stackScreenOptions';
  * Layout raiz (Expo Router). Três grupos de rota:
  *   (auth)/  — rotas públicas (hoje só `entrar`, o acesso de demonstração): só existem SEM sessão.
  *   (app)/   — rotas do produto (dashboard M05): só existem COM sessão.
- *   mapbox-check — tela de desenvolvimento, fora dos grupos e FORA DO BUILD DE PRODUÇÃO (ver
- *              `metro.config.js`, variável VUUMBORA_BUILD_PROFILE).
+ *   (dev)/   — telas de desenvolvimento (`/mapbox-check`; o grupo não entra na URL). Tudo sob
+ *              `app/(dev)/` fica FORA DO BUILD DE PRODUÇÃO por convenção de pasta (ver `metro.config.js`):
+ *              tela de desenvolvimento nova nasce AQUI, nunca solta em `app/`.
  *
  * A guarda é `Stack.Protected`: com `guard` falso a tela nem é registrada no navegador, então
  * URL direta (web) ou deep link (nativo) para uma rota de `(app)` sem sessão nunca a abre e é
