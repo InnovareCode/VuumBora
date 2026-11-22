@@ -304,3 +304,17 @@ gerador de CSS a partir do mesmo `vuumbora.tokens.json`.
   `packages/ui/src/typography.ts` (exportados de `@vuumbora/ui`). Detalhe completo,
   incluindo por que glifo/símbolo decorativo fica fora da fonte da marca, em
   [[licoes-tipografia-plus-jakarta-sans]].
+- **Fatia A1 "Higiene do protótipo" (21/11/2026, docs/plano-apps-execucao.md §3):** os dois apps agora têm `app/(auth)/`
+  (públicas: passageiro `boas-vindas/login/cadastro`; motorista `entrar`, placeholder da M01) e `app/(app)/` (produto), cada
+  grupo com `_layout.tsx` próprio, e `Stack.Protected` no `_layout.tsx` raiz alimentado por `src/session/SessionProvider.tsx`
+  (sessão de MOCK em memória: `useSession()` → `isSignedIn`, `mode:'mock'`, `signInWithMock`, `signOut`; A2/A3 trocam).
+  A flag de "acesso simulado" da Home passou de param de URL (`simulated=1`) para `useSession().mode`. Detalhes e armadilha em
+  [[bug_stack_protected_sem_redirectto_vira_unmatched_route]]. `catalogo`/`mapbox-check` ficam na raiz de `app/` (sem guarda,
+  só existem fora de `production`) — [[feedback_telas_de_dev_fora_do_build_por_metro_blocklist]]. Categorias: cinco
+  (`vuumbora|conforto|motorista_mulher|entrega|pet`, mesmos slugs do plano de dados), Home em lista de uma coluna em toda largura
+  (5 cards lado a lado não cabem); VuumBora/Conforto com ilustração, as outras com símbolo lucide; preços inventados marcados por
+  `MockBadge`. Login social ligado por `SOCIAL_SIGN_IN_ENABLED=false` em `apps/passenger/src/config/featureFlags.ts` (seção nem renderiza).
+- **Fatia B1 (22/11/2026):** o `SessionProvider` do passageiro deixou de ser de mentira — espelha `identity.session` do
+  `@vuumbora/api-client/identity` (mock + memória; `status` ganhou `loading`, o `RootGate` segura a splash) e `(auth)` ganhou
+  `codigo`, `esqueci-senha`, `redefinir-senha`, `termos`, `privacidade`; `simulateAuthRequest`/`signInWithMock` não existem mais.
+  Tudo em [[project_passenger_identity_b1]].

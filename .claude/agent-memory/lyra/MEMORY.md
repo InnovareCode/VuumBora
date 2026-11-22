@@ -56,3 +56,24 @@
 - [nginx: add_header em location zera os do server](bug_nginx_add_header_location_zera_heranca.md) — CSP some do index.html; map p/ Cache-Control, testar curl -I em todas as rotas.
 - [cn() sem tailwind-merge: classes de tamanho conflitam](bug_cn_sem_tailwind_merge_classes_conflitantes.md) — ativação a 14 px; medir fontSize de todo input em 390.
 - [navigate() depois de acceptSession perde para o redirect do /login](bug_navigate_apos_login_perde_para_redirect.md) — destino pós-login viaja no estado da sessão.
+- [Stack.Protected sem redirectTo → "Unmatched Route"](bug_stack_protected_sem_redirectto_vira_unmatched_route.md) — URL vira `/(auth)`; redirectTo explícito, estrutura (auth)/(app) dos apps (A1, 21/11).
+- [Perfil de build do Metro, telas `app/(dev)/` e guarda de identidade](feedback_telas_de_dev_fora_do_build_por_metro_blocklist.md) — perfil derivado de NODE_ENV, escape temporário `VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION=1`, harness vm + export real; mapbox-gl não era o index de 2,3 MB.
+- [Admin: csrfToken obrigatório em sessão nova (B-9)](project_admin_csrf_sessao_nova_b9.md) — `null` só em /me; 18 cenários no Chromium + controle negativo no HEAD; API viva NÃO provada.
+- [lucide-react-native barrel infla o bundle](bug_lucide_barrel_infla_bundle.md) — ~2 MB de ícones não usados em passageiro e motorista; deep import recomendado, NÃO aplicado.
+- [`.expo/types` velho quebra o check; armadilhas Git Bash+Playwright](bug_typedroutes_expo_types_velho_quebra_check.md) — regenerar com expo start; MSYS_NO_PATHCONV e a pasta C:\c.
+- [Login sem `status` virava desafio e a tela sumia](bug_login_status_ausente_vira_desafio.md) — falha fechada: validação `unknown`, `contract_mismatch`, foco no alerta; vermelho+text-secondary reprova AA.
+- [Provar SPA contra API falsa + controle negativo](feedback_prova_api_falsa_e_controle_negativo.md) — bundle de prova em scratch, `git archive HEAD` p/ ver o bug, armadilhas de path/junction no Windows.
+- [Passageiro B1 — identidade sobre o cliente mock](project_passenger_identity_b1.md) — pontos únicos (identityClient, authErrors, legalDocuments, authFlowStore), o que foi p/ ui, provado x não provado.
+- [RNW: checkbox sem aria-checked e sem Espaço](bug_rnweb_checkbox_aria_checked_e_espaco.md) — `accessibilityState.checked` não chega ao DOM; Espaço só em role button; `ToggleSwitch` não conferido.
+- [InputCore: input real 37px e anel duplo no foco](bug_inputcore_textinput_37pt_e_anel_duplo.md) — `alignSelf:'stretch'` + `outlineStyle:'none'` web; "o pai tem 52" não prova o alvo.
+- [Provar formulário Expo web: armadilhas da B1](feedback_provar_expo_web_armadilhas_b1.md) — `CI=1 expo start` serve bundle velho, `text=` casa helper, helper idempotente, gancho `__DEV__`, heredoc; B3: scratchpad persiste (não sobrescreve lib.mjs), role=tab, MutationObserver p/ "Home nunca apareceu".
+- [Passageiro B3 — aceite com versão exibida e reaceite](project_passenger_consent_b3.md) — store legal compartilhada, gate no layout de (app), desmarcar por referência, 409 com/sem current, provado x só aparelho.
+- [RNW: BackHandler no web = console.error + #error-toast](bug_rnweb_backhandler_console_error.md) — toast intercepta clique; proteger com Platform android; provas devem tratar console.error como falha.
+- [`<input>` em linha flex sem minWidth:0 some o "Mostrar senha"](bug_input_flex_minwidth_firefox_webkit.md) — Firefox ≤373 / WebKit ≤365, Chromium não mostra; provar nos 3 motores + controle negativo.
+- [Foco no `<body>` depois de envio com erro](bug_foco_vai_para_body_apos_envio_com_erro.md) — blurOnSubmit do RNW + botão sem tabindex; regra campo/aviso, `focusAfterRender`, `field.ref` do RHF, sem InteractionManager no RN 0.88.
+- [Expo Router: +not-found, `sitemap:false` e cache do manifesto](feedback_expo_router_notfound_sitemap_e_cache_do_manifesto.md) — opção do plugin só vale com `--clear`; como provar no export de produção.
+- [Editar em lote sem trocar CRLF/LF](feedback_editar_preservando_fim_de_linha.md) — Python em modo texto regrava CRLF no Windows; helper que preserva o fim de linha original.
+- [Motorista B2 — identidade sobre o cliente mock](project_driver_identity_b2.md) — rotas (entrar/criar-conta), regra "conta ≠ cadastro" na copy, RegistrationNotice, lock não atualizado, provado × só aparelho.
+- [InputCore: foco invisível em campo inválido](bug_inputcore_foco_invisivel_em_campo_invalido.md) — borda de foco e de erro idênticas; anel boxShadow; provar foco por imagem focado×desfocado, não por activeElement.
+- [A3 — cofre da sessão, B-6 (texto conferido), N4, N6](project_a3_secure_storage_and_verified_text.md) — packages/ui/src/device, Keychain do iOS na reinstalação, o que só se prova em aparelho.
+- [Mutação: sobreviventes ensinam a assertar o objeto inteiro](feedback_mutacao_sobreviventes_assert_objeto_inteiro.md) — runner Python com restauração por hash; teste de ordem por log.

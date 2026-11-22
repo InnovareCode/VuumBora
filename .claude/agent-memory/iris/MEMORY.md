@@ -11,3 +11,8 @@
 - [S1: validação independente (21/11/2026)](project_s1_validacao_independente.md) — flakes (virada do TOTP, .env), mutações que sobreviveram, portas do CI limpo
 - [S1: ambiente e ferramentas](project_s1_ambiente_de_teste_e_ferramentas.md) — PG isolado, Node 22 do CI, cópia limpa, mutação em cópia, Playwright WebKit/Firefox
 - [S1: passada final de QA (ff7af13)](project_s1_passada_final_qa.md) — APROVADO; F1 Firefox (-mt-1); falsos FAIL de motor e do meu harness
+- [S1: passada 2 de QA (79f41d8)](project_s1_passada_2_qa.md) — APROVADO; mutantes de época vivos no api-client; HEAD anda; CI vermelho no 16c147a; receitas de cada bateria
+- [S1: passada 3 de QA (1707546)](project_s1_passada_3_qa.md) — REPROVADO: CI vermelho 4/4, teto do A-1 deixa teste de 12 simultâneas flaky, "Mostrar senha" some no Firefox/WebKit; receitas (afinidade, CI sem login, WSL2)
+- [S1: passada 4 de QA (33b2401)](project_s1_passada_4_qa.md) — bcrypt-ceiling não repete no mesmo banco (uniqueEmail), flake 200 ms, lacunas do teste B-2; receitas pin.ps1/log_statement
+- [S1: passada 5 de QA (6a3ff24)](project_s1_passada_5_qa.md) — APROVADO; N1/N2 provados em 120 execuções; Q1 bcrypt fora do verify-email sem teste, N3 com 7 formas vivas, LinkButton sem teclado no web
+- [Harness da passada 5: armadilhas e receitas](feedback_harness_passada_5.md) — initdb UTF8, splat do PowerShell, mutante que morre por pré-condição, Expo CI=1 sem watch, gancho do B-6 no navegador

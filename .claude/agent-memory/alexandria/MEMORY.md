@@ -1,0 +1,1 @@
+- [Convenções de docs da identidade](convencoes-docs-identidade.md) — tabelas de erro do admin, base dos caminhos, desenho vs. implementado, "M-3" ambíguo

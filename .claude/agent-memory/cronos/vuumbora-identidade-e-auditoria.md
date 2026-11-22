@@ -30,6 +30,25 @@ Idade minima 18 anos (passageiro e motorista); versoes dos Termos/Privacidade AI
 - Backup: restore COMPLETO preserva accepted_at (gatilhos so nascem depois dos dados). Restore data-only COM gatilhos
   reescreve accepted_at para now() — medido; usar --disable-triggers / session_replication_role=replica.
 
+**0021 (versoes dos documentos legais, M-3 do Orion) — decisoes:**
+- `legal_document_versions` (document terms_of_use|privacy_policy, audience passenger|driver, version, text_sha256, requires_reacceptance,
+  published_at) imutavel: gatilho vale ate para o dono + vuumbora_api so SELECT. "Vigente" e DERIVADA (view legal_current_versions, maior
+  published_at por par), nao coluna `retired_at`: marcar a anterior exigiria UPDATE em linha imutavel. Unica por construcao; gatilho
+  exige published_at estritamente crescente sob pg_advisory_xact_lock (relogio lido DEPOIS do lock). Publicar = vigorar (sem agendamento).
+- account_consents ganhou audience + text_sha256 (NULLABLE: aceite legado nao tem como ganhar hash); o gatilho PREENCHE os dois
+  (audience = tipo da conta; hash = do catalogo) e recusa versao nao publicada (23503 account_consents_version_published) ou
+  superada (23514 ..._version_current). FK composta de 4 colunas (document,audience,version,sha) segura ate com gatilho desligado.
+- Reaceite: `legal_pending_for_account(conta)` e a unica definicao: em dia = aceitou versao publicada >= ultima MATERIAL
+  (requires_reacceptance=true); pendente lista a VIGENTE. Aceite legado (sem hash) nao conta. COALESCE('-infinity') cobre par sem material.
+- UPDATE do aceite agora compara a LINHA INTEIRA (`NEW IS NOT DISTINCT FROM (OLD com ip_hash NULL)`): coluna nova no futuro entra sozinha.
+- Hash do texto vazio e recusado por CHECK (pipe que falhou). `url` NAO fica no banco (host muda, linha e imutavel); corpo do texto
+  no banco = decisao aberta, tem de ser antes da 1a publicacao (depois nenhuma linha publicada pode ganhar corpo).
+- Armadilhas medidas: `TRUNCATE tabela_referenciada_por_FK` (sem CASCADE) cai em 0A000 ANTES do gatilho; so o CASCADE chega ao gatilho
+  (por isso o gatilho de TRUNCATE existe: sem ele `TRUNCATE catalogo CASCADE` apagaria os aceites). Default privileges da 0012 valem
+  para VIEW tambem (REVOKE explicito). Rollback tem de devolver a funcao do gatilho a forma anterior ANTES de dropar colunas; schema
+  pos-rollback == schema pre-migracao (pg_dump --schema-only, so os tokens \restrict aleatorios diferem). A 0021 QUEBRA o cadastro
+  atual por desenho (gatilho exige versao publicada): fixtures dos testes da API precisam publicar versao com o dono.
+
 **Armadilhas que valem reusar:**
 - Numeracao de migracao colide quando duas frentes criam em paralelo (0018 nasceu duplicada: Vega e eu). Antes de salvar
   `ls migrations` E `ls rollback`; quem chegou depois renomeia. O rollback tem o MESMO nome da migracao: eu sobrescrevi
@@ -46,8 +65,10 @@ Idade minima 18 anos (passageiro e motorista); versoes dos Termos/Privacidade AI
   um tipo bloqueia o outro.
 - Erro de banco nao tratado vira 503 'unavailable' na API: coluna NOT NULL nova derruba o cadastro ate o codigo enviar o dado.
 - Testes exigem banco terminado em `_test` e truncam tabelas.
-- Teste local: PG 18 em C:/Program Files/PostgreSQL/18/bin; initdb em scratchpad (-A trust, --locale=C), porta 54392
-  (a 5432 e de outro: nao usar). `pg_ctl start -w` dentro do Bash TRAVA (herda o pipe): subir em background e checar com
-  pg_isready. Role de teste com `ALTER ROLE vuumbora_api LOGIN` (trust) para provar privilegio por conexao REAL, nao so
+- Teste local: PG 18 em C:/Program Files/PostgreSQL/18/bin; initdb em scratchpad (-A trust, --locale=C, -U postgres), porta
+  escolhida pelo Atlas na tarefa (0021: 5439; 5432/5434/5437/5438 sao de outros — checar `netstat` antes). `pg_ctl start -w`
+  dentro do Bash TRAVA (herda o pipe): `(nohup pg_ctl start -D dir -o "-p PORTA" -l log -W >/dev/null 2>&1 &)` e checar com
+  pg_isready. Ao rodar a suite da API em PG proprio: DATABASE_URL no shell + `DOTENV_CONFIG_PATH` apontando arquivo inexistente
+  (o .env do repo tem a DATABASE_URL do dono e o setup.ts o le). Role de teste com `ALTER ROLE vuumbora_api LOGIN` (trust) para provar privilegio por conexao REAL, nao so
   SET ROLE. psql aplica cada .sql e schema_migrations precisa existir antes (0012 faz REVOKE nela).
   Runner: `DATABASE_URL=... node --import tsx test/helpers/run-migrate.ts` (cria o banco e migra, via prepararBanco).

@@ -11,3 +11,11 @@
 - [Admin — SMTP no painel (0015)](project_admin_email_smtp.md) — mailer, trava SSRF, lock do limite de testes, armadilha do teste de corrida
 - [S1 rodada 2 — correções I-1..I-7 + idade/aceite](project_s1_rodada2_correcoes.md) — decisões, limites conhecidos (aceite x reaproveitamento), onde mora cada prova
 - [Armadilhas de teste/edição do S1](feedback_testes_e_edicao_armadilhas_s1.md) — CRLF, heredoc, portas/banco compartilhados, mutação redundante, pool monkeypatchado
+- [A2 — identidade no api-client](project_api_client_identity_a2.md) — refresh em voo único, falha transitória x definitiva, época, como provar contra a API real (0021 quebra cadastro)
+- [A-1 bcrypt: pista de threads (rodadas 3 e 3b)](project_bcrypt_pool_a1.md) — bcryptjs em worker, 2 pistas, reserva ANTES do banco (sem DELETE em login_attempts), justiça por /48, vigia, cache legal, piso do custo
+- [Mutação e banco compartilhado](feedback_teste_mutacao_e_banco_compartilhado.md) — migração alheia no meio, trilha append-only suja, runs sobrepostos, mutar só em cópia
+- [M-3 — versões exibidas e reaceite (0021)](project_legal_m3_versoes_exibidas.md) — LEGAL_DOCUMENTS_BASE_URL fail-closed, fixture do catálogo imutável, 409 e legal:publish
+- [api-client: M-2, M-4, B-8 (22/11)](project_api_client_m2_m4_b8.md) — versões exibidas como entrada, refresh só definitivo com code, fila de revogação, http só em dev, sem DOM
+- [Corrida sem sleep + armadilhas do Bash/Windows](feedback_corrida_sem_sleep_e_ferramentas.md) — mutante vivo só sob carga, gates determinísticos, heredoc/python3, API do HEAD com árvore suja
+- [Python regrava CRLF; concorrência pela HTTP x origem](feedback_python_crlf_e_admissao_na_http.md) — tr -cd '\r' para contar; lock do par testa-se no repositório; timer de worker conta a subida
+- [N1/N2/N3 da passada 4 (limites de teste e sondagem)](feedback_limites_de_teste_e_sondagem_n1_n3.md) — ms absoluto mede a máquina, bcrypt síncrono só cai na parada TOTAL, uniqueEmail com marca por execução, auth escondida só por efeito
