@@ -11,6 +11,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { pool } from '../db.js';
+import { adminRouteRateLimit } from '../lib/admin-rate-limit.js';
 import { requireAdminRole, requireCsrfToken } from '../hooks/require-admin.js';
 import {
   approveDriverApplicationForAdmin,
@@ -107,12 +108,12 @@ export function registerAdminDriverApplicationRoutes(app: FastifyInstance): void
   // Rota estática registrada antes da rota com `:id` — o roteador do Fastify já
   // prioriza caminho estático sobre parâmetro de qualquer forma, mas a ordem aqui
   // deixa isso explícito para quem ler o arquivo depois.
-  app.get('/driver-applications/summary', { preHandler: requireDriverApplicationAccess }, async (_request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/driver-applications/summary', { ...adminRouteRateLimit(), preHandler: requireDriverApplicationAccess }, async (_request: FastifyRequest, reply: FastifyReply) => {
     const counts = await getDriverApplicationSummary(pool);
     reply.code(200).send({ ok: true, data: counts });
   });
 
-  app.get('/driver-applications/:id', { preHandler: requireDriverApplicationAccess }, async (request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/driver-applications/:id', { ...adminRouteRateLimit(), preHandler: requireDriverApplicationAccess }, async (request: FastifyRequest, reply: FastifyReply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) {
       reply.code(400).send({ ok: false, error: { code: 'invalid_params', message: 'Identificador inválido.' } });
@@ -133,7 +134,7 @@ export function registerAdminDriverApplicationRoutes(app: FastifyInstance): void
     reply.code(200).send({ ok: true, data: application });
   });
 
-  app.get('/driver-applications', { preHandler: requireDriverApplicationAccess }, async (request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/driver-applications', { ...adminRouteRateLimit(), preHandler: requireDriverApplicationAccess }, async (request: FastifyRequest, reply: FastifyReply) => {
     const parsedQuery = listQuerySchema.safeParse(request.query);
     if (!parsedQuery.success) {
       sendInvalidQuery(reply);
@@ -157,7 +158,7 @@ export function registerAdminDriverApplicationRoutes(app: FastifyInstance): void
 
   app.post(
     '/driver-applications/:id/approve',
-    { preHandler: requireMutationAccess },
+    { ...adminRouteRateLimit(), preHandler: requireMutationAccess },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const parsedParams = idParamSchema.safeParse(request.params);
       if (!parsedParams.success) {
@@ -185,7 +186,7 @@ export function registerAdminDriverApplicationRoutes(app: FastifyInstance): void
 
   app.post(
     '/driver-applications/:id/reject',
-    { preHandler: requireMutationAccess },
+    { ...adminRouteRateLimit(), preHandler: requireMutationAccess },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const parsedParams = idParamSchema.safeParse(request.params);
       if (!parsedParams.success) {

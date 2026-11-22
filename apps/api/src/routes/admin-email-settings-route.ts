@@ -10,6 +10,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { removePasswordSchema, saveSettingsSchema, testEmailSchema } from '../domain/email-settings.js';
 import { pool } from '../db.js';
 import { requireAdminRole, requireCsrfToken } from '../hooks/require-admin.js';
+import { adminRouteRateLimit } from '../lib/admin-rate-limit.js';
 import { twoFactorConfig } from '../lib/two-factor-config.js';
 import {
   getEmailSettings,
@@ -50,11 +51,11 @@ function sendStepUpFailure(request: FastifyRequest, reply: FastifyReply, failure
 }
 
 export function registerAdminEmailSettingsRoutes(app: FastifyInstance): void {
-  app.get('/settings/email', { preHandler: requireOwner }, async (request, reply) => {
+  app.get('/settings/email', { ...adminRouteRateLimit(), preHandler: requireOwner }, async (request, reply) => {
     reply.code(200).send({ ok: true, data: await getEmailSettings(pool, contextOf(request)) });
   });
 
-  app.post('/settings/email', { preHandler: requireOwnerMutation }, async (request, reply) => {
+  app.post('/settings/email', { ...adminRouteRateLimit(), preHandler: requireOwnerMutation }, async (request, reply) => {
     const parsed = saveSettingsSchema.safeParse(request.body ?? {});
     if (!parsed.success) return sendValidationFailed(reply, fieldsOf(parsed.error.issues));
 
@@ -69,7 +70,7 @@ export function registerAdminEmailSettingsRoutes(app: FastifyInstance): void {
     reply.code(200).send({ ok: true, data: outcome.view });
   });
 
-  app.post('/settings/email/password/remove', { preHandler: requireOwnerMutation }, async (request, reply) => {
+  app.post('/settings/email/password/remove', { ...adminRouteRateLimit(), preHandler: requireOwnerMutation }, async (request, reply) => {
     const parsed = removePasswordSchema.safeParse(request.body ?? {});
     if (!parsed.success) return sendValidationFailed(reply, fieldsOf(parsed.error.issues));
 
@@ -78,7 +79,7 @@ export function registerAdminEmailSettingsRoutes(app: FastifyInstance): void {
     reply.code(200).send({ ok: true, data: outcome.view });
   });
 
-  app.post('/settings/email/test', { preHandler: requireOwnerMutation }, async (request, reply) => {
+  app.post('/settings/email/test', { ...adminRouteRateLimit(), preHandler: requireOwnerMutation }, async (request, reply) => {
     const parsed = testEmailSchema.safeParse(request.body ?? {});
     if (!parsed.success) return sendValidationFailed(reply, ['to']);
 

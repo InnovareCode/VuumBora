@@ -5,6 +5,7 @@ import { pool } from '../db.js';
 import { env } from '../env.js';
 import { ADMIN_SESSION_COOKIE } from '../domain/admin.js';
 import { requireAdmin, requireCsrfToken } from '../hooks/require-admin.js';
+import { adminRouteRateLimit } from '../lib/admin-rate-limit.js';
 import { routeRateLimitKey } from '../lib/ip-bucket.js';
 import { twoFactorConfig } from '../lib/two-factor-config.js';
 import {
@@ -126,7 +127,7 @@ export function registerAdminTwoFactorRoutes(app: FastifyInstance): void {
 
   // ---- Com sessão (papéis em que o 2FA é opcional, e gerência para todos).
 
-  app.get('/2fa/status', { preHandler: requireAdmin }, async (request, reply) => {
+  app.get('/2fa/status', { ...adminRouteRateLimit(), preHandler: requireAdmin }, async (request, reply) => {
     reply.code(200).send({ ok: true, data: await getTwoFactorStatus(pool, request.admin!) });
   });
 
