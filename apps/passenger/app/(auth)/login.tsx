@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type ViewInstance } from 'react-native';
 import { Lock, User } from 'lucide-react-native';
 import {
   AppShell,
@@ -14,7 +14,6 @@ import {
   formatWait,
   theme,
   textStyle,
-  type TextInputHandle,
 } from '@vuumbora/ui';
 import { AuthErrorAlert } from '../../src/components/auth/AuthErrorAlert';
 import { AuthHeader } from '../../src/components/auth/AuthHeader';
@@ -24,6 +23,7 @@ import { identity } from '../../src/identity/identityClient';
 import { safeCall } from '../../src/identity/safeCall';
 import { useRetryLock } from '../../src/identity/useRetryLock';
 import { goBackOr } from '../../src/navigation/goBack';
+import { useFocusAfterRender } from '../../src/lib/focusAfterRender';
 import { loginSchema, type LoginFormValues } from '../../src/schemas/authSchemas';
 import { fieldErrorProps } from '../../src/lib/fieldErrorProps';
 
@@ -51,9 +51,11 @@ export default function LoginScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<{ readonly view: AuthErrorView; readonly attempt: number } | null>(null);
   const lock = useRetryLock();
-  const passwordRef = useRef<TextInputHandle>(null);
+  // O aviso de erro recebe o foco quando o envio falha (o botão fica indisponível durante o envio e o foco cai no <body>).
+  const alertRef = useRef<ViewInstance>(null);
+  const focusAfterRender = useFocusAfterRender();
 
-  const { control, handleSubmit, setValue } = useForm<LoginFormValues>({
+  const { control, handleSubmit, setValue, setFocus } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { identifier: loginHint ?? '', password: '' },
     mode: 'onBlur',
@@ -89,6 +91,7 @@ export default function LoginScreen() {
       lock.lockFor(view.retryAfterSeconds, lockKeyOf(typed));
     }
     setFailure((previous) => ({ view, attempt: (previous?.attempt ?? 0) + 1 }));
+    focusAfterRender(() => alertRef.current?.focus());
   }
 
   function handleAction(action: AuthErrorAction) {
@@ -122,8 +125,9 @@ export default function LoginScreen() {
                 autoComplete="username"
                 textContentType="username"
                 autoCorrect={false}
+                inputRef={field.ref}
                 returnKeyType="next"
-                onSubmitEditing={() => passwordRef.current?.focus()}
+                onSubmitEditing={() => setFocus('password')}
                 leftAccessory={<User size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
                 testID="login-identifier-input"
               />
@@ -144,7 +148,7 @@ export default function LoginScreen() {
                 autoComplete="current-password"
                 textContentType="password"
                 returnKeyType="go"
-                inputRef={passwordRef}
+                inputRef={field.ref}
                 onSubmitEditing={() => void submit()}
                 leftAccessory={<Lock size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
                 testID="login-password-input"
@@ -167,6 +171,7 @@ export default function LoginScreen() {
               view={failure.view}
               waitSeconds={waitSeconds}
               onAction={handleAction}
+              alertRef={alertRef}
               testID="login-alert"
             />
           ) : null}

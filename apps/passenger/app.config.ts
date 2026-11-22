@@ -28,7 +28,9 @@ const config: ExpoConfig = {
     },
   },
   plugins: [
-    'expo-router',
+    // `sitemap: false`: sem a rota `/_sitemap` (lista TODAS as rotas do app, versão do SDK e origem, e estava aberta no
+    // export de produção). O app não tem uso para ela; a tela de rota inexistente é a nossa, `app/+not-found.tsx`.
+    ['expo-router', { sitemap: false }],
     'expo-status-bar',
     'expo-font',
     'expo-image',

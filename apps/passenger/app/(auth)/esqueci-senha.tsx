@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, type ViewInstance } from 'react-native';
 import { Mail } from 'lucide-react-native';
 import { AppShell, LinkButton, PrimaryButton, TextInput, formatWait, theme } from '@vuumbora/ui';
 import { AuthErrorAlert } from '../../src/components/auth/AuthErrorAlert';
@@ -13,21 +13,25 @@ import { identity } from '../../src/identity/identityClient';
 import { safeCall } from '../../src/identity/safeCall';
 import { useRetryLock } from '../../src/identity/useRetryLock';
 import { goBackOr } from '../../src/navigation/goBack';
+import { useFocusAfterRender } from '../../src/lib/focusAfterRender';
 import { forgotSchema, type ForgotFormValues } from '../../src/schemas/authSchemas';
 import { fieldErrorProps } from '../../src/lib/fieldErrorProps';
 
 /**
  * Esqueci a senha — recuperação SÓ por e-mail (o contrato não aceita celular). O servidor responde igual exista a
  * conta ou não (e igual para conta não confirmada), então a tela NUNCA diz se o e-mail tem conta: o texto fala em
- * "se estiver cadastrado" e o sucesso leva sempre à tela de redefinir. Erros: e-mail inválido (campo),
- * `too_many_attempts` (contagem), rede e serviço indisponível.
+ * "se estiver cadastrado" e o sucesso leva sempre à tela de redefinir. Erros: e-mail inválido (a mensagem vai NO campo,
+ * que fica `aria-invalid` e recebe o foco), `too_many_attempts` (contagem), rede e serviço indisponível (aviso, que
+ * recebe o foco).
  */
 export default function EsqueciSenhaScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<{ readonly view: AuthErrorView; readonly attempt: number } | null>(null);
   const lock = useRetryLock();
+  const alertRef = useRef<ViewInstance>(null);
+  const focusAfterRender = useFocusAfterRender();
 
-  const { control, handleSubmit } = useForm<ForgotFormValues>({
+  const { control, handleSubmit, setError, setFocus } = useForm<ForgotFormValues>({
     resolver: zodResolver(forgotSchema),
     defaultValues: { email: '' },
     mode: 'onBlur',
@@ -50,10 +54,17 @@ export default function EsqueciSenhaScreen() {
       return;
     }
     const view = describeAuthError('code_request', result.error);
+    if (view.presentation === 'field' && view.field === 'email') {
+      // `invalid_email` do servidor: erro DO CAMPO (texto embaixo dele + aria-invalid), não do aviso geral.
+      setError('email', { type: 'server', message: view.message });
+      focusAfterRender(() => setFocus('email'));
+      return;
+    }
     if (view.key === 'too_many_attempts' && view.retryAfterSeconds !== undefined) {
       lock.lockFor(view.retryAfterSeconds, typed.toLowerCase());
     }
     setFailure((previous) => ({ view, attempt: (previous?.attempt ?? 0) + 1 }));
+    focusAfterRender(() => alertRef.current?.focus());
   }
 
   const submit = handleSubmit(onSubmit);
@@ -85,6 +96,7 @@ export default function EsqueciSenhaScreen() {
                 autoComplete="email"
                 textContentType="emailAddress"
                 autoCorrect={false}
+                inputRef={field.ref}
                 returnKeyType="go"
                 onSubmitEditing={() => void submit()}
                 leftAccessory={<Mail size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
@@ -96,7 +108,13 @@ export default function EsqueciSenhaScreen() {
 
         <View style={styles.actions}>
           {failure !== null ? (
-            <AuthErrorAlert key={failure.attempt} view={failure.view} waitSeconds={waitSeconds} testID="esqueci-alert" />
+            <AuthErrorAlert
+              key={failure.attempt}
+              view={failure.view}
+              waitSeconds={waitSeconds}
+              alertRef={alertRef}
+              testID="esqueci-alert"
+            />
           ) : null}
           <PrimaryButton
             label={locked ? `Aguarde ${formatWait(waitSeconds)}` : 'Enviar código'}

@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { memo, type Ref } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View, type PressableInstance } from 'react-native';
 import { theme } from '@vuumbora/tokens';
 import { LinkButton } from './LinkButton';
 import { glyphStyle, textStyle } from './typography';
@@ -22,6 +22,8 @@ export interface ConsentCheckboxProps {
   readonly errorMessage?: string;
   readonly testID?: string;
   readonly linkTestID?: string;
+  /** Ref da caixa (a linha tocável), para o formulário levar o foco até ela quando o aceite é o que falta. */
+  readonly checkboxRef?: Ref<PressableInstance>;
 }
 
 /**
@@ -43,6 +45,7 @@ export const ConsentCheckbox = memo(function ConsentCheckbox({
   errorMessage,
   testID,
   linkTestID,
+  checkboxRef,
 }: ConsentCheckboxProps) {
   // No web, o Pressable só trata a tecla Espaço em role `button`/`menuitem` (react-native-web, PressResponder): um
   // `role="checkbox"` só marcaria com Enter, e quem usa teclado espera Espaço. Medido no navegador.
@@ -61,6 +64,7 @@ export const ConsentCheckbox = memo(function ConsentCheckbox({
   return (
     <View style={styles.root}>
       <Pressable
+        ref={checkboxRef}
         {...spaceKeyProps}
         onPress={() => onChange(!checked)}
         disabled={disabled}

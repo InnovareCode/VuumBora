@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { Controller, useForm, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type ViewInstance } from 'react-native';
 import { CalendarDays, Lock, Mail, Phone, User } from 'lucide-react-native';
 import {
   AppShell,
@@ -17,7 +17,6 @@ import {
   formatWait,
   theme,
   textStyle,
-  type TextInputHandle,
 } from '@vuumbora/ui';
 import { AuthErrorAlert } from '../../src/components/auth/AuthErrorAlert';
 import { AuthHeader } from '../../src/components/auth/AuthHeader';
@@ -36,6 +35,7 @@ import { safeCall } from '../../src/identity/safeCall';
 import { useRetryLock } from '../../src/identity/useRetryLock';
 import { consentPayload, refreshLegalAfterOutdated, useLegalDocuments } from '../../src/legal/legalDocuments';
 import { goBackOr } from '../../src/navigation/goBack';
+import { useFocusAfterRender } from '../../src/lib/focusAfterRender';
 import { cadastroSchema, type CadastroFormValues } from '../../src/schemas/authSchemas';
 import { fieldErrorProps } from '../../src/lib/fieldErrorProps';
 
@@ -74,6 +74,10 @@ const FIELD_LABEL: Record<keyof CadastroFormValues, string> = {
  * aberto"), limite de tentativas etc. têm estado de tela próprio (`describeAuthError`). A data de nascimento fica só
  * no formulário (estado local): é enviada e nunca guardada — sair da tela a descarta. Sucesso leva à tela do código;
  * o app NÃO abre sessão aqui (o servidor não devolve token no cadastro).
+ *
+ * Foco: envio com campo faltando leva o foco ao primeiro campo com erro (o do react-hook-form, que acha o campo pelo
+ * `field.ref` de cada `Controller`); erro do servidor que é de um campo leva ao campo, e erro que é aviso leva ao aviso
+ * (o botão que enviou ficou indisponível durante o envio e o navegador jogaria o foco no `<body>`).
  */
 export default function CadastroScreen() {
   // Quem ENVIA o aceite confere a idade da cópia ao abrir: a cópia de uma visita antiga não é a que a pessoa vai ver.
@@ -81,12 +85,10 @@ export default function CadastroScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<{ readonly view: AuthErrorView; readonly attempt: number } | null>(null);
   const lock = useRetryLock();
-  const emailRef = useRef<TextInputHandle>(null);
-  const phoneRef = useRef<TextInputHandle>(null);
-  const birthRef = useRef<TextInputHandle>(null);
-  const passwordRef = useRef<TextInputHandle>(null);
+  const alertRef = useRef<ViewInstance>(null);
+  const focusAfterRender = useFocusAfterRender();
 
-  const { control, handleSubmit, setError, setValue, clearErrors, formState } = useForm<CadastroFormValues>({
+  const { control, handleSubmit, setError, setFocus, setValue, getValues, clearErrors, formState } = useForm<CadastroFormValues>({
     resolver: zodResolver(cadastroSchema),
     defaultValues: {
       fullName: '',
@@ -164,11 +166,20 @@ export default function CadastroScreen() {
     }
     if (view.presentation === 'alert') {
       setFailure((previous) => ({ view, attempt: (previous?.attempt ?? 0) + 1 }));
+      focusAfterRender(() => alertRef.current?.focus());
+    } else if (view.field !== undefined) {
+      const [first] = FORM_FIELDS[view.field];
+      if (first !== undefined) focusAfterRender(() => setFocus(first));
     }
   }
 
   function handleAction(action: AuthErrorAction) {
-    if (action === 'go_login') router.push('/login');
+    if (action === 'go_login') {
+      // "Entrar na minha conta" (e-mail já cadastrado): o login abre com o e-mail que a pessoa acabou de digitar.
+      const typed = getValues('email').trim();
+      if (typed !== '') useAuthFlowStore.getState().prefillLogin(typed);
+      router.push('/login');
+    }
     if (action === 'go_forgot') router.push('/esqueci-senha');
   }
 
@@ -196,8 +207,9 @@ export default function CadastroScreen() {
                 autoCapitalize="words"
                 autoComplete="name"
                 textContentType="name"
+                inputRef={field.ref}
                 returnKeyType="next"
-                onSubmitEditing={() => emailRef.current?.focus()}
+                onSubmitEditing={() => setFocus('email')}
                 leftAccessory={<User size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
                 testID="cadastro-name-input"
               />
@@ -221,9 +233,9 @@ export default function CadastroScreen() {
                 autoComplete="email"
                 textContentType="emailAddress"
                 autoCorrect={false}
-                inputRef={emailRef}
+                inputRef={field.ref}
                 returnKeyType="next"
-                onSubmitEditing={() => phoneRef.current?.focus()}
+                onSubmitEditing={() => setFocus('phone')}
                 leftAccessory={<Mail size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
                 testID="cadastro-email-input"
               />
@@ -241,9 +253,9 @@ export default function CadastroScreen() {
                 onBlur={field.onBlur}
                 disabled={submitting}
                 {...fieldErrorProps(fieldState.error)}
-                inputRef={phoneRef}
+                inputRef={field.ref}
                 returnKeyType="next"
-                onSubmitEditing={() => birthRef.current?.focus()}
+                onSubmitEditing={() => setFocus('birthDate')}
                 leftAccessory={<Phone size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
                 testID="cadastro-phone-input"
               />
@@ -262,7 +274,7 @@ export default function CadastroScreen() {
                 onBlur={field.onBlur}
                 disabled={submitting}
                 {...fieldErrorProps(fieldState.error)}
-                inputRef={birthRef}
+                inputRef={field.ref}
                 leftAccessory={<CalendarDays size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
                 testID="cadastro-birthdate-input"
               />
@@ -283,7 +295,7 @@ export default function CadastroScreen() {
                 {...fieldErrorProps(fieldState.error)}
                 autoComplete="new-password"
                 textContentType="newPassword"
-                inputRef={passwordRef}
+                inputRef={field.ref}
                 leftAccessory={<Lock size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
                 testID="cadastro-password-input"
               />
@@ -300,6 +312,7 @@ export default function CadastroScreen() {
               view={failure.view}
               waitSeconds={waitSeconds}
               onAction={handleAction}
+              alertRef={alertRef}
               testID="cadastro-alert"
             />
           ) : null}

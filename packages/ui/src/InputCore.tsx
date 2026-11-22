@@ -67,6 +67,14 @@ export interface InputCoreProps {
  */
 const WEB_NO_INNER_OUTLINE = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null;
 
+/**
+ * O react-native-web imita o RN: todo campo de uma linha com `onSubmitEditing` se DESFOCA depois do Enter
+ * (`setTimeout(() => input.blur(), 0)`). No celular isso fecha o teclado, e é o certo; no web não há teclado para
+ * fechar, e quem usa só o teclado perde o lugar (o foco cai no <body>, medido: Enter na senha de um login com erro).
+ * No web o foco fica no campo. No nativo continua o padrão do RN (o teclado fecha ao enviar).
+ */
+const WEB_KEEP_FOCUS_ON_SUBMIT = Platform.OS === 'web' ? { blurOnSubmit: false } : null;
+
 export const InputCore = memo(function InputCore({
   label,
   value,
@@ -133,6 +141,7 @@ export const InputCore = memo(function InputCore({
           maxLength={maxLength}
           returnKeyType={returnKeyType}
           onSubmitEditing={onSubmitEditing}
+          {...WEB_KEEP_FOCUS_ON_SUBMIT}
           textContentType={textContentType}
           autoCorrect={autoCorrect}
           spellCheck={autoCorrect}
@@ -185,6 +194,10 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    // Sem isto o <input> web não encolhe abaixo da largura intrínseca do navegador (Firefox ~253px, WebKit ~246px;
+    // o Chromium encolhe por conta própria): em linha flex o `min-width: auto` ganha do `flex: 1 1 0` e empurra o
+    // acessório da direita ("Mostrar senha") para fora do campo, onde ele é cortado. No nativo é inofensivo.
+    minWidth: 0,
     // Estica o campo nativo até a altura do `field` (52pt): sem isto o <TextInput> media 37pt e o toque nas faixas de
     // cima/baixo do campo não focava nada (alvo real abaixo dos 44pt do design system — medido no navegador).
     alignSelf: 'stretch',

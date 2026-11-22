@@ -59,6 +59,7 @@ export function LegalConsentFields({ control, legal, disabled }: LegalConsentFie
             linkLabel={LEGAL_LABELS.terms.readLabel}
             linkCaption={`Versão ${terms.version}`}
             onPressLink={() => router.push(LEGAL_ROUTE.terms)}
+            checkboxRef={field.ref}
             testID="cadastro-terms-checkbox"
             linkTestID="cadastro-terms-link"
           />
@@ -77,6 +78,7 @@ export function LegalConsentFields({ control, legal, disabled }: LegalConsentFie
             linkLabel={LEGAL_LABELS.privacy.readLabel}
             linkCaption={`Versão ${privacy.version}`}
             onPressLink={() => router.push(LEGAL_ROUTE.privacy)}
+            checkboxRef={field.ref}
             testID="cadastro-privacy-checkbox"
             linkTestID="cadastro-privacy-link"
           />

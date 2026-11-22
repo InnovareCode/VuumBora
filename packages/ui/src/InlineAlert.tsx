@@ -11,8 +11,8 @@
  *
  * Glifos em `Text` irmão, fora da fonte da marca — ver nota em typography.ts.
  */
-import { memo, useEffect, type ReactNode } from 'react';
-import { AccessibilityInfo, Platform, StyleSheet, Text, View } from 'react-native';
+import { memo, useEffect, type ReactNode, type Ref } from 'react';
+import { AccessibilityInfo, Platform, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 import { theme } from '@vuumbora/tokens';
 import { withAlpha } from './colorAlpha';
 import { glyphStyle, textStyle } from './typography';
@@ -26,6 +26,14 @@ export interface InlineAlertProps {
   /** Ações abaixo do texto (botões/links). Ficam fora do anúncio. */
   readonly children?: ReactNode;
   readonly testID?: string | undefined;
+  /**
+   * Ref do aviso INTEIRO, para quem renderiza levar o foco até ele depois de um envio que falhou (`ref.current?.focus()`).
+   * Com ela o aviso passa a aceitar foco por código (`tabIndex -1`: nunca entra na ordem do Tab nem muda o toque).
+   * Sem ela nada muda. Por que existe: o botão que enviou fica indisponível durante o envio e o navegador joga o foco
+   * no <body>; o aviso é onde está a explicação e as ações (`Pedir novo código`, `Entrar na minha conta`).
+   * No nativo `focus()` num `View` não faz nada: lá o anúncio é a região viva / `announceForAccessibility` acima.
+   */
+  readonly focusRef?: Ref<ViewInstance>;
 }
 
 const TONE: Record<InlineAlertTone, { readonly glyph: string; readonly color: string; readonly border: string }> = {
@@ -35,7 +43,7 @@ const TONE: Record<InlineAlertTone, { readonly glyph: string; readonly color: st
   success: { glyph: '✓', color: theme.role.success, border: theme.role.success },
 };
 
-export const InlineAlert = memo(function InlineAlert({ tone, message, title, children, testID }: InlineAlertProps) {
+export const InlineAlert = memo(function InlineAlert({ tone, message, title, children, testID, focusRef }: InlineAlertProps) {
   const assertive = tone === 'danger' || tone === 'warning';
   const spoken = title ? `${title}. ${message}` : message;
 
@@ -46,6 +54,8 @@ export const InlineAlert = memo(function InlineAlert({ tone, message, title, chi
   const visual = TONE[tone];
   return (
     <View
+      ref={focusRef}
+      {...(focusRef ? { tabIndex: -1 as const } : null)}
       style={[styles.root, { borderColor: visual.border, backgroundColor: withAlpha(visual.border, 0.1) }]}
       testID={testID}
     >

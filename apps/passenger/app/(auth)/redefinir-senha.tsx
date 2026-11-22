@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Redirect, router } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, type ViewInstance } from 'react-native';
 import { Lock, Mail } from 'lucide-react-native';
 import {
   AppShell,
@@ -25,6 +25,7 @@ import { identity } from '../../src/identity/identityClient';
 import { safeCall } from '../../src/identity/safeCall';
 import { useRetryLock } from '../../src/identity/useRetryLock';
 import { goBackOr } from '../../src/navigation/goBack';
+import { useFocusAfterRender, useFocusOnArrival } from '../../src/lib/focusAfterRender';
 import { resetSchema, type ResetFormValues } from '../../src/schemas/authSchemas';
 import { fieldErrorProps } from '../../src/lib/fieldErrorProps';
 
@@ -41,6 +42,10 @@ type Scope = 'reset' | 'resend';
  * Também: `invalid_code` + tentativas restantes, `code_locked`/`code_expired` (levam a "Pedir novo código"),
  * `invalid_password` (no campo), `too_many_attempts` (contagem), rede/serviço. O reenvio chama o mesmo
  * "esqueci a senha": o servidor responde igual exista a conta ou não, então o aviso não afirma que o e-mail saiu.
+ *
+ * Foco: ao abrir, vai ao campo do código. Se o envio falhar, vai ao campo com o erro (código ou senha nova, a mensagem
+ * está embaixo dele) ou, quando o erro é um aviso, ao aviso (o botão que enviou ficou indisponível durante o envio e o
+ * navegador o jogaria no `<body>`).
  */
 export default function RedefinirSenhaScreen() {
   const reset = useAuthFlowStore((state) => state.reset);
@@ -60,13 +65,16 @@ function ResetForm({ pending }: { readonly pending: PendingReset }) {
   const [resendNotice, setResendNotice] = useState<number | null>(null);
   const [resetLocked, setResetLocked] = useState(false);
   const lock = useRetryLock();
+  const alertRef = useRef<ViewInstance>(null);
+  const focusAfterRender = useFocusAfterRender();
   const resendSeconds = useSecondsUntil(pending.nextResendAt);
 
-  const { control, handleSubmit, setError } = useForm<ResetFormValues>({
+  const { control, handleSubmit, setError, setFocus } = useForm<ResetFormValues>({
     resolver: zodResolver(resetSchema),
     defaultValues: { code: '', newPassword: '' },
     mode: 'onBlur',
   });
+  useFocusOnArrival(() => setFocus('code'));
 
   const resetWait = lock.secondsFor('reset');
   const resetBlocked = resetLocked || resetWait > 0;
@@ -75,6 +83,7 @@ function ResetForm({ pending }: { readonly pending: PendingReset }) {
     if (view.key === 'reset_locked') setResetLocked(true);
     if (view.key === 'too_many_attempts' && view.retryAfterSeconds !== undefined) lock.lockFor(view.retryAfterSeconds, scope);
     setFailure((previous) => ({ view, scope, attempt: (previous?.attempt ?? 0) + 1 }));
+    focusAfterRender(() => alertRef.current?.focus());
   }
 
   async function onSubmit(values: ResetFormValues) {
@@ -93,11 +102,13 @@ function ResetForm({ pending }: { readonly pending: PendingReset }) {
     const view = describeAuthError('reset', result.error);
     if (view.presentation === 'field' && view.field === 'newPassword') {
       setError('newPassword', { type: 'server', message: view.message });
+      focusAfterRender(() => setFocus('newPassword'));
       return;
     }
     if (view.presentation === 'field' && view.field === 'code' && view.actions.length === 0) {
       // Ainda há tentativas: a mensagem (com o que resta) vai no próprio campo. Esgotadas, vira aviso com "Pedir novo código".
       setError('code', { type: 'server', message: view.message });
+      focusAfterRender(() => setFocus('code'));
       return;
     }
     fail(view, 'reset');
@@ -154,6 +165,7 @@ function ResetForm({ pending }: { readonly pending: PendingReset }) {
                 disabled={submitting}
                 {...fieldErrorProps(fieldState.error)}
                 {...(failure?.view.field === 'code' && fieldState.error === undefined ? { error: true } : {})}
+                inputRef={field.ref}
                 leftAccessory={<Mail size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
                 testID="redefinir-code-input"
               />
@@ -173,6 +185,7 @@ function ResetForm({ pending }: { readonly pending: PendingReset }) {
                 {...fieldErrorProps(fieldState.error)}
                 autoComplete="new-password"
                 textContentType="newPassword"
+                inputRef={field.ref}
                 returnKeyType="go"
                 onSubmitEditing={() => void submit()}
                 leftAccessory={<Lock size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
@@ -190,6 +203,7 @@ function ResetForm({ pending }: { readonly pending: PendingReset }) {
               waitSeconds={lock.secondsFor(failure.scope)}
               actionOverrides={{ resend_code: { label: requestLabel, disabled: resendBlocked } }}
               onAction={handleAction}
+              alertRef={alertRef}
               testID="redefinir-alert"
             />
           ) : null}

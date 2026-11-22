@@ -42,6 +42,8 @@ interface AuthFlowState {
   markResetResent(resendAfterSeconds: number): void;
   /** Conclui um passo e leva a pessoa ao login com o aviso certo. */
   finishToLogin(hint: string, notice: LoginNotice): void;
+  /** Só pré-preenche o login (sem aviso): "Entrar na minha conta" depois de `email_taken` no cadastro. */
+  prefillLogin(hint: string): void;
   consumeLoginNotice(): void;
   /** Login concluído (ou conta trocada): nada do fluxo anterior pode vazar para o próximo. */
   clearAll(): void;
@@ -77,6 +79,8 @@ export const useAuthFlowStore = create<AuthFlowState>((set) => ({
     set((state) => (state.reset ? { reset: { ...state.reset, nextResendAt: Date.now() + resendAfterSeconds * 1000 } } : state)),
 
   finishToLogin: (hint, notice) => set({ verification: null, reset: null, loginHint: hint, loginNotice: notice }),
+
+  prefillLogin: (hint) => set({ loginHint: hint }),
 
   consumeLoginNotice: () => set({ loginNotice: null }),
 

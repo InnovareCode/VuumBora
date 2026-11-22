@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { memo, type Ref } from 'react';
+import { StyleSheet, Text, type ViewInstance } from 'react-native';
 import { InlineAlert, LinkButton, formatWait, tabularNums, theme, textStyle } from '@vuumbora/ui';
 import type { AuthErrorAction, AuthErrorView } from '../../identity/authErrors';
 
@@ -22,6 +22,8 @@ export interface AuthErrorAlertProps {
   readonly waitSeconds?: number;
   readonly onAction?: (action: AuthErrorAction) => void;
   readonly testID?: string;
+  /** O aviso inteiro, para a tela levar o foco até ele depois de um envio que falhou (ver `focusAfterRender`). */
+  readonly alertRef?: Ref<ViewInstance>;
 }
 
 /**
@@ -37,16 +39,19 @@ export const AuthErrorAlert = memo(function AuthErrorAlert({
   actionOverrides,
   onAction,
   testID,
+  alertRef,
 }: AuthErrorAlertProps) {
   const counting = view.key === 'too_many_attempts' && view.retryAfterSeconds !== undefined;
   const waitOver = counting && (waitSeconds ?? 0) <= 0;
 
   if (waitOver) {
-    return <InlineAlert tone="info" title="Pronto" message="Você já pode tentar de novo." testID={testID} />;
+    return (
+      <InlineAlert tone="info" title="Pronto" message="Você já pode tentar de novo." testID={testID} {...(alertRef ? { focusRef: alertRef } : null)} />
+    );
   }
 
   return (
-    <InlineAlert tone={view.tone} message={view.message} title={view.title} testID={testID}>
+    <InlineAlert tone={view.tone} message={view.message} title={view.title} testID={testID} {...(alertRef ? { focusRef: alertRef } : null)}>
       {counting ? (
         <Text style={styles.countdown} testID={testID ? `${testID}-countdown` : undefined}>
           Tente de novo em {formatWait(waitSeconds ?? view.retryAfterSeconds ?? 0)}.

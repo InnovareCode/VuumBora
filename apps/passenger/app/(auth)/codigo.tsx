@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Redirect, router } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, type ViewInstance } from 'react-native';
 import { Lock, Mail } from 'lucide-react-native';
 import {
   AppShell,
@@ -16,7 +16,6 @@ import {
   formatWait,
   theme,
   useSecondsUntil,
-  type TextInputHandle,
 } from '@vuumbora/ui';
 import { AuthErrorAlert } from '../../src/components/auth/AuthErrorAlert';
 import { AuthHeader } from '../../src/components/auth/AuthHeader';
@@ -26,6 +25,7 @@ import { identity } from '../../src/identity/identityClient';
 import { safeCall } from '../../src/identity/safeCall';
 import { useRetryLock } from '../../src/identity/useRetryLock';
 import { goBackOr } from '../../src/navigation/goBack';
+import { useFocusAfterRender, useFocusOnArrival } from '../../src/lib/focusAfterRender';
 import { verifySchema, type VerifyFormValues } from '../../src/schemas/authSchemas';
 import { fieldErrorProps } from '../../src/lib/fieldErrorProps';
 
@@ -45,6 +45,9 @@ type Scope = 'verify' | 'resend';
  * Estados: `email_not_verified` (chegada pelo login), `emailSent:false` (o e-mail não saiu: reenvio liberado de
  * imediato), `invalid_code` + tentativas restantes, `code_locked`, `code_expired`, `too_many_attempts` com contagem,
  * rede/serviço. Reenvio com contador (60 s, vindo do servidor); o contador é um instante, sobrevive a sair da tela.
+ *
+ * Foco: ao abrir, vai ao campo do código (é só o que a pessoa veio fazer aqui). Se o envio falhar, o foco vai ao aviso
+ * de erro (o botão que enviou ficou indisponível durante o envio e o navegador o jogaria no `<body>`).
  */
 export default function CodigoScreen() {
   const verification = useAuthFlowStore((state) => state.verification);
@@ -64,14 +67,16 @@ function VerifyForm({ verification }: { readonly verification: PendingVerificati
   const [failure, setFailure] = useState<{ readonly view: AuthErrorView; readonly scope: Scope; readonly attempt: number } | null>(null);
   const [resendNotice, setResendNotice] = useState<number | null>(null);
   const lock = useRetryLock();
-  const passwordRef = useRef<TextInputHandle>(null);
+  const alertRef = useRef<ViewInstance>(null);
+  const focusAfterRender = useFocusAfterRender();
   const resendSeconds = useSecondsUntil(verification.nextResendAt);
 
-  const { control, handleSubmit } = useForm<VerifyFormValues>({
+  const { control, handleSubmit, setFocus } = useForm<VerifyFormValues>({
     resolver: zodResolver(verifySchema),
     defaultValues: { code: '', password: '' },
     mode: 'onBlur',
   });
+  useFocusOnArrival(() => setFocus('code'));
 
   const verifyWait = lock.secondsFor('verify');
   const verifyLocked = verifyWait > 0;
@@ -79,6 +84,7 @@ function VerifyForm({ verification }: { readonly verification: PendingVerificati
   function fail(view: AuthErrorView, scope: Scope) {
     if (view.key === 'too_many_attempts' && view.retryAfterSeconds !== undefined) lock.lockFor(view.retryAfterSeconds, scope);
     setFailure((previous) => ({ view, scope, attempt: (previous?.attempt ?? 0) + 1 }));
+    focusAfterRender(() => alertRef.current?.focus());
   }
 
   async function onSubmit(values: VerifyFormValues) {
@@ -173,8 +179,9 @@ function VerifyForm({ verification }: { readonly verification: PendingVerificati
                 disabled={submitting}
                 {...fieldErrorProps(fieldState.error)}
                 {...(failure?.view.field === 'code' && fieldState.error === undefined ? { error: true } : {})}
+                inputRef={field.ref}
                 returnKeyType="next"
-                onSubmitEditing={() => passwordRef.current?.focus()}
+                onSubmitEditing={() => setFocus('password')}
                 leftAccessory={<Mail size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
                 testID="codigo-code-input"
               />
@@ -194,7 +201,7 @@ function VerifyForm({ verification }: { readonly verification: PendingVerificati
                 autoComplete="current-password"
                 textContentType="password"
                 returnKeyType="go"
-                inputRef={passwordRef}
+                inputRef={field.ref}
                 onSubmitEditing={() => void submit()}
                 leftAccessory={<Lock size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
                 testID="codigo-password-input"
@@ -211,6 +218,7 @@ function VerifyForm({ verification }: { readonly verification: PendingVerificati
               waitSeconds={lock.secondsFor(failure.scope)}
               actionOverrides={{ resend_code: { label: requestLabel, disabled: resendBlocked } }}
               onAction={handleAction}
+              alertRef={alertRef}
               testID="codigo-alert"
             />
           ) : null}
