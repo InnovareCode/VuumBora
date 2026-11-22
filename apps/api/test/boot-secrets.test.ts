@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, test } from 'node:test';
-import { authConfigProblems } from '../src/lib/auth-config.js';
+import { authConfigProblems, loadAuthConfig, PRODUCTION_BCRYPT_COST_FLOOR } from '../src/lib/auth-config.js';
 import { bootSecretProblems } from '../src/lib/boot-secrets.js';
 
 const strong = () => randomBytes(48).toString('base64');
@@ -29,6 +29,29 @@ describe('diagnóstico (só nomes e motivos, nunca valores)', () => {
     assert.deepEqual(authConfigProblems({ AUTH_PEPPER: same, AUTH_JWT_SECRET: same }), ['AUTH_PEPPER:equals_AUTH_JWT_SECRET']);
     assert.deepEqual(authConfigProblems({ AUTH_PEPPER: strong(), AUTH_JWT_SECRET: strong(), AUTH_BCRYPT_COST: '99' }), ['AUTH_BCRYPT_COST:too_big']);
     assert.deepEqual(authConfigProblems({ AUTH_PEPPER: strong(), AUTH_JWT_SECRET: strong() }), []);
+  });
+
+  test('B-5 (rodada 3b): em produção o custo do bcrypt tem piso 10; abaixo dele a identidade dos apps falha FECHADA e o boot avisa (só o nome)', () => {
+    const secrets = { AUTH_PEPPER: strong(), AUTH_JWT_SECRET: strong() };
+    for (const NODE_ENV of ['production', undefined]) {
+      const env = (cost?: string): NodeJS.ProcessEnv => ({ ...secrets, ...(NODE_ENV ? { NODE_ENV } : {}), ...(cost ? { AUTH_BCRYPT_COST: cost } : {}) });
+      const label = NODE_ENV ?? 'NODE_ENV ausente (o env.ts o trata como production)';
+      assert.deepEqual(authConfigProblems(env('4')), ['AUTH_BCRYPT_COST:below_production_floor'], label);
+      assert.deepEqual(authConfigProblems(env('9')), ['AUTH_BCRYPT_COST:below_production_floor'], label);
+      assert.equal(loadAuthConfig(env('9')), null, `${label}: custo 9 não sobe a identidade`);
+      assert.deepEqual(authConfigProblems(env('10')), [], label);
+      assert.equal(loadAuthConfig(env('10'))?.bcryptCost, 10, `${label}: o piso em si é aceito`);
+      assert.equal(loadAuthConfig(env())?.bcryptCost, 12, `${label}: o padrão (12) segue valendo`);
+      assert.equal(loadAuthConfig(env('15'))?.bcryptCost, 15);
+    }
+    // O custo baixo continua permitido onde ele existe de propósito (a suíte usa 4 para ser rápida).
+    for (const NODE_ENV of ['test', 'development']) {
+      assert.deepEqual(authConfigProblems({ ...secrets, NODE_ENV, AUTH_BCRYPT_COST: '4' }), [], NODE_ENV);
+      assert.equal(loadAuthConfig({ ...secrets, NODE_ENV, AUTH_BCRYPT_COST: '4' })?.bcryptCost, 4, NODE_ENV);
+    }
+    assert.equal(PRODUCTION_BCRYPT_COST_FLOOR, 10);
+    // O valor configurado nunca vai para o diagnóstico, e o boot (bootSecretProblems) herda o aviso.
+    assert.deepEqual(bootSecretProblems({ ...secrets, NODE_ENV: 'production', AUTH_BCRYPT_COST: '4', ADMIN_TOTP_ENCRYPTION_KEY: randomBytes(32).toString('base64') }), ['AUTH_BCRYPT_COST:below_production_floor']);
   });
 
   test('nenhum valor de segredo aparece no diagnóstico', () => {

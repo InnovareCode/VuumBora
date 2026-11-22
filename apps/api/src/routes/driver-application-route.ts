@@ -5,6 +5,7 @@ import { pool } from '../db.js';
 import { env } from '../env.js';
 import { normalizeBrazilianPhone, normalizeBrazilianState } from '../domain/phone.js';
 import { submitDriverApplication } from '../services/driver-application-service.js';
+import { routeRateLimitKey } from '../lib/ip-bucket.js';
 import { describeErrorForLog } from '../lib/safe-error.js';
 
 /**
@@ -93,6 +94,7 @@ export function registerDriverApplicationRoute(app: FastifyInstance): void {
         rateLimit: {
           max: env.DRIVER_APPLICATION_RATE_LIMIT_MAX,
           timeWindow: env.DRIVER_APPLICATION_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000,
+          keyGenerator: routeRateLimitKey,
         },
       },
     },

@@ -12,7 +12,7 @@ import { checkBirthDate } from '../domain/birth-date.js';
 import { makeRequireAccount } from '../hooks/require-account.js';
 import { authConfigProblems, loadAuthConfig } from '../lib/auth-config.js';
 import { drainBackgroundTasks } from '../lib/background-tasks.js';
-import { rateLimitKey } from '../lib/ip-bucket.js';
+import { routeRateLimitKey } from '../lib/ip-bucket.js';
 import { loadLegalConfig, type LegalConfig } from '../lib/legal-config.js';
 import { unavailableMailPort, type MailPort } from '../lib/mail-port.js';
 import * as identity from '../services/identity-service.js';
@@ -37,9 +37,9 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
   });
 
   if (!config) {
-    // Sem segredos: falha fechada (503), o servidor sobe e o resto da API segue de pé.
+    // Sem segredos válidos (ou com custo de bcrypt abaixo do piso de produção): falha fechada (503), o servidor sobe e o resto da API segue de pé.
     // `reasons`: nomes de variável e motivo, nunca valor (lib/auth-config.ts::authConfigProblems).
-    app.log.error({ event: 'auth_unavailable', reason: 'secrets_missing_weak_or_equal', reasons: authConfigProblems() });
+    app.log.error({ event: 'auth_unavailable', reason: 'config_missing_weak_or_invalid', reasons: authConfigProblems() });
     app.all('/v1/auth/*', async (_request, reply) => {
       fail(reply, 503, 'auth_unavailable', 'Autenticação indisponível no momento.');
     });
@@ -52,8 +52,8 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
   // Esquenta o hash descartável (login de conta desconhecida) fora da thread principal: o primeiro login com e-mail
   // inexistente não pode custar mais que os seguintes (o tempo denunciaria). Falha aqui é ignorada: tenta no primeiro uso.
   identity.getDummyHash(config.bcryptCost).catch(() => undefined);
-  // Um balde por IPv4 e por /64 IPv6 (I-5d): sem isto o atacante troca os últimos 64 bits a cada requisição.
-  const ipLimit = { config: { rateLimit: { max: config.ipRateLimitMax, timeWindow: config.ipRateLimitWindowMs, keyGenerator: rateLimitKey } } };
+  // Um balde por IPv4 e por /48 IPv6 (I-5d e M-1 da rodada 3b): com o /64 um /48 gratuito dava 65 536 baldes a uma máquina só.
+  const ipLimit = { config: { rateLimit: { max: config.ipRateLimitMax, timeWindow: config.ipRateLimitWindowMs, keyGenerator: routeRateLimitKey } } };
 
   // Envios em segundo plano terminam antes do servidor fechar.
   app.addHook('onClose', async () => drainBackgroundTasks());

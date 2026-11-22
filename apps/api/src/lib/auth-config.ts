@@ -90,7 +90,20 @@ export interface AuthConfig {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/**
+ * Piso do custo do bcrypt em PRODUÇÃO (revisão S1 rodada 3b, B-5). O esquema aceita de 4 a 15 por causa dos testes (custo 4
+ * mantém a suíte rápida); em produção um custo baixo por engano de configuração (um `AUTH_BCRYPT_COST=4` esquecido)
+ * enfraqueceria todo hash gravado dali em diante, sem aviso. Abaixo do piso a identidade dos apps falha FECHADA (503) e o
+ * boot avisa com o nome da variável, como com segredo fraco. O hash do admin tem custo fixo 12 (`admin-auth-service.ts`).
+ */
+export const PRODUCTION_BCRYPT_COST_FLOOR = 10;
 const MIN_DISTINCT_CHARS = 12;
+
+/** Produção, ou nada dito: `env.ts` trata `NODE_ENV` ausente como `production`, e o piso segue a mesma regra (só `test` e `development` o dispensam). */
+function belowProductionCostFloor(cost: number, source: NodeJS.ProcessEnv): boolean {
+  const relaxed = source['NODE_ENV'] === 'test' || source['NODE_ENV'] === 'development';
+  return !relaxed && cost < PRODUCTION_BCRYPT_COST_FLOOR;
+}
 const MIN_ENTROPY_BITS_PER_CHAR = 3.0;
 
 /** Entropia de Shannon (bits por caractere) da distribuição de caracteres do segredo. */
@@ -126,10 +139,11 @@ export function authConfigProblems(source: NodeJS.ProcessEnv = process.env): str
   if (v.AUTH_PEPPER === v.AUTH_JWT_SECRET) problems.push('AUTH_PEPPER:equals_AUTH_JWT_SECRET');
   if (!isStrongSecret(v.AUTH_PEPPER)) problems.push('AUTH_PEPPER:weak');
   if (!isStrongSecret(v.AUTH_JWT_SECRET)) problems.push('AUTH_JWT_SECRET:weak');
+  if (belowProductionCostFloor(v.AUTH_BCRYPT_COST, source)) problems.push('AUTH_BCRYPT_COST:below_production_floor');
   return problems;
 }
 
-/** `null` quando faltam segredos válidos (rotas respondem 503). */
+/** `null` quando faltam segredos válidos ou o custo do bcrypt está abaixo do piso de produção (rotas respondem 503). */
 export function loadAuthConfig(source: NodeJS.ProcessEnv = process.env): AuthConfig | null {
   const parsed = schema.safeParse(source);
   if (!parsed.success) return null;
@@ -137,6 +151,7 @@ export function loadAuthConfig(source: NodeJS.ProcessEnv = process.env): AuthCon
   // Dois segredos IGUAIS anulam a separação de funções (quem forja HMAC de IP forjaria JWT).
   if (v.AUTH_PEPPER === v.AUTH_JWT_SECRET) return null;
   if (!isStrongSecret(v.AUTH_PEPPER) || !isStrongSecret(v.AUTH_JWT_SECRET)) return null;
+  if (belowProductionCostFloor(v.AUTH_BCRYPT_COST, source)) return null;
   return {
     pepper: v.AUTH_PEPPER,
     jwtSecret: v.AUTH_JWT_SECRET,

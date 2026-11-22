@@ -17,7 +17,7 @@ import { canonicalEmailForLimit } from '../src/lib/email-normalize.js';
 import { hashEmailCode } from '../src/lib/email-code.js';
 import { buildCodeMail, buildPasswordChangedMail, greetingFor } from '../src/lib/identity-mail.js';
 import { DEFAULT_RETENTION, runIdentityRetention } from '../src/lib/identity-retention.js';
-import { ipBucket } from '../src/lib/ip-bucket.js';
+import { ipBucket, ipBucket48, rateLimitKey, routeRateLimitKey } from '../src/lib/ip-bucket.js';
 import { hmacHex } from '../src/lib/token-crypto.js';
 import { pool, prepareDatabase, shutdown } from './helpers/harness.js';
 import { ageCodes, makeClient, PASSWORD, PEPPER, REGISTER_EXTRAS, startIdentityApp, uniqueEmail, type Harness } from './helpers/identity-kit.js';
@@ -337,7 +337,7 @@ describe('I-5c: e-mail canonical só para limite', () => {
   });
 });
 
-describe('I-5d: limite por /64 no IPv6', () => {
+describe('I-5d: limite por /64 no IPv6 (e por /48 nos limites de rota, M-1 da rodada 3b)', () => {
   test('ipBucket: IPv6 = o /64; IPv4 e IPv4 mapeado = o endereço; lixo volta como veio', () => {
     assert.equal(ipBucket('2001:db8:abcd:12:aaaa:bbbb:cccc:dddd'), '2001:0db8:abcd:0012::/64');
     assert.equal(ipBucket('2001:db8:abcd:12::1'), '2001:0db8:abcd:0012::/64');
@@ -353,25 +353,51 @@ describe('I-5d: limite por /64 no IPv6', () => {
     assert.equal(ipBucket('1:2:3:4:5:6:7:8:9'), '1:2:3:4:5:6:7:8:9');
   });
 
+  test('ipBucket48: IPv6 = o /48; IPv4 e IPv4 mapeado = o endereço; lixo volta como veio (M-1)', () => {
+    assert.equal(ipBucket48('2001:db8:abcd:12:aaaa:bbbb:cccc:dddd'), '2001:0db8:abcd::/48');
+    assert.equal(ipBucket48('2001:db8:abcd:ffff::1'), '2001:0db8:abcd::/48', 'outro /64 do MESMO /48 é o mesmo balde');
+    assert.equal(ipBucket48('2001:DB8:ABCD:0:0:0:0:1'), '2001:0db8:abcd::/48');
+    assert.equal(ipBucket48('2001:db8:abce:12::1'), '2001:0db8:abce::/48', 'outro /48 é outro balde');
+    assert.equal(ipBucket48('fe80::1%eth0'), 'fe80:0000:0000::/48');
+    assert.equal(ipBucket48('203.0.113.7'), '203.0.113.7');
+    assert.equal(ipBucket48('::ffff:203.0.113.7'), '203.0.113.7');
+    assert.equal(ipBucket48('nao-e-ip'), 'nao-e-ip');
+    // O limite global segue no /64; o limite por rota usa o /48.
+    assert.equal(rateLimitKey({ ip: '2001:db8:abcd:12::1' }), '2001:0db8:abcd:0012::/64');
+    assert.equal(routeRateLimitKey({ ip: '2001:db8:abcd:12::1' }), '2001:0db8:abcd::/48');
+  });
+
   test('teto de cadastros por IP: o atacante que gira os últimos 64 bits cai no MESMO balde', async () => {
     await withApp({ AUTH_REGISTER_MAX_PER_IP: '3' }, async (_harness, client) => {
       const register = (ip: string) => client.call('POST', '/v1/auth/register', { ip, body: { accountType: 'passenger', fullName: 'Pessoa', email: uniqueEmail('v6'), password: PASSWORD, ...REGISTER_EXTRAS } });
       const sameBlock = ['2001:db8:aaaa:1::1', '2001:db8:aaaa:1:1234:5678:9abc:def0', '2001:db8:aaaa:1:ffff::2', '2001:db8:aaaa:1::3'];
-      assert.deepEqual((await Promise.all(sameBlock.slice(0, 3).map(register))).map((r) => r.status), [201, 201, 201]);
+      // Em sequência: três cadastros ao mesmo tempo do mesmo balde de origem passariam do limite de espera da pista do bcrypt (M-1), e aqui se prova o contador do banco.
+      for (const ip of sameBlock.slice(0, 3)) assert.equal((await register(ip)).status, 201, ip);
       assert.equal((await register(sameBlock[3]!)).status, 429, '4º endereço do mesmo /64');
       assert.equal((await register('2001:db8:aaaa:2::1')).status, 201, 'outro /64 tem a própria cota');
       assert.equal((await register('203.0.113.9')).status, 201, 'IPv4 segue por endereço');
     });
   });
 
-  test('o limite por IP do @fastify/rate-limit também usa o /64 (rota com limite próprio)', async () => {
+  test('o limite por IP do @fastify/rate-limit de rota usa o /48 (M-1): girar o /64 dentro do mesmo /48 não abre cota nova', async () => {
     await withApp({ AUTH_IP_RATE_LIMIT_MAX: '3' }, async (_harness, client) => {
       const refresh = (ip: string) => client.call('POST', '/v1/auth/refresh', { ip, body: { refreshToken: 'x'.repeat(40) } });
       const statuses: number[] = [];
-      for (const ip of ['2001:db8:bbbb:1::1', '2001:db8:bbbb:1::2', '2001:db8:bbbb:1:5::3', '2001:db8:bbbb:1:6::4', '2001:db8:bbbb:1:7::5']) statuses.push((await refresh(ip)).status);
-      assert.deepEqual(statuses, [401, 401, 401, 429, 429]);
-      assert.equal((await refresh('2001:db8:bbbb:2::1')).status, 401, 'outro /64');
+      // /64 DIFERENTES (bbbb:1, bbbb:2, bbbb:3...), todos dentro do /48 2001:db8:bbbb::/48.
+      for (const ip of ['2001:db8:bbbb:1::1', '2001:db8:bbbb:2::2', '2001:db8:bbbb:3:5::3', '2001:db8:bbbb:4:6::4', '2001:db8:bbbb:ffff:7::5']) statuses.push((await refresh(ip)).status);
+      assert.deepEqual(statuses, [401, 401, 401, 429, 429], 'cinco /64 do mesmo /48 dividem UMA cota de 3');
+      assert.equal((await refresh('2001:db8:bbbc:1::1')).status, 401, 'outro /48 tem a própria cota');
+      assert.equal((await refresh('203.0.113.50')).status, 401, 'IPv4 segue por endereço');
     });
+  });
+
+  test('o limite POR ROTA vale também nas rotas públicas que antes herdavam o /64 do global (lista de espera): mesmo /48 = mesma cota', async () => {
+    // Limite padrão da rota: 5 por janela (o `env` é lido uma vez, na importação; o limiter é em memória e vive por instância do app).
+    const join = (ip: string) => h.t.app.inject({ method: 'POST', url: '/v1/waitlist', headers: { 'x-forwarded-for': ip }, payload: { email: `fila-${randomTag()}@teste.vuumbora.dev`, profile: 'passenger' } });
+    const statuses: number[] = [];
+    for (let block = 1; block <= 6; block += 1) statuses.push((await join(`2001:db8:cccc:${block}::1`)).statusCode);
+    assert.deepEqual(statuses.map((s) => (s === 429 ? 429 : 'servida')), ['servida', 'servida', 'servida', 'servida', 'servida', 429], 'seis /64 do mesmo /48: o 6º passa do limite de 5');
+    assert.notEqual((await join('2001:db8:cccd:1::1')).statusCode, 429, 'outro /48 tem a própria cota');
   });
 });
 

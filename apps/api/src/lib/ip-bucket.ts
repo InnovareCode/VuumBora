@@ -8,6 +8,9 @@
  *
  * Usado na chave do limite por IP da identidade (HMAC do balde, nunca o IP em claro) e no `keyGenerator`
  * do `@fastify/rate-limit`. Endereço que não é IP válido devolve o texto como veio (balde próprio).
+ *
+ * Há também o balde GROSSO (`ipBucket48`, o /48 do IPv6) para o que protege recurso caro e escasso: a justiça da fila do
+ * bcrypt e os limites por rota (revisão S1 rodada 3b, M-1). O limite global e os contadores do banco seguem no /64.
  */
 
 function hex16(group: number): string {
@@ -46,7 +49,8 @@ function expandIpv6(raw: string): number[] | null {
   return missing >= 1 ? [...head, ...Array<number>(missing).fill(0), ...tail] : null;
 }
 
-export function ipBucket(ip: string): string {
+/** 16 bits por grupo: 4 grupos = /64, 3 grupos = /48. */
+function bucketOf(ip: string, ipv6Groups: 3 | 4): string {
   const text = ip.trim();
   if (!text.includes(':')) return text; // IPv4 (ou lixo): o próprio endereço
 
@@ -57,10 +61,30 @@ export function ipBucket(ip: string): string {
   if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) {
     return `${groups[6]! >> 8}.${groups[6]! & 255}.${groups[7]! >> 8}.${groups[7]! & 255}`;
   }
-  return `${groups.slice(0, 4).map(hex16).join(':')}::/64`;
+  return `${groups.slice(0, ipv6Groups).map(hex16).join(':')}::/${ipv6Groups * 16}`;
 }
 
-/** `keyGenerator` do `@fastify/rate-limit`: um balde por conexão IPv4 e por /64 IPv6. */
+/** Balde de um IP: IPv4 = o endereço, IPv6 = o /64. */
+export function ipBucket(ip: string): string {
+  return bucketOf(ip, 4);
+}
+
+/**
+ * Balde GROSSO (revisão S1 rodada 3b, M-1): IPv4 = o endereço, IPv6 = o /48. Um /48 gratuito (tunnel broker) dá 65 536
+ * baldes /64 a partir de UMA máquina; com o /48 como chave, esse atacante volta a ser UM balde. Usado onde o que se
+ * protege é um recurso caro e escasso (a fila do bcrypt e os limites por rota). O custo: quem divide um /48 (um provedor que
+ * entrega /64 por assinante de um mesmo /48) divide também a cota; por isso o limite GLOBAL de 100 por minuto segue no /64.
+ */
+export function ipBucket48(ip: string): string {
+  return bucketOf(ip, 3);
+}
+
+/** `keyGenerator` do limite GLOBAL do `@fastify/rate-limit`: um balde por conexão IPv4 e por /64 IPv6. */
 export function rateLimitKey(request: { ip: string }): string {
   return ipBucket(request.ip);
+}
+
+/** `keyGenerator` dos limites POR ROTA (as que gastam recurso: cadastro, login, admin, formulários): IPv4 = o endereço, IPv6 = o /48. */
+export function routeRateLimitKey(request: { ip: string }): string {
+  return ipBucket48(request.ip);
 }

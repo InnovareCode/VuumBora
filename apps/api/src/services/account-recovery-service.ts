@@ -20,7 +20,7 @@ import type { Pool } from 'pg';
 import type { AccountType } from '../domain/auth.js';
 import { normalizeIdentifier } from '../domain/auth.js';
 import type { AuthConfig } from '../lib/auth-config.js';
-import { appBcrypt, assertAppBcryptCapacity } from '../lib/bcrypt-pool.js';
+import { reserveAppBcrypt, withBcryptReservation, type BcryptReservation } from '../lib/bcrypt-pool.js';
 import { runInBackground } from '../lib/background-tasks.js';
 import { emailGlobalKey } from '../lib/email-budget.js';
 import { generateEmailCode, hashEmailCode, type EmailCodePurpose } from '../lib/email-code.js';
@@ -160,12 +160,21 @@ export async function verifyEmail(
   pool: Pool, config: AuthConfig,
   input: { accountType: AccountType; identifier: string; code: string; password: string }, ctx: RequestContext,
 ): Promise<CodeCheckResult> {
-  assertAppBcryptCapacity();
+  // Hash descartável e lugar na pista ANTES de reservar o par (B-1, rodada 3b): ver `login` em identity-service.ts.
+  const dummyHash = await getDummyHash(config.bcryptCost);
+  return withBcryptReservation(reserveAppBcrypt(ctx.bcryptOrigin ?? null), (bcrypt) => verifyEmailWithReservation(pool, config, input, ctx, bcrypt, dummyHash));
+}
+
+async function verifyEmailWithReservation(
+  pool: Pool, config: AuthConfig,
+  input: { accountType: AccountType; identifier: string; code: string; password: string }, ctx: RequestContext,
+  bcrypt: BcryptReservation, dummyHash: string,
+): Promise<CodeCheckResult> {
   const identifier = normalizeIdentifier(input.identifier);
   if (!(await reserveCodeCheck(pool, config, 'verify_email', input.accountType, identifier, ctx))) return { kind: 'blocked', retryAfterSeconds: config.codeCheckWindowMinutes * 60 };
   const account = await findCodeTarget(pool, input.accountType, identifier);
   const storedHash = account ? await findPasswordHash(pool, account.id) : null;
-  const passwordOk = await appBcrypt().compare(input.password, storedHash ?? (await getDummyHash(config.bcryptCost)));
+  const passwordOk = await bcrypt.compare(input.password, storedHash ?? dummyHash);
   if (!account) return { kind: 'expired' };
   const codeHash = passwordOk ? hashEmailCode(config.pepper, 'verify_email', account.id, input.code) : NEVER_A_CODE_HASH;
   const result = await consumeEmailCode(pool, account.id, 'verify_email', codeHash);
@@ -178,11 +187,19 @@ export async function resetPassword(
   pool: Pool, config: AuthConfig, deps: MailDeps,
   input: { accountType: AccountType; email: string; code: string; newPassword: string }, ctx: RequestContext,
 ): Promise<CodeCheckResult> {
-  // A reserva do par vem ANTES do bcrypt: sem ela, quem repete a rota ocupava a CPU sem limite por chave (A-1).
-  assertAppBcryptCapacity();
+  // O lugar na pista vem ANTES da reserva do par (B-1, rodada 3b), e a reserva do par vem ANTES do bcrypt: sem ela, quem
+  // repete a rota ocupava a CPU sem limite por chave (A-1).
+  return withBcryptReservation(reserveAppBcrypt(ctx.bcryptOrigin ?? null), (bcrypt) => resetPasswordWithReservation(pool, config, deps, input, ctx, bcrypt));
+}
+
+async function resetPasswordWithReservation(
+  pool: Pool, config: AuthConfig, deps: MailDeps,
+  input: { accountType: AccountType; email: string; code: string; newPassword: string }, ctx: RequestContext,
+  bcrypt: BcryptReservation,
+): Promise<CodeCheckResult> {
   if (!(await reserveCodeCheck(pool, config, 'password_reset', input.accountType, { kind: 'email', value: input.email }, ctx))) return { kind: 'blocked', retryAfterSeconds: config.codeCheckWindowMinutes * 60 };
   // O bcrypt roda SEMPRE (inclusive para conta desconhecida): o tempo não revela se a conta existe.
-  const newHash = await appBcrypt().hash(input.newPassword, config.bcryptCost);
+  const newHash = await bcrypt.hash(input.newPassword, config.bcryptCost);
   const account = await findCodeTarget(pool, input.accountType, { kind: 'email', value: input.email });
   if (!account) return { kind: 'expired' };
   const result = await resetPasswordWithCode(pool, account.id, hashEmailCode(config.pepper, 'password_reset', account.id, input.code), newHash, config.resetMaxFailuresPerDay);

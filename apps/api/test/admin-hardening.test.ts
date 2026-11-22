@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { after, afterEach, before, beforeEach, describe, test } from 'node:test';
 import { base32Decode, hotp, totpStep } from '../src/lib/totp.js';
+import { adminBcrypt } from '../src/lib/bcrypt-pool.js';
 import { DEFAULT_DELAY_SCHEDULE } from '../src/lib/progressive-delay.js';
 import { accountKey, pairLockKey, reserveFailureSlot } from '../src/repositories/admin-login-failure-repository.js';
 import { hashEnrollmentToken, issueEnrollmentToken } from '../src/services/admin-enrollment-token-service.js';
@@ -21,6 +22,10 @@ before(prepareDatabase);
 after(shutdown);
 beforeEach(async () => {
   t = await startApp();
+  // O app é recriado a cada teste e o fechamento termina as threads do bcrypt: o primeiro login de cada teste pagaria a SUBIDA da
+  // thread do admin (centenas de ms sob o tsx, mais de 1 s num runner de 2 CPUs ocupado) entre a reserva da falha e a resposta, e a
+  // espera progressiva de 1 s já teria passado quando o teste tenta o segundo palpite (429 esperado, 401 recebido). Sobe a thread antes.
+  await adminBcrypt().hash('aquecimento-da-pista-do-admin', 4);
 });
 afterEach(() => t.app.close());
 
@@ -127,6 +132,10 @@ describe('A-1 / I-6 — atraso PROGRESSIVO por par (e-mail + IP); nunca bloqueia
     const ghost = `fantasma-${Math.random().toString(36).slice(2, 8)}@teste.vuumbora.dev`;
     const ip = freshIp()['x-forwarded-for'];
     assert.equal((await loginFrom(ip, ghost, 'errada-123456')).status, 401);
+    // O e-mail inexistente compara com o hash descartável de custo 12 (fixo). Num runner de 2 CPUs ocupado essa comparação passa de 1 s,
+    // e a espera de 1 s do par (contada da reserva da falha, ANTES do bcrypt) já teria acabado quando o segundo palpite chega. Põe a
+    // falha no instante atual: o teste afirma a espera de 1 s, não a velocidade da CPU (o mesmo teste falha no HEAD sob 2 CPUs).
+    await pool.query('UPDATE admin_login_failures SET created_at = clock_timestamp() WHERE email_hash = $1', [accountKey(ghost)]);
     const blocked = await loginFrom(ip, ghost, 'errada-123456');
     assert.equal(blocked.status, 429);
     assert.equal(blocked.body.error.code, 'account_locked');
@@ -168,12 +177,22 @@ describe('A-1 / I-6 — atraso PROGRESSIVO por par (e-mail + IP); nunca bloqueia
     assert.equal((await loginFrom('2001:db8:dddd:2::1', admin.email)).status, 200, 'outro /64');
   });
 
-  test('concorrência: 12 palpites paralelos do mesmo par viram UM erro (401) + 11 esperas (429)', async () => {
+  test('concorrência: 12 reservas paralelas do mesmo par viram UMA falha gravada + 11 esperas (a prova do lock, sem passar pelo bcrypt)', async () => {
+    // No repositório e não pela HTTP: depois do M-1 (rodada 3b) um mesmo IP não coloca mais de 2 requisições ao mesmo tempo na
+    // fila do bcrypt (a 3ª já recebe 503 `server_busy`), e o par é por definição o mesmo IP. O que se prova aqui é o lock do par.
+    const emailHash = accountKey(`paralelo-${Math.random().toString(36).slice(2, 10)}@teste.vuumbora.dev`);
+    const outcomes = await Promise.all(Array.from({ length: 12 }, () => reserveFailureSlot(pool, { emailHash, adminId: null, ipBucket: '10.9.9.9' }, DEFAULT_DELAY_SCHEDULE)));
+    assert.equal(outcomes.filter((o) => o.kind === 'reserved').length, 1);
+    assert.equal(outcomes.filter((o) => o.kind === 'locked').length, 11);
+    const rows = await pool.query<{ n: string }>('SELECT count(*) AS n FROM admin_login_failures WHERE email_hash = $1', [emailHash]);
+    assert.equal(Number(rows.rows[0]!.n), 1);
+  });
+
+  test('concorrência pela HTTP: 2 palpites paralelos do mesmo par (o que um IP pode ter na fila do bcrypt) viram UM erro (401) + UMA espera (429)', async () => {
     const admin = await createAdmin('operacao');
     const ip = freshIp()['x-forwarded-for'];
-    const replies = await Promise.all(Array.from({ length: 12 }, () => loginFrom(ip, admin.email, 'errada-123456')));
-    assert.equal(replies.filter((r) => r.status === 401).length, 1);
-    assert.equal(replies.filter((r) => r.status === 429).length, 11);
+    const replies = await Promise.all(Array.from({ length: 2 }, () => loginFrom(ip, admin.email, 'errada-123456')));
+    assert.deepEqual(replies.map((r) => r.status).sort(), [401, 429]);
     assert.equal(await failureRows(admin.email), 1);
   });
 

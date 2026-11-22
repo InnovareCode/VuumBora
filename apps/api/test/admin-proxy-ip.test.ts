@@ -65,3 +65,24 @@ describe('X-Forwarded-For forjado não escolhe o IP', () => {
     assert.ok(PASSWORD);
   });
 });
+
+describe('limites POR ROTA usam o /48 do IPv6 (M-1, rodada 3b): girar o /64 dentro do mesmo /48 não abre cota nova', () => {
+  // Cada rota tem o próprio limiter (e o app é recriado a cada teste). Corpo vazio: o limite conta ANTES de o corpo ser validado.
+  const cases = [
+    { name: 'login do painel', url: '/v1/admin/auth/login', limit: 5 },
+    { name: 'verificação do 2FA do painel (continuação do login)', url: '/v1/admin/auth/2fa/verify', limit: 5 },
+    { name: 'candidatura de motorista', url: '/v1/driver-applications', limit: 5 },
+  ] as const;
+
+  for (const { name, url, limit } of cases) {
+    test(`${name}: ${limit} /64 diferentes do mesmo /48 dividem UMA cota; outro /48 e o IPv4 têm a própria`, async () => {
+      const hit = (ip: string) => t.app.inject({ method: 'POST', url, headers: { 'x-forwarded-for': ip }, payload: {} });
+      const statuses: number[] = [];
+      for (let block = 1; block <= limit + 2; block += 1) statuses.push((await hit(`2001:db8:feed:${block.toString(16)}::1`)).statusCode);
+      assert.deepEqual(statuses.slice(0, limit).filter((s) => s === 429), [], 'dentro da cota nenhuma é limitada');
+      assert.deepEqual(statuses.slice(limit), [429, 429], 'a partir da cota, mesmo girando o /64, é 429');
+      assert.notEqual((await hit('2001:db8:fee0:1::1')).statusCode, 429, 'outro /48');
+      assert.notEqual((await hit('203.0.113.77')).statusCode, 429, 'IPv4 segue por endereço');
+    });
+  }
+});

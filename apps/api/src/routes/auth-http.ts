@@ -6,7 +6,7 @@ import type { AuthConfig } from '../lib/auth-config.js';
 import { BCRYPT_BUSY_RETRY_AFTER_SECONDS, BcryptBusyError } from '../lib/bcrypt-pool.js';
 import type { MailDeps } from '../services/code-delivery.js';
 import { describeErrorForLog } from '../lib/safe-error.js';
-import { ipBucket } from '../lib/ip-bucket.js';
+import { ipBucket, ipBucket48 } from '../lib/ip-bucket.js';
 import { hmacHex } from '../lib/token-crypto.js';
 import type { RequestContext } from '../services/identity-service.js';
 
@@ -26,6 +26,8 @@ export function contextOf(request: FastifyRequest, config: AuthConfig): RequestC
   return {
     // Balde (/64 no IPv6), não o endereço: o limite por IP não pode ser driblado trocando os últimos 64 bits.
     ipHash: request.ip ? hmacHex(config.pepper, ipBucket(request.ip)) : null,
+    // Balde GROSSO (/48 no IPv6) para a justiça da fila do bcrypt (M-1). Sempre preenchido: IP desconhecido é UM balde, não "sem limite".
+    bcryptOrigin: hmacHex(config.pepper, `bcrypt-origin:${request.ip ? ipBucket48(request.ip) : '-'}`),
     userAgentFamily: userAgentFamily(typeof userAgent === 'string' ? userAgent : undefined),
     requestId: String(request.id),
   };

@@ -6,14 +6,21 @@
  * 1,9 s (mediana) e até 6,2 s (máximo, só 4 sondas coubam na rajada).
  *
  * A ordem dos testes importa: o PRIMEIRO precisa da pista cheia ANTES de o app subir (ver `before`).
+ * Rodada 3b: os dois últimos blocos (B-1 e M-1) provam, com o custo real, que o lugar na pista é tomado ANTES de gravar o
+ * contador e que um balde de IP não ocupa a fila inteira.
  */
 import './helpers/auth-env.js';
 import './helpers/setup.js';
 import assert from 'node:assert/strict';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { after, before, describe, test } from 'node:test';
+import type { Pool } from 'pg';
+import { loadAuthConfig } from '../src/lib/auth-config.js';
 import { adminBcrypt, appBcrypt } from '../src/lib/bcrypt-pool.js';
-import { getDummyHash } from '../src/services/identity-service.js';
+import { loadLegalConfig } from '../src/lib/legal-config.js';
+import { resetPassword, verifyEmail } from '../src/services/account-recovery-service.js';
+import { verifyPasswordWithGuard } from '../src/services/admin-auth-service.js';
+import { getDummyHash, login, registerAccount } from '../src/services/identity-service.js';
 import { createAdmin, pool, prepareDatabase, PASSWORD as ADMIN_PASSWORD, send, shutdown } from './helpers/harness.js';
 import { REGISTER_EXTRAS, startIdentityApp, uniqueEmail, type Harness } from './helpers/identity-kit.js';
 
@@ -109,6 +116,8 @@ describe('A-1: teto global do bcrypt', () => {
       assert.equal(refused.headers['retry-after'], '3');
     }
     assert.equal(stats.completed - baseline.completed, byStatus(400).length, 'cada requisição atendida gastou exatamente UMA operação de bcrypt');
+    // F4 da Íris (passada 3): na rajada SIMULTÂNEA a recusa também não gasta tentativa (antes: 30 linhas para 30 requisições, 20 recusadas).
+    assert.equal(await attempts(), byStatus(400).length, 'só as requisições atendidas reservaram tentativa do par; as 503 não gravaram nada');
     // (3) O servidor segue vivo: o /healthz respondeu várias vezes DURANTE a rajada e nunca demorou 200 ms.
     assert.ok(probes.length >= 10, `só ${probes.length} sondas do /healthz couberam na rajada de ${burstMs.toFixed(0)} ms (o laço de eventos parou)`);
     const worst = Math.max(...probes.map((p) => p.ms));
@@ -158,5 +167,191 @@ describe('A-1: teto global do bcrypt', () => {
     await Promise.all(fillers);
     const again = await send(h.t.app, 'POST', '/auth/login', { body: { email: admin.email, password: ADMIN_PASSWORD }, headers: { 'x-forwarded-for': '10.99.0.9' } });
     assert.equal(again.status, 200, 'esvaziou: o admin entra');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Rodada 3b: B-1 (lugar na pista ANTES de gravar o contador) e M-1 (justiça por origem, pela HTTP).
+// ---------------------------------------------------------------------------------------------------------------
+
+/**
+ * Pool do pg que, na PRIMEIRA reserva transacional (`connect`), enche a pista inteira com trabalho lento (custo 12): reproduz, de forma
+ * determinística, a janela do B-1 (a pista enche ENTRE a checagem de capacidade e o bcrypt, enquanto a rota grava o contador).
+ */
+function poolThatFillsTheLane(lane: ReturnType<typeof appBcrypt>) {
+  const fillers: Array<Promise<unknown>> = [];
+  let fired = false;
+  const fire = () => {
+    if (fired) return;
+    fired = true;
+    fillers.push(...fill(lane));
+  };
+  const wrapped = {
+    // Só `connect` dispara: é por onde passam as reservas do par/limite (transação), DEPOIS de a rota ter tomado o lugar na pista.
+    // As leituras simples (`query`, como a conferência da versão dos documentos no cadastro) vêm ANTES do lugar e não contam.
+    query: (...args: unknown[]) => (pool.query as (...a: unknown[]) => Promise<unknown>).apply(pool, args),
+    connect: async () => {
+      fire();
+      return pool.connect();
+    },
+  } as unknown as Pool;
+  return { pool: wrapped, fillers, fired: () => fired };
+}
+
+const CTX = { ipHash: null, userAgentFamily: 'x', requestId: 'r', bcryptOrigin: 'origem-do-teste-b1' } as const;
+const mailDeps = { mail: { send: async () => undefined }, onMailFailure: () => undefined };
+
+describe('B-1: a pista que enche ENTRE a checagem e o bcrypt não consome o contador do titular sem comparar', () => {
+  test('login: com a pista enchendo enquanto o par é reservado, a comparação AINDA roda (nada de 503 depois da falha gravada)', async () => {
+    await getDummyHash(12);
+    await pool.query('TRUNCATE login_attempts');
+    const config = loadAuthConfig()!;
+    const lane = appBcrypt();
+    const rig = poolThatFillsTheLane(lane);
+    const completedBefore = lane.stats().completed;
+
+    const result = await login(rig.pool, config, { accountType: 'passenger', identifier: uniqueEmail('janela-login'), password: 'Senha-de-teste-123' }, CTX);
+    assert.equal(rig.fired(), true, 'a pista foi enchida no meio (durante a reserva do par)');
+    assert.equal(result.kind, 'invalid_credentials', 'a comparação rodou: o titular não levou 503 depois de a falha do par ser gravada');
+    assert.equal(await attempts(), 1, 'a falha gravada corresponde a UMA comparação que de fato aconteceu');
+    await Promise.all(rig.fillers);
+    assert.ok(lane.stats().completed > completedBefore, 'e a operação foi contada como concluída');
+    assert.equal(lane.stats().reserved, 0, 'nenhum lugar ficou preso');
+  });
+
+  test('verify-email: idem (a reserva do par de conferência não é gasta sem o bcrypt rodar)', async () => {
+    await getDummyHash(12);
+    await pool.query('TRUNCATE login_attempts');
+    const rig = poolThatFillsTheLane(appBcrypt());
+    const result = await verifyEmail(rig.pool, loadAuthConfig()!, { accountType: 'passenger', identifier: uniqueEmail('janela-verify'), code: '123456', password: 'Senha-de-teste-123' }, CTX);
+    assert.equal(rig.fired(), true);
+    assert.deepEqual(result, { kind: 'expired' }, 'conta desconhecida: o bcrypt rodou e o desfecho é o de sempre');
+    assert.equal(await attempts(), 1);
+    await Promise.all(rig.fillers);
+    assert.equal(appBcrypt().stats().reserved, 0);
+  });
+
+  test('reset-password: idem', async () => {
+    await pool.query('TRUNCATE login_attempts');
+    const rig = poolThatFillsTheLane(appBcrypt());
+    const result = await resetPassword(rig.pool, loadAuthConfig()!, mailDeps, { accountType: 'passenger', email: uniqueEmail('janela-reset'), code: '123456', newPassword: 'Nova-senha-9876' }, CTX);
+    assert.equal(rig.fired(), true);
+    assert.deepEqual(result, { kind: 'expired' });
+    assert.equal(await attempts(), 1);
+    await Promise.all(rig.fillers);
+    assert.equal(appBcrypt().stats().reserved, 0);
+  });
+
+  test('cadastro: a conta é criada mesmo que a pista encha depois do teto de e-mails e do limite do cadastro serem gastos', async () => {
+    await pool.query('TRUNCATE login_attempts');
+    const accountsBefore = await accounts();
+    const rig = poolThatFillsTheLane(appBcrypt());
+    const email = uniqueEmail('janela-cadastro');
+    const result = await registerAccount(
+      rig.pool, loadAuthConfig()!, loadLegalConfig(), mailDeps,
+      { accountType: 'passenger', fullName: 'Pessoa', email, password: 'Senha-de-teste-123', phone: null, ...REGISTER_EXTRAS }, CTX,
+    );
+    assert.equal(rig.fired(), true);
+    assert.equal(result.kind, 'ok', 'o limite do cadastro foi gasto E o hash rodou: não sobrou limite gasto sem conta');
+    assert.equal(await accounts(), accountsBefore + 1);
+    await Promise.all(rig.fillers);
+  });
+
+  test('admin: a espera progressiva do dono não cresce por uma comparação que não rodou, mesmo com a pista do admin enchendo no meio', async () => {
+    const failuresBefore = (await pool.query('SELECT count(*)::int AS n FROM admin_login_failures')).rows[0].n as number;
+    const rig = poolThatFillsTheLane(adminBcrypt());
+    const result = await verifyPasswordWithGuard(rig.pool, { email: `janela-${uniqueEmail('admin')}`, record: null, password: 'qualquer-senha-123', ipAddress: '10.98.0.1', purpose: 'login' });
+    assert.equal(rig.fired(), true);
+    assert.deepEqual(result, { kind: 'invalid' }, 'a comparação rodou (e-mail desconhecido = senha errada)');
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM admin_login_failures')).rows[0].n - failuresBefore, 1);
+    await Promise.all(rig.fillers);
+    assert.equal(adminBcrypt().stats().reserved, 0);
+  });
+});
+
+describe('M-1: justiça por origem na fila do bcrypt, pela HTTP', () => {
+  test('um /48 do atacante (8 /64 diferentes) segura no máximo 2 lugares de espera: o excesso é 503 e o titular de OUTRO IP é atendido', async () => {
+    await pool.query('TRUNCATE login_attempts');
+    const lane = appBcrypt();
+    // Ocupa as vagas de RODAR com trabalho lento (custo 13, ~1 s): nada do que chegar agora começa antes de a rajada inteira ser decidida, mesmo num runner de 2 CPUs.
+    const runners = Array.from({ length: SIZE }, () => lane.hash('ocupando-a-vaga', 13).catch(() => undefined));
+    assert.equal(lane.stats().active, SIZE);
+    const before = lane.stats();
+
+    const attackers = Array.from({ length: 8 }, (_, i) => post('/v1/auth/verify-email', `2001:db8:abcd:${i + 1}::1`, verifyBody(uniqueEmail('atacante'))));
+    const titular = post('/v1/auth/verify-email', '10.123.0.1', verifyBody(uniqueEmail('titular')));
+    const replies = await Promise.all(attackers);
+    const titularReply = await titular;
+    await Promise.all(runners);
+
+    const statuses = replies.map((r) => r.statusCode).sort();
+    assert.deepEqual(statuses, [400, 400, 503, 503, 503, 503, 503, 503], `8 /64 do MESMO /48: 2 lugares de espera, 6 recusadas (${statuses.join(',')})`);
+    for (const refused of replies.filter((r) => r.statusCode === 503)) {
+      assert.equal(JSON.parse(refused.body).error.code, 'server_busy');
+      assert.equal(refused.headers['retry-after'], '3');
+    }
+    assert.equal(titularReply.statusCode, 400, `o titular de outro IP foi atendido (conta desconhecida = 400), não recusado: ${titularReply.body}`);
+    assert.equal(lane.stats().rejectedByOrigin - before.rejectedByOrigin, 6, 'as 6 recusas foram pelo limite do balde, não pela pista cheia');
+    assert.equal(lane.stats().reserved, 0, 'nenhum lugar ficou preso depois da rajada');
+  });
+
+  test('a mesma rajada do mesmo IPv4: 2 lugares de espera, o resto 503; a recusa não grava tentativa nenhuma para quem foi recusado', async () => {
+    await pool.query('TRUNCATE login_attempts');
+    const lane = appBcrypt();
+    const runners = Array.from({ length: SIZE }, () => lane.hash('ocupando-a-vaga', 13).catch(() => undefined));
+    assert.equal(lane.stats().active, SIZE);
+    const replies = await Promise.all(Array.from({ length: 5 }, (_, i) => post('/v1/auth/login', '10.124.0.1', { accountType: 'passenger', identifier: uniqueEmail(`mesmo-ip-${i}`), password: 'Senha-de-teste-123' })));
+    await Promise.all(runners);
+    assert.equal(replies.filter((r) => r.statusCode === 503).length, 3);
+    assert.equal(replies.filter((r) => r.statusCode === 401).length, 2);
+    assert.equal(await attempts(), 2, 'só as 2 requisições admitidas reservaram tentativa; as 3 recusadas não gravaram nada');
+  });
+
+  test('pista do ADMIN: um /48 do atacante também segura só 2 lugares de espera, e o dono entra de outro IP', async () => {
+    const admin = await createAdmin('suporte');
+    const lane = adminBcrypt();
+    const runner = lane.hash('ocupando-a-vaga', 13).catch(() => undefined);
+    assert.equal(lane.stats().active, 1);
+    const before = lane.stats();
+    const attackers = Array.from({ length: 4 }, (_, i) =>
+      send(h.t.app, 'POST', '/auth/login', { body: { email: `atacante-${i}-${uniqueEmail()}`, password: 'qualquer-senha-123' }, headers: { 'x-forwarded-for': `2001:db8:beef:${i + 1}::1` } }));
+    const owner = send(h.t.app, 'POST', '/auth/login', { body: { email: admin.email, password: ADMIN_PASSWORD }, headers: { 'x-forwarded-for': '10.125.0.1' } });
+    const replies = await Promise.all(attackers);
+    const ownerReply = await owner;
+    await runner;
+    assert.deepEqual(replies.map((r) => r.status).sort(), [401, 401, 503, 503]);
+    assert.equal(ownerReply.status, 200, JSON.stringify(ownerReply.body));
+    assert.equal(lane.stats().rejectedByOrigin - before.rejectedByOrigin, 2);
+  });
+});
+
+describe('F4: o 503 da rajada SIMULTÂNEA também não gasta tentativa, limite nem conta (a reserva só vem depois do lugar na pista)', () => {
+  test('rajada de 30 reset-password de IPs distintos: uma linha de tentativa por requisição ATENDIDA, nenhuma por recusada', async () => {
+    await pool.query('TRUNCATE login_attempts');
+    const replies = await Promise.all(Array.from({ length: 30 }, (_, i) => post('/v1/auth/reset-password', `10.131.0.${i + 1}`, resetBody(uniqueEmail('rajada-reset')))));
+    const served = replies.filter((r) => r.statusCode !== 503).length;
+    const refused = replies.filter((r) => r.statusCode === 503).length;
+    assert.ok(refused >= 10, `a rajada tem que ter sido recusada em parte (${refused} de 30): sem isto o teste não prova nada`);
+    assert.equal(await attempts(), served, `${served} atendidas = ${served} linhas (e não 30)`);
+  });
+
+  test('rajada de 30 cadastros: a conta e todas as linhas de limite existem só para as atendidas', async () => {
+    await pool.query('TRUNCATE login_attempts');
+    // Calibra: quantas linhas de limite UM cadastro grava (por e-mail, por IP e o teto global de e-mails).
+    const calibration = await post('/v1/auth/register', '10.132.0.200', { accountType: 'passenger', fullName: 'Pessoa', email: uniqueEmail('calibra'), password: 'Senha-de-teste-123', ...REGISTER_EXTRAS });
+    assert.equal(calibration.statusCode, 201, calibration.body);
+    const rowsPerRegistration = await attempts();
+    assert.ok(rowsPerRegistration >= 1);
+    await pool.query('TRUNCATE login_attempts');
+    const accountsBefore = await accounts();
+
+    const replies = await Promise.all(Array.from({ length: 30 }, (_, i) =>
+      post('/v1/auth/register', `10.132.0.${i + 1}`, { accountType: 'passenger', fullName: 'Pessoa', email: uniqueEmail('rajada-cadastro'), password: 'Senha-de-teste-123', ...REGISTER_EXTRAS })));
+    const created = replies.filter((r) => r.statusCode === 201).length;
+    const refused = replies.filter((r) => r.statusCode === 503).length;
+    assert.ok(refused >= 10, `a rajada tem que ter sido recusada em parte (${refused} de 30)`);
+    assert.equal(created + refused, 30, 'ou criou ou foi recusada com 503 (nenhum outro desfecho)');
+    assert.equal(await accounts() - accountsBefore, created);
+    assert.equal(await attempts(), created * rowsPerRegistration, 'as 503 não gastaram o limite do cadastro nem o teto global de e-mails');
   });
 });

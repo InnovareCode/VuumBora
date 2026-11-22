@@ -27,6 +27,11 @@ import {
 } from './helpers/legal-kit.js';
 import { OWNER_DATABASE_URL } from './helpers/runtime-role-env.js';
 
+// Cache do GET /v1/legal/current DESLIGADO neste arquivo (B-3, rodada 3b): quase todo teste daqui troca o catálogo e relê a vigente na
+// hora, e o app é montado UMA vez. O cache em si (TTL, hit, miss, erro não guardado, perfis separados) é provado em
+// `legal-current-cache.test.ts`, que usa o prazo padrão.
+process.env['LEGAL_CACHE_MAX_AGE_SECONDS'] = '0';
+
 const owner = new pg.Pool({ connectionString: OWNER_DATABASE_URL, max: 4 });
 /** E-mail ALEATÓRIO: o banco persiste entre execuções e o contador do kit repetiria e-mails de contas já verificadas (409 email_taken). */
 const uniqueEmail = (label: string) => `${label}-${randomUUID().slice(0, 8)}@teste.vuumbora.dev`;
@@ -95,7 +100,7 @@ const wroteAnything = (statements: string[]) => statements.some((sql) => /\b(INS
 const accept = (bearer: string, body: unknown, ip?: string) => api.call('POST', '/v1/auth/consents', { bearer, body, ...(ip ? { ip } : {}) });
 
 describe('GET /v1/legal/current', () => {
-  test('200 sem sessão: os DOIS documentos do perfil, com versão, sha256 do catálogo, publishedAt e url; cache público de 60 s', async () => {
+  test('200 sem sessão: os DOIS documentos do perfil, com versão, sha256 do catálogo, publishedAt e url; Cache-Control com o prazo configurado', async () => {
     for (const audience of ['passenger', 'driver'] as const) {
       const reply = await getCurrent(audience);
       assert.equal(reply.status, 200, JSON.stringify(reply.body));
@@ -111,7 +116,7 @@ describe('GET /v1/legal/current', () => {
         assert.deepEqual(Object.keys(reply.body.data[key]).sort(), ['publishedAt', 'sha256', 'url', 'version']);
         assert.ok(new Date(reply.body.data[key].publishedAt).getTime() <= Date.now() && new Date(reply.body.data[key].publishedAt).getTime() > Date.now() - 3_600_000);
       }
-      assert.equal(reply.headers['cache-control'], 'public, max-age=60');
+      assert.equal(reply.headers['cache-control'], 'public, max-age=0', 'o prazo vem de LEGAL_CACHE_MAX_AGE_SECONDS (0 neste arquivo)');
       assert.equal(reply.headers['set-cookie'], undefined);
     }
   });

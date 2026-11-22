@@ -6,6 +6,7 @@ import { env } from '../env.js';
 import { ADMIN_SESSION_COOKIE } from '../domain/admin.js';
 import { requireAdmin } from '../hooks/require-admin.js';
 import { insertAuditLog } from '../repositories/admin-audit-repository.js';
+import { routeRateLimitKey } from '../lib/ip-bucket.js';
 import { twoFactorConfig } from '../lib/two-factor-config.js';
 import { loginAdmin, logoutAdmin } from '../services/admin-auth-service.js';
 import { markNoStore, sendAccountLocked, sendChallenge, sendSessionStarted, sendTwoFactorUnavailable } from './admin-auth-http.js';
@@ -40,6 +41,7 @@ export function registerAdminAuthRoutes(app: FastifyInstance): void {
         rateLimit: {
           max: env.ADMIN_LOGIN_RATE_LIMIT_MAX,
           timeWindow: env.ADMIN_LOGIN_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000,
+          keyGenerator: routeRateLimitKey,
         },
       },
     },

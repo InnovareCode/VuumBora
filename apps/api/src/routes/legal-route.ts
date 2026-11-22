@@ -7,6 +7,7 @@
 import type { FastifyInstance } from 'fastify';
 import { pool } from '../db.js';
 import { legalCurrentQuerySchema } from '../domain/legal.js';
+import { CurrentLegalCache } from '../lib/current-legal-cache.js';
 import { legalConfigProblems, type LegalConfig } from '../lib/legal-config.js';
 import { loadCurrentLegal } from '../services/legal-service.js';
 import { consentUnavailable, invalidBody, unavailable } from './auth-http.js';
@@ -17,6 +18,9 @@ export function registerLegalRoutes(app: FastifyInstance, legal: LegalConfig | n
     app.log.error({ event: 'legal_unavailable', reason: 'legal_config_missing_or_invalid', reasons: legalConfigProblems() });
   }
 
+  // Uma consulta ao banco por perfil a cada `LEGAL_CACHE_MAX_AGE_SECONDS`, não uma por pedido (B-3): o endpoint é público.
+  const cache = new CurrentLegalCache(legal ? legal.cacheMaxAgeSeconds * 1000 : 0);
+
   app.get('/v1/legal/current', async (request, reply) => {
     const parsed = legalCurrentQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -24,7 +28,7 @@ export function registerLegalRoutes(app: FastifyInstance, legal: LegalConfig | n
       return invalidBody(request, reply, 'legal_current_rejected');
     }
     try {
-      const result = await loadCurrentLegal(pool, legal, parsed.data.audience);
+      const result = await cache.get(parsed.data.audience, () => loadCurrentLegal(pool, legal, parsed.data.audience));
       if (result.kind === 'unavailable' || !legal) {
         request.log.error({ event: 'legal_current_unavailable', reason: result.kind === 'unavailable' ? result.reason : 'not_configured', audience: parsed.data.audience });
         return consentUnavailable(reply);

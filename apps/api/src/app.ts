@@ -3,7 +3,7 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
-import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyError, type FastifyInstance, type onRouteHookHandler } from 'fastify';
 import { pool } from './db.js';
 import { env } from './env.js';
 import type { MailPort } from './lib/mail-port.js';
@@ -42,6 +42,11 @@ export interface BuildAppOptions {
   readonly logStream?: NodeJS.WritableStream;
   /** Adaptador de e-mail da identidade dos apps (SMTP em produção; fake nos testes). Sem ele o envio falha de forma explícita. */
   readonly mail?: MailPort;
+  /**
+   * Só os testes: recebe TODA rota registrada (inclusive as dos contextos encapsulados), para enumerá-las. Serve ao teste que
+   * exige `requireCurrentConsent` ou uma exceção declarada em toda rota autenticada (`test/consent-gate-coverage.test.ts`).
+   */
+  readonly onRoute?: onRouteHookHandler;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -126,6 +131,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // As threads do bcrypt (lib/bcrypt-pool.ts) terminam junto com o servidor, depois das operações em curso.
   app.addHook('onClose', async () => closeBcryptPools());
 
+  // ANTES de qualquer `register`: o hook só vê as rotas registradas depois dele e é herdado pelos contextos filhos.
+  if (options.onRoute) app.addHook('onRoute', options.onRoute);
+
   await app.register(helmet);
 
   // Sem segredo/assinatura: o valor do cookie é um token aleatório opaco,
@@ -144,8 +152,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     global: true,
     max: 100,
     timeWindow: '1 minute',
-    // Todo limite por IP do serviço (inclusive os de rota, que herdam isto) usa o balde: IPv4 = o endereço,
-    // IPv6 = o /64. Sem isso, um único /64 dá 2^64 "IPs" (revisão S1 rodada 2, I-5d).
+    // Este limite GLOBAL usa o balde: IPv4 = o endereço, IPv6 = o /64. Sem isso, um único /64 dá 2^64 "IPs" (revisão S1
+    // rodada 2, I-5d). Os limites POR ROTA (cadastro, login, admin, formulários) declaram a própria chave, o /48 no IPv6
+    // (`routeRateLimitKey`, rodada 3b M-1): o global fica no /64 para não somar, num /48 de provedor, todos os assinantes.
     keyGenerator: rateLimitKey,
     errorResponseBuilder: () => {
       const err = new Error('rate limited') as FastifyError;

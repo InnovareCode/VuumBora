@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { pool } from '../db.js';
 import { env } from '../env.js';
 import { signUpForWaitlist } from '../services/waitlist-service.js';
+import { routeRateLimitKey } from '../lib/ip-bucket.js';
 import { describeErrorForLog } from '../lib/safe-error.js';
 
 const bodySchema = z.object({
@@ -33,6 +34,7 @@ export function registerWaitlistRoute(app: FastifyInstance): void {
         rateLimit: {
           max: env.WAITLIST_RATE_LIMIT_MAX,
           timeWindow: env.WAITLIST_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000,
+          keyGenerator: routeRateLimitKey,
         },
       },
     },

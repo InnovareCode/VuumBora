@@ -6,8 +6,8 @@ import type { AdminUser, AdminUserRecord } from '../domain/admin.js';
 import { roleRequiresTwoFactor, type TwoFactorConfig } from '../domain/two-factor.js';
 import { findAdminByEmail, findAdminRecordById } from '../repositories/admin-repository.js';
 import { accountKey, clearPairFailures, reserveFailureSlot } from '../repositories/admin-login-failure-repository.js';
-import { adminBcrypt, assertAdminBcryptCapacity } from '../lib/bcrypt-pool.js';
-import { ipBucket } from '../lib/ip-bucket.js';
+import { reserveAdminBcrypt, withBcryptReservation, type BcryptReservation } from '../lib/bcrypt-pool.js';
+import { ipBucket, ipBucket48 } from '../lib/ip-bucket.js';
 import { DEFAULT_DELAY_SCHEDULE, type DelaySchedule } from '../lib/progressive-delay.js';
 import { insertAuditLog } from '../repositories/admin-audit-repository.js';
 import { findTotp, insertChallenge } from '../repositories/admin-two-factor-repository.js';
@@ -127,14 +127,24 @@ export async function verifyPasswordWithGuard(
   input: { readonly email: string; readonly record: AdminUserRecord | null; readonly password: string; readonly ipAddress: string | null; readonly purpose: 'login' | 'reauth' },
   schedule: DelaySchedule = DEFAULT_LOGIN_DELAY,
 ): Promise<PasswordCheck> {
-  // Pista do admin cheia: recusa ANTES de reservar a falha do par (o bcrypt não rodaria, e a espera progressiva do
-  // dono não pode crescer por causa de uma recusa que não foi culpa dele).
-  assertAdminBcryptCapacity();
+  // Pista do admin cheia: recusa ANTES de reservar a falha do par, e o lugar fica garantido até a comparação (B-1, rodada 3b):
+  // a espera progressiva do dono nunca cresce por uma comparação que não chegou a rodar. A origem é o balde GROSSO
+  // (IPv6 = /48, M-1), só em memória.
+  const origin = `admin:${ipBucket48(input.ipAddress ?? '-')}`;
+  return withBcryptReservation(reserveAdminBcrypt(origin), (reservation) => verifyPasswordWithReservation(pool, input, schedule, reservation));
+}
+
+async function verifyPasswordWithReservation(
+  pool: Pool,
+  input: { readonly email: string; readonly record: AdminUserRecord | null; readonly password: string; readonly ipAddress: string | null; readonly purpose: 'login' | 'reauth' },
+  schedule: DelaySchedule,
+  reservation: BcryptReservation,
+): Promise<PasswordCheck> {
   const pair = { emailHash: accountKey(input.email), ipBucket: input.ipAddress ? ipBucket(input.ipAddress) : null };
   const slot = await reserveFailureSlot(pool, { ...pair, adminId: input.record?.id ?? null }, schedule);
   if (slot.kind === 'locked') return { kind: 'locked', retryAfterSeconds: slot.retryAfterSeconds };
 
-  const matches = await adminBcrypt().compare(input.password, input.record?.passwordHash ?? DUMMY_PASSWORD_HASH);
+  const matches = await reservation.compare(input.password, input.record?.passwordHash ?? DUMMY_PASSWORD_HASH);
   if (input.record && input.record.deactivatedAt === null && matches) {
     await clearPairFailures(pool, pair);
     return { kind: 'ok' };

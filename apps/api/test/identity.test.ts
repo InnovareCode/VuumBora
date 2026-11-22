@@ -5,6 +5,8 @@ import { randomBytes } from 'node:crypto';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { loadAuthConfig } from '../src/lib/auth-config.js';
 import { drainBackgroundTasks } from '../src/lib/background-tasks.js';
+import { DEFAULT_DELAY_SCHEDULE, LOGIN_FAILURE_MEMORY_HOURS } from '../src/lib/progressive-delay.js';
+import { reserveDelayedAttempt } from '../src/repositories/identity-repository.js';
 import { sha256Hex, signAccessToken, verifyAccessToken } from '../src/lib/token-crypto.js';
 import { pool, prepareDatabase, shutdown } from './helpers/harness.js';
 import {
@@ -287,13 +289,23 @@ describe('login: atraso progressivo por par (I-6) — não tranca a vítima de f
     assert.equal(blocked.headers['retry-after'], '1');
   });
 
-  test('tentativas simultâneas do mesmo par não furam a espera (reserva sob lock): só UMA chega a comparar a senha', async () => {
+  test('12 reservas paralelas do mesmo par não furam a espera (reserva sob lock): só UMA é concedida e UMA falha é gravada', async () => {
+    // No repositório e não pela HTTP: depois do M-1 (rodada 3b) um mesmo IP não coloca mais de 2 requisições ao mesmo tempo na fila
+    // do bcrypt (a 3ª já recebe 503 `server_busy`), e o par é por definição o mesmo IP. O que se prova aqui é o lock do par.
+    const identifierHash = 'a'.repeat(63) + Math.floor(Math.random() * 16).toString(16);
+    const before = await failureRows();
+    const outcomes = await Promise.all(Array.from({ length: 12 }, () => reserveDelayedAttempt(pool, { scope: 'login', identifierHash, ipHash: null, schedule: DEFAULT_DELAY_SCHEDULE, memoryHours: LOGIN_FAILURE_MEMORY_HOURS })));
+    assert.equal(outcomes.filter((o) => o.allowed).length, 1);
+    assert.equal(outcomes.filter((o) => !o.allowed).length, 11);
+    assert.equal(await failureRows() - before, 1, 'uma única falha gravada');
+  });
+
+  test('2 tentativas simultâneas do mesmo par pela HTTP (o que um IP pode ter na fila do bcrypt): UMA compara (401) e a outra espera (429)', async () => {
     const created = await registerAndLogin();
     const ip = randomIp();
     const before = await failureRows();
-    const results = await Promise.all(Array.from({ length: 12 }, (_, i) => login(ip, created.email, `errada-${i}-xxxx`)));
-    assert.equal(results.filter((r) => r.status === 401).length, 1);
-    assert.equal(results.filter((r) => r.status === 429).length, 11);
+    const results = await Promise.all(Array.from({ length: 2 }, (_, i) => login(ip, created.email, `errada-${i}-xxxx`)));
+    assert.deepEqual(results.map((r) => r.status).sort(), [401, 429]);
     assert.equal(await failureRows() - before, 1, 'uma única falha gravada');
   });
 

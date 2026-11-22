@@ -5,6 +5,7 @@ import { pool } from '../db.js';
 import { env } from '../env.js';
 import { ADMIN_SESSION_COOKIE } from '../domain/admin.js';
 import { requireAdmin, requireCsrfToken } from '../hooks/require-admin.js';
+import { routeRateLimitKey } from '../lib/ip-bucket.js';
 import { twoFactorConfig } from '../lib/two-factor-config.js';
 import {
   confirmEnrollment,
@@ -35,6 +36,7 @@ const rateLimit = {
     rateLimit: {
       max: env.ADMIN_LOGIN_RATE_LIMIT_MAX,
       timeWindow: env.ADMIN_LOGIN_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000,
+      keyGenerator: routeRateLimitKey,
     },
   },
 };

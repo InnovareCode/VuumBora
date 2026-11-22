@@ -15,7 +15,7 @@ import type { AccountSummary, AccountType, DeviceInput } from '../domain/auth.js
 import { normalizeIdentifier } from '../domain/auth.js';
 import type { CurrentLegal } from '../domain/legal.js';
 import type { AuthConfig } from '../lib/auth-config.js';
-import { appBcrypt, assertAppBcryptCapacity } from '../lib/bcrypt-pool.js';
+import { appBcrypt, reserveAppBcrypt, withBcryptReservation, type BcryptReservation } from '../lib/bcrypt-pool.js';
 import { generateEmailCode, hashEmailCode } from '../lib/email-code.js';
 import { canonicalEmailForLimit } from '../lib/email-normalize.js';
 import { emailGlobalKey } from '../lib/email-budget.js';
@@ -37,6 +37,11 @@ export { BirthDateRejectedError, EmailTakenError };
 export interface RequestContext {
   /** HMAC do IP (ou `null` se desconhecido). O IP em claro nunca entra aqui. */
   readonly ipHash: string | null;
+  /**
+   * Balde de origem para a justiça da fila do bcrypt (M-1): HMAC do balde GROSSO (IPv4 = o endereço, IPv6 = o /48), só em
+   * memória. Omitido/`null` = sem limite por origem (testes e chamadas internas); a rota sempre o preenche.
+   */
+  readonly bcryptOrigin?: string | null;
   readonly userAgentFamily: string;
   readonly requestId: string;
 }
@@ -156,14 +161,24 @@ export async function registerAccount(pool: Pool, config: AuthConfig, legal: Leg
   }
 }
 
-async function createRegistration(
+type RegistrationOutcome = Exclude<RegisterResult, { kind: 'consent_unavailable' } | { kind: 'consent_outdated' }>;
+
+/**
+ * O lugar na pista do bcrypt é tomado ANTES de gastar o teto de e-mails e o limite do cadastro (B-1, rodada 3b): pista cheia
+ * recusa (503) sem ter gravado nada, e quem entra aqui nunca é recusado entre a reserva do limite e o hash.
+ */
+async function createRegistration(pool: Pool, config: AuthConfig, deps: MailDeps, input: RegisterInput, ctx: RequestContext): Promise<RegistrationOutcome> {
+  return withBcryptReservation(reserveAppBcrypt(ctx.bcryptOrigin ?? null), (bcrypt) => registerWithReservation(pool, config, deps, input, ctx, bcrypt));
+}
+
+async function registerWithReservation(
   pool: Pool,
   config: AuthConfig,
   deps: MailDeps,
   input: RegisterInput,
   ctx: RequestContext,
-): Promise<Exclude<RegisterResult, { kind: 'consent_unavailable' } | { kind: 'consent_outdated' }>> {
-  assertAppBcryptCapacity();
+  bcrypt: BcryptReservation,
+): Promise<RegistrationOutcome> {
   const allowed = await reserveAttempts(pool, {
     scope: 'register',
     keys: registerKeys(config, input.accountType, input.email, ctx),
@@ -172,7 +187,7 @@ async function createRegistration(
   });
   if (!allowed) return { kind: 'blocked' };
 
-  const passwordHash = await appBcrypt().hash(input.password, config.bcryptCost);
+  const passwordHash = await bcrypt.hash(input.password, config.bcryptCost);
   // `public_id` é aleatório de 40 bits: colisão é improvável, mas o UNIQUE a barra e aqui se repete.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     let registered: { account: AccountSummary; reclaimed: boolean; code: string };
@@ -251,15 +266,18 @@ export function getDummyHash(cost: number): Promise<string> {
   return dummyHash;
 }
 
-export async function login(
-  pool: Pool,
-  config: AuthConfig,
-  input: { accountType: AccountType; identifier: string; password: string; device?: DeviceInput | undefined },
-  ctx: RequestContext,
-): Promise<LoginResult> {
-  // Pista cheia: recusa ANTES de reservar a tentativa. O bcrypt não vai rodar, então a falha não pode ser contada
-  // contra o titular que só caiu num momento de rajada.
-  assertAppBcryptCapacity();
+type LoginInput = { accountType: AccountType; identifier: string; password: string; device?: DeviceInput | undefined };
+
+export async function login(pool: Pool, config: AuthConfig, input: LoginInput, ctx: RequestContext): Promise<LoginResult> {
+  // O hash descartável (conta desconhecida) vem ANTES do lugar na pista: guardado, é instantâneo; a frio, gasta uma operação própria
+  // que, se recusada, recusa o login ainda sem gravar nada (com o lugar já tomado, a recusa dele viria depois da reserva do par).
+  const dummyHash = await getDummyHash(config.bcryptCost);
+  // Pista cheia: recusa ANTES de reservar a tentativa. O lugar fica garantido até a comparação (B-1, rodada 3b): o bcrypt
+  // que a falha do par anuncia SEMPRE roda, então a espera progressiva nunca cobra do titular uma comparação que não houve.
+  return withBcryptReservation(reserveAppBcrypt(ctx.bcryptOrigin ?? null), (bcrypt) => loginWithReservation(pool, config, input, ctx, bcrypt, dummyHash));
+}
+
+async function loginWithReservation(pool: Pool, config: AuthConfig, input: LoginInput, ctx: RequestContext, bcrypt: BcryptReservation, dummyHash: string): Promise<LoginResult> {
   const identifier = normalizeIdentifier(input.identifier);
   // Par tipo + identificador + IP (escopo pelo TIPO: errar a senha do passageiro não atrasa o motorista de mesmo
   // e-mail). A espera progressiva é do PAR: quem erra paga no próprio par, e a vítima (outro IP) entra sem espera.
@@ -279,7 +297,7 @@ export async function login(
 
   const candidate = await findLoginCandidate(pool, input.accountType, identifier);
   // Compara SEMPRE, mesmo sem conta: o tempo de resposta não revela se o e-mail existe.
-  const passwordOk = await appBcrypt().compare(input.password, candidate?.passwordHash ?? (await getDummyHash(config.bcryptCost)));
+  const passwordOk = await bcrypt.compare(input.password, candidate?.passwordHash ?? dummyHash);
 
   if (!candidate || !passwordOk || candidate.status !== 'active') {
     await insertAccessLog(pool, { event: 'login_failure', accountId: candidate?.account.id ?? null, deviceId: null, ...ctx });
