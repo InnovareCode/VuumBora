@@ -99,6 +99,16 @@ e deixa a decisão 17, contas de loja da Apple e do Google, como bloqueio de iPh
 
 ## Estado em 22/11/2026 (madrugada)
 
+- **Íris, passada 5: APROVADO** sobre `6a3ff24` (`docs/veredito-iris-s1-passada-5.md`): CI 4/4; suíte 384/384 em 5 de 5; o
+  `bcrypt-ceiling` 120/120 em 6 condições (os mutantes dela morrem); teste do gate com 5 formas escondidas fechadas; B2, anel de
+  foco, A3 e B-6 nos três navegadores; nenhum token em `localStorage`, `sessionStorage`, cookie, IndexedDB ou Cache Storage.
+  **Marco 1 fechado: backend e apps prontos em modo de teste.** O que ainda impede publicar o S1 em produção fechada (nada de
+  QA): **B4** (modo http dos apps com `EXPO_PUBLIC_API_URL` e TLS; hoje `IDENTITY_MODE` é `mock`); **textos dos Termos e da
+  Política** (arquivo hospedado, `LEGAL_DOCUMENTS_BASE_URL` e a primeira versão no catálogo; sem isso o cadastro responde 503);
+  **migrações 0010 a 0021, API e painel juntos** (hoje a produção é a API antiga com painel incompatível); Docker, `TRUST_PROXY`,
+  papel restrito e SMTP com TLS, SPF e DKIM sem prova; para loja, EAS e as contas Apple e Google. Backlog da Íris: Q1 a Q3
+  (testes do pool e do gate), **Q4** (`LinkButton` `role=link` não ativa por Enter nem Espaço no web), Q5 (Home do motorista, na
+  M04), Q6 (outliers de 231 a 289 ms no `/healthz`, causa não provada). Rodada curta da Órion sobre o delta pós-3b em andamento.
 - **CI verde em `33b2401`** (4 de 4 jobs): o teste do pool de bcrypt foi corrigido de fato (mede uma comparação no próprio
   processo e afirma proporções). **Íris, passada 4: REPROVADO só por 2 defeitos de TESTE** (`docs/veredito-iris-s1-passada-4.md`),
   com o código de produção provado: M-1 (titular recusado de 21 a 68% para 0%), B-1 e F4 (503 não grava tentativa), B-3, B-4,
