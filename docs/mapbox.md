@@ -96,16 +96,19 @@ nenhum (é a prova que segue abaixo).
 - Valor preenchido vale. Valor fora da lista aborta (`metro.config.js:52-56`). `development` com `NODE_ENV=production` aborta (`:57-62`).
 - Sem a variável: `EAS_BUILD_PROFILE=production` ou `NODE_ENV=production` dão `production`; `NODE_ENV=development|test` dão
   `development` (`:71-73`). Build não interativa sem nenhum dos dois aborta (`:74-80`).
-- Só `production` tira as telas de dev do bundle: tudo sob `app/(dev)/`, em qualquer nível, entra na `resolver.blockList`
-  (`:39-40`, `:148-160`). `preview` não esconde telas de dev.
+- Só `production` tira as telas de dev do bundle: tudo sob `app/(dev)/`, em qualquer nível, entra na `resolver.blockList`.
+  `preview` não esconde telas de dev.
 - Convenção: tela de desenvolvimento nova nasce em `app/(dev)/` e já fica fora da loja, sem editar lista.
 
-Build `production` também **aborta** se a identidade for simulada: `IDENTITY_MODE` de `src/identity/identityClient.ts` precisa valer
-`'http'` (`metro.config.js:118-138`). Hoje o passageiro está em `'mock'` (`apps/passenger/src/identity/identityClient.ts:37`) e o
-motorista não tem `src/identity/`; sem o escape, os dois abortam em `production`.
+Build `preview` ou `production` também **aborta** se a identidade for simulada (F02/B4, 22/11/2026): o modo (`mock`/
+`http`) não é mais um valor fixo em `identityClient.ts` — é escolhido por TROCA DE MÓDULO em tempo de build. O arquivo
+importa `./mode`, e o `resolver.resolveRequest` do `metro.config.js` redireciona esse pedido para `./mode.mock.ts`
+(`development`, padrão) ou `./mode.http.ts` (`preview`/`production`, sempre; `development` com `VUUMBORA_IDENTITY=http`
+no ambiente real). Fora de `development` o resolver SÓ pode apontar para `mode.http` — sem isso a build aborta, sem
+exceção. Os dois apps (passageiro e motorista) já têm `src/identity/mode.http.ts`.
 
-Escape temporário: `VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION=1` (só o valor exato `1`; cada uso imprime aviso; `metro.config.js:97-104`,
-`:127-133`). Nunca em build de loja. Sai quando os dois apps tiverem `IDENTITY_MODE = 'http'`.
+Não existe mais escape: `VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION` foi removido do `metro.config.js` dos dois apps na
+F02/B4 (22/11/2026). Nenhuma variável de ambiente libera `preview`/`production` com identidade simulada.
 
 ## Prova de que carrega (feita, não assumida)
 

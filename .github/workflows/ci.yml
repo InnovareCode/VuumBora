@@ -64,6 +64,75 @@ jobs:
             echo "== nginx -t: apps/$app"
             docker run --rm -v "$PWD/apps/$app/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine nginx -t
           done
+      # F02/B4: o modo da identidade (mock/http) é escolhido por TROCA DE MÓDULO no metro.config.js
+      # (resolver.resolveRequest redireciona "./mode" para "./mode.mock" ou "./mode.http"), não por um
+      # `if` em runtime — um branch runtime não tira o código do mock do bundle (o minificador não prova
+      # que é inalcançável). Com troca de módulo, o arquivo perdedor nunca entra no grafo de dependências,
+      # e isso dá um canário de TEXTO que presta: o marcador de mode.mock.ts não pode aparecer no export
+      # de produção. `expo export --platform web` de verdade (não só o typecheck) dos dois apps: 1 caso
+      # positivo que tem de SAIR sem o canário do mock, e 2 controles negativos que têm de ABORTAR SEM
+      # GERAR NADA (a pasta de saída existe, vazia — o Expo CLI a cria antes de carregar o
+      # metro.config.js; "sem artefato" se prova listando-a, não por "pasta inexistente").
+      - name: 'Apps: guarda de identidade e https na build de produção (expo export)'
+        run: |
+          set -eu
+          HTTPS_URL="https://api.example.invalid"
+          HTTP_URL="http://api.example.invalid"
+          MOCK_CANARY="vuumbora-identity-mock-mode-canary-f02"
+          for app in passenger driver; do
+            DIR="apps/$app"
+            OUT="$RUNNER_TEMP/export-$app"
+            rm -rf "$OUT"
+
+            echo "== $app: export de produção com EXPO_PUBLIC_API_URL https tem de SAIR, sem o canário do mock"
+            (cd "$DIR" && VUUMBORA_BUILD_PROFILE=production EXPO_PUBLIC_API_URL="$HTTPS_URL" \
+              npx expo export --platform web --output-dir "$OUT/ok")
+            if [ -z "$(find "$OUT/ok" -type f 2>/dev/null)" ]; then
+              echo "::error::$app: export de produção (https) não gerou nenhum arquivo"; exit 1
+            fi
+            if grep -rqF "$MOCK_CANARY" "$OUT/ok"; then
+              echo "::error::$app: o canário do modo mock ('$MOCK_CANARY') apareceu no export de PRODUÇÃO — mode.mock.ts entrou no bundle"
+              exit 1
+            fi
+
+            echo "== $app: controle negativo (EXPO_PUBLIC_API_URL em http) tem de ABORTAR sem gerar nada"
+            set +e
+            (cd "$DIR" && VUUMBORA_BUILD_PROFILE=production EXPO_PUBLIC_API_URL="$HTTP_URL" \
+              npx expo export --platform web --output-dir "$OUT/http") >"$OUT.http.log" 2>&1
+            http_status=$?
+            set -e
+            if [ "$http_status" -eq 0 ]; then
+              echo "::error::$app: export de produção NÃO abortou com EXPO_PUBLIC_API_URL em http"; cat "$OUT.http.log"; exit 1
+            fi
+            grep -qi "https" "$OUT.http.log" || { echo "::error::$app: aborto de http não mencionou https"; cat "$OUT.http.log"; exit 1; }
+            if [ -n "$(find "$OUT/http" -type f 2>/dev/null)" ]; then
+              echo "::error::$app: controle negativo de http gerou arquivo(s) em vez de abortar vazio"; exit 1
+            fi
+
+            echo "== $app: controle negativo (resolver de identidade não apontando para mode.http) tem de ABORTAR sem gerar nada"
+            cp "$DIR/metro.config.js" "$RUNNER_TEMP/metro.config.$app.bak"
+            sed -i "s/if (profile === 'preview' || profile === 'production') return 'mode.http';/if (profile === 'preview' || profile === 'production') return 'mode.mock';/" "$DIR/metro.config.js"
+            if ! grep -q "return 'mode.mock';" "$DIR/metro.config.js"; then
+              echo "::error::$app: a mutação do controle negativo não encontrou a linha esperada em metro.config.js (arquivo mudou de forma?)"
+              cp "$RUNNER_TEMP/metro.config.$app.bak" "$DIR/metro.config.js"
+              exit 1
+            fi
+            set +e
+            (cd "$DIR" && VUUMBORA_BUILD_PROFILE=production EXPO_PUBLIC_API_URL="$HTTPS_URL" \
+              npx expo export --platform web --output-dir "$OUT/mock") >"$OUT.mock.log" 2>&1
+            mock_status=$?
+            set -e
+            cp "$RUNNER_TEMP/metro.config.$app.bak" "$DIR/metro.config.js"
+            if [ "$mock_status" -eq 0 ]; then
+              echo "::error::$app: export de produção NÃO abortou com o resolver apontando para mode.mock"; cat "$OUT.mock.log"; exit 1
+            fi
+            grep -qi "simulada" "$OUT.mock.log" || { echo "::error::$app: aborto de identidade simulada não mencionou o motivo"; cat "$OUT.mock.log"; exit 1; }
+            if [ -n "$(find "$OUT/mock" -type f 2>/dev/null)" ]; then
+              echo "::error::$app: controle negativo de identidade simulada gerou arquivo(s) em vez de abortar vazio"; exit 1
+            fi
+
+            echo "== $app: ok (export real + canário ausente + 2 controles negativos)"
+          done
 
   api:
     name: api (build, migracoes e testes contra Postgres e Redis reais)
