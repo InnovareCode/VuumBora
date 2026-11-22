@@ -368,8 +368,9 @@ existe na tela, mas nenhuma regra usa esse número ainda.
 
 ### Complemento: o embarque na oferta é só o bairro ✅ (decidido pelo dono em 22/11/2026)
 
-A oferta vai a vários motoristas ao mesmo tempo, inclusive aos que recusam.
-Por isso o dono decidiu, seguindo a recomendação da Nova
+A oferta vai a um motorista por vez (o despacho é sequencial), mas a mesma
+corrida pode passar por vários motoristas até alguém aceitar, e cada um que
+recusa ou deixa a oferta vencer já viu o que ela mostra. Por isso o dono decidiu, seguindo a recomendação da Nova
 (`docs/contratos/conferencia-f08-nova.md`):
 
 - **Antes do aceite**, o motorista vê **o bairro do embarque**, a distância

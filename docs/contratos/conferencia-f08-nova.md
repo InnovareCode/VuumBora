@@ -335,3 +335,162 @@ antes da tela M06 (oferta), porque trocar a forma de `RideOffer` depois quebra e
    - motorista que saiu cancelando de novo;
    - chave repetida com corpo diferente;
    - sequência de `seq` com posição no meio e `seq` no snapshot.
+
+---
+
+## Reconferência (Nova, 22/11/2026): commit `c5f8fa0`, branch `fatia/f08-v2`
+
+**Alvo:** `c5f8fa0`, que substitui o `292c230`. Conferi contra a minha própria lista (A1–A4, B1–B7, C1–C4) e contra
+a decisão do dono de 22/11 em `docs/decisoes-do-dono.md`, seção "Complemento: o embarque na oferta é só o bairro".
+
+**Método:**
+- Extraí `packages/domain` e `packages/api-client` do commit, com `git archive`, para uma pasta temporária fora do
+  repositório. A árvore de trabalho não foi tocada.
+- Rodei os testes dessa cópia:
+  - `packages/domain`: `tests 26 · pass 26 · fail 0`.
+  - `packages/api-client`: `tests 279 · suites 43 · pass 279 · fail 0`.
+  - Na primeira tentativa, 3 falhas eram do meu ambiente, não do commit: o domínio estava copiado dentro de
+    `node_modules`, onde o Node não remove tipos de arquivo `.ts`, e faltava o arquivo de contrato da identidade. Com
+    uma junção no lugar da cópia e o arquivo extraído, a suíte passou inteira.
+- Rodei de novo a sonda, com os 5 cenários originais e 7 novos, contra os mocks deste commit.
+
+### Veredito: AJUSTES (pequenos, um commit)
+
+A maior parte da lista foi atendida, e bem. Os 5 cenários originais da sonda passam e viraram testes permanentes.
+Sobram 3 regressões, que são efeitos colaterais das próprias correções, 4 defeitos novos nas peças acrescentadas e 1
+ponto de texto. Nenhum é grande. O mais importante é o **R1**: o motorista atribuído não fica sabendo quando o
+passageiro cancela.
+
+### Item por item
+
+| Item | Situação | Observação |
+|---|---|---|
+| A1 quem pode cancelar | **Atendido** | `CANCELLABLE_FROM` por ator; motorista recusado em `requested` e `searching_driver`; `isTripCancellable(status, actor)` |
+| A2 volta à busca limpa o motorista | **Parcial: R2** | Limpa se alguém consulta `status()` durante a busca; se ninguém consulta, o passageiro vê o motorista antigo quando outro aceita |
+| A3 só o atribuído vê a corrida | **Atendido, mas foi longe demais: R1** | Também esconde do motorista atribuído o cancelamento feito pelo passageiro |
+| A4 chave repetida com corpo diferente | **Parcial: R6** | No cancelamento do passageiro, a impressão do corpo não inclui `tripId` |
+| B1 cotação por categoria | **Atendido** | `quoteId` e `expiresAt` por categoria; `QuoteInput` obrigatório; categoria desligada fora da lista; `none` aceita o pedido |
+| B2 pedido nasce em `requested` | **Atendido** | |
+| B3 cancelamento com motivo e taxa | **Atendido** | |
+| B4 projeção por perfil | **Atendido** | `PassengerTripSnapshot` × `DriverTripSnapshot`. Os eventos ficaram só com a base, sem dado de perfil; aceito, porque acrescentar campos ao evento do passageiro depois não quebra quem já consome |
+| B5 `seq` e ressincronização | **Atendido, falta texto: R8** | `seq` só de estado, presente no snapshot, posição sem incrementar. A porta entrega o estado ao assinar, mas o contrato não diz que ela faz o mesmo ao **reconectar** e ao **ver buraco** |
+| B6 `reason` tipado | **Atendido, falta texto: R8** | União fechada por operação nos construtores dos mocks. Falta escrever que o adaptador `http` transforma `reason` desconhecido em `unknown` |
+| B7 portas sem token | **Atendido** | README, seção "Token" |
+| C1 `arrived`/`start`/`complete` | **Atendido, com R3** | `start` confere o código antes de conferir quem chama e em que fase |
+| C2 ofertas em tempo real | **Atendido, com R4** | Quem aceita recebe `offer.revoked: cancelled` da própria oferta |
+| C3 disponibilidade | **Atendido, com R7** | Ficar offline falha com documento vencido ou conta não aprovada |
+| C4 envio de posição | **Atendido** | |
+
+### Decisão do dono: o embarque na oferta é só o bairro
+
+O contrato respeita a decisão, com uma brecha (R5):
+- `RideOffer.pickup` é `ApproximatePlace` (bairro e ponto arredondado a 2 casas, cerca de 1,1 km). O `offer.created`
+  não leva endereço nem ponto exato (sonda, cenário 8).
+- O endereço e o ponto exatos só existem no `DriverTripSnapshot`, e só para o motorista atribuído (cenário 8b). Quem
+  recusou ou perdeu a oferta recebe `404` (testes da suíte A3).
+- **Brecha (R5):** `toApproximatePlace` usa o `label` do lugar quando falta o bairro. Um `Place` sem bairro, cujo
+  `label` é o endereço, leva o endereço exato na oferta (cenário 11). É exatamente o que a decisão proíbe.
+
+Observações que não bloqueiam:
+- **Distância e tempo até o embarque:** `pickupDistanceM` e `pickupEtaS` vão exatos. O motorista conhece a própria
+  posição; com a distância exata, ele estreita bastante onde o passageiro está dentro do quadrado de 1,1 km.
+  Recomendo que o servidor arredonde (100 m e 1 min), com a regra escrita no JSDoc de `RideOffer`.
+- **Texto da decisão:** a frase "a oferta vai a vários motoristas ao mesmo tempo" contradiz o despacho sequencial do
+  §5.4. O certo é "a vários motoristas, um de cada vez". Correção de redação em `docs/decisoes-do-dono.md`.
+- **Pergunta ao dono:** o destino continua completo na oferta, com endereço e ponto exatos. O motivo da decisão ("vai
+  a vários motoristas, inclusive aos que recusam") vale também para o destino, que na volta para casa é o endereço do
+  passageiro. Para escolher a corrida, "destino visível" se resolve com bairro e ponto aproximado. Precisa ser decidido
+  antes da tela M06, pelo mesmo motivo do embarque: trocar `destination: Place` por `ApproximatePlace` depois quebra
+  essa tela.
+
+### Sonda (rodada contra os mocks de `c5f8fa0`)
+
+| # | Cenário | Resultado |
+|---|---|---|
+| 1 | Passageiro durante a busca, depois que o motorista desistiu | ok: sem motorista |
+| 1b | O mesmo, sem consultar `status()` na busca; B aceita | **falha**: `driver_en_route` com o motorista **A** (R2) |
+| 2 | Motorista que saiu, ainda assinado | ok: nenhum evento depois do cancelamento; `status` 404 |
+| 3 | Motorista que saiu cancela de novo com chave nova | ok: 404, a corrida segue com B; o domínio recusa motorista em `searching_driver` e `requested` |
+| 4 | Pedido com a mesma chave e outra cotação | ok: `409 idempotency_key_reused` |
+| 4b | Cancelamento do passageiro com a mesma chave em **outra** corrida | **falha**: devolve `{ status: 'cancelled' }`, e a segunda corrida continua em `requested` (R6) |
+| 5 | Sequência de `seq` | ok: `status:1 status:2 location:2 location:2 status:3`; o snapshot traz `seq: 3` |
+| 6 | Passageiro cancela com o motorista a caminho | **falha**: o motorista atribuído não recebe `cancelled`, e o `status()` dele dá 404 (R1) |
+| 7 | Motorista aceita a oferta, assinado nas ofertas | **falha**: recebe `offer.created` e logo depois `offer.revoked: cancelled` da oferta que acabou de aceitar (R4) |
+| 8 / 8b | Conteúdo da oferta e do snapshot do atribuído | ok: a oferta leva só bairro e ponto arredondado; o snapshot leva o endereço completo |
+| 9 / 9c / 9d | `start` com código errado antes de chegar, e por motorista não atribuído | **falha**: dá `400` em vez de `409`/`404`; as tentativas de quem não é atribuído contam, e o código certo acaba em `429` (R3) |
+| 10 | Ficar offline com documento vencido ou conta não aprovada | **falha**: `409` (R7) |
+| 11 | `toApproximatePlace` sem bairro | **falha**: `neighborhood: "Rua das Flores, 123"` (R5) |
+
+O cenário 1 da suíte permanente chama `status()` durante a busca, e foi por isso que não pegou o 1b.
+
+### O que ainda falta
+
+**R1 (alto). O motorista atribuído não fica sabendo que o passageiro cancelou.**
+- **Arquivos:** `packages/api-client/src/trip/mock-store.ts` (`setStatus` apaga `assignedDriverId` ao ir para
+  `cancelled`), `packages/api-client/src/driver/mock-adapter.ts` (filtro do `subscribe` e `assignedTripInfo`) e a
+  seção "Visibilidade do motorista" do README.
+- **Muda:** o motorista perde a atribuição **só** quando a corrida volta para `searching_driver` ou `requested` (ele
+  desistiu, ou o sistema reatribuiu). Em `cancelled` e `completed`, o motorista que estava atribuído continua vendo a
+  corrida: recebe o evento terminal, e `status()` devolve o snapshot terminal.
+- **Teste:** passageiro, admin e sistema cancelam em `driver_en_route`; o motorista recebe `status: cancelled` e
+  `status()` devolve `cancelled`.
+- **A causa é em parte minha:** no A3 eu escrevi "a assinatura deixa de entregar eventos depois do cancelamento", sem
+  separar o cancelamento do próprio motorista do cancelamento do passageiro. A Vega seguiu a letra.
+
+**R2 (médio). O passageiro vê o motorista antigo.**
+- **Arquivo:** `packages/api-client/src/passenger/mock-adapter.ts`. O resumo do motorista é guardado por corrida e só
+  é limpo quando alguém lê o snapshot.
+- **Muda:** o resumo mostrado precisa ser sempre o do motorista atribuído naquele momento (por exemplo, guardar por
+  `driverId` e resolver pelo `assignedDriverId` da store). `setDriverSummary` de um motorista que não é o atribuído é
+  ignorado. O mecanismo fica com a Vega.
+- **Teste:** cenário 1b.
+
+**R3 (médio). `start` confere o código antes de conferir quem chama.**
+- **Arquivos:** `packages/api-client/src/driver/mock-adapter.ts` (`start`) e o JSDoc de `DriverTripPort.start`.
+- **Muda:** a ordem passa a ser:
+  1. `404` se o motorista não é o atribuído;
+  2. `409 invalid_transition` se a corrida não está em `driver_arrived`;
+  3. `400` se o código está errado;
+  4. `429` depois de várias tentativas.
+
+  As tentativas contam por corrida **e** motorista, e só as do atribuído.
+- **Por quê:** o `tripId` vai em toda `RideOffer`. Com a ordem atual, no servidor, qualquer motorista que recebeu a
+  oferta confirma que a corrida existe e gasta as tentativas do motorista atribuído (cenários 9c e 9d).
+
+**R4 (médio). Quem aceita recebe a revogação da própria oferta.**
+- **Arquivo:** `packages/api-client/src/driver/mock-adapter.ts` (`accept`). A oferta é marcada como resolvida só
+  depois da passagem automática para `driver_en_route`, e o vigia da oferta lê essa passagem como cancelamento.
+- **Muda:** a oferta é marcada como resolvida, e o vigia desligado, antes das duas transições.
+- **Teste:** durante o `accept`, `subscribeOffers` recebe só `offer.created`.
+
+**R5 (médio). O embarque aproximado pode vazar o endereço.**
+- **Arquivo:** `packages/domain/src/geo.ts` (`toApproximatePlace`).
+- **Muda:** sem bairro, o valor de reserva é um texto neutro (por exemplo, "Bairro não informado"), nunca `label` nem
+  `address`. Ou então a função passa a exigir o bairro.
+- **Teste:** um `Place` sem bairro, com `label` igual ao endereço, não pode deixar o `label` aparecer na oferta.
+- **Por quê:** o servidor do S4 vai reutilizar essa função, e um geocodificador que não devolve bairro leva o
+  endereço exato a todo motorista ofertado.
+
+**R6 (baixo). Chave repetida em outra corrida.**
+- **Arquivo:** `packages/api-client/src/passenger/mock-adapter.ts` (`cancel`).
+- **Muda:** a impressão do corpo passa a ser `fingerprint({ tripId, ...input })`, como já é do lado do motorista.
+- **Teste:** cenário 4b dá `409 idempotency_key_reused`.
+
+**R7 (baixo). Ficar offline sempre funciona.**
+- **Arquivos:** `packages/api-client/src/driver/mock-adapter.ts` (`setAvailability`) e o README (C3).
+- **Muda:** as checagens de aprovação e documento valem só para `online: true`.
+- **Por quê:** um motorista cujo documento vence no meio do turno precisa conseguir desligar.
+
+**R8 (texto).**
+- **Arquivos:** JSDoc de `TripRealtimePort` em `packages/api-client/src/trip/types.ts` e o README, seções "Tempo
+  real" e "`reason` tipado".
+- **Escrever:**
+  - a porta também entrega o estado ao reconectar e ao detectar buraco;
+  - a porta só entrega eventos de estado com `seq` estritamente crescente, e é ela que descarta duplicados;
+  - o adaptador `http` transforma `reason` fora da união em `kind: 'unknown'`.
+
+**Não bloqueia (registro):**
+- **Pet:** a fixture deixa Pet ligado, mas a D-09 no plano-mestre diz "as duas nascem desligadas".
+- **Comentário de `DeclineReason`:** atribui os valores à decisão 15, que trata de cancelamento, não de recusa.
+- **Distância e tempo na oferta:** arredondamento recomendado (ver acima).
+- **Destino exato na oferta:** pergunta ao dono (ver acima).
