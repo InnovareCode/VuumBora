@@ -1,16 +1,24 @@
-/** Portas do PASSAGEIRO. Proposta — contrato HTTP definitivo na Etapa E. Nunca importar em apps/driver. */
-import type { Place, TripId, TripStatus } from '@vuumbora/domain';
-import type { FareEstimate, RideDraft } from '@vuumbora/domain/passenger';
-import type { Result } from '../index';
+/**
+ * Portas do PASSAGEIRO. Nunca importar em apps/driver.
+ *
+ *   const { port, control } = createMockPassengerRidePort();
+ *   const quoted = await port.quote({ origin, destination });
+ *   const requested = await port.request({ quoteId, paymentMethodId }, idempotencyKey);
+ *   const unsubscribe = port.subscribe(tripId, onEvent);
+ *   control.advance(tripId, 'searching_driver'); // ver README
+ */
+export type {
+  CancelReason,
+  CategoryAvailability,
+  CategoryQuote,
+  PassengerRidePort,
+  PassengerTripSnapshot,
+  PlacesPort,
+  Quote,
+  QuoteInput,
+  RequestRideInput,
+  TripDriverSummary,
+} from './types';
 
-export interface PassengerRidePort {
-  quote(draft: RideDraft): Promise<Result<readonly FareEstimate[]>>;
-  /** `idempotencyKey` evita corrida duplicada em retry/reconexão. */
-  request(draft: RideDraft, idempotencyKey: string): Promise<Result<{ readonly tripId: TripId }>>;
-  status(tripId: TripId): Promise<Result<{ readonly status: TripStatus }>>;
-  cancel(tripId: TripId, idempotencyKey: string): Promise<Result<void>>;
-}
-
-export interface PlacesPort {
-  search(query: string): Promise<Result<readonly Place[]>>;
-}
+export { createMockPassengerRidePort } from './mock-adapter';
+export type { MockPassengerRide, MockPassengerRideControl, MockPassengerRideOptions } from './mock-adapter';

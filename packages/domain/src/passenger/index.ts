@@ -3,11 +3,11 @@
  * Nunca importar a partir de apps/driver.
  */
 import type { Money, Place } from '../index';
-import { canTransitionRide, isRideCancellable, transitionRide } from './rideStateMachine';
-import type { PassengerTripPhase, RideState, RideTransitionResult } from './rideStateMachine';
+import { cancelRide, canTransitionRide, isRideCancellable, transitionRide } from './rideStateMachine';
+import type { CancelActor, PassengerTripPhase, RideState, RideTransitionResult } from './rideStateMachine';
 
-export type { PassengerTripPhase, RideState, RideTransitionResult };
-export { canTransitionRide, isRideCancellable, transitionRide };
+export type { CancelActor, PassengerTripPhase, RideState, RideTransitionResult };
+export { cancelRide, canTransitionRide, isRideCancellable, transitionRide };
 
 export interface RideDraft {
   readonly origin?: Place;

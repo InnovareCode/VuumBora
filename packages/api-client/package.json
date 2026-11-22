@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./passenger": "./src/passenger/index.ts",
     "./driver": "./src/driver/index.ts",
+    "./trip": "./src/trip/index.ts",
     "./waitlist": "./src/waitlist/index.ts",
     "./driver-applications": "./src/driver-applications/index.ts",
     "./identity": "./src/identity/index.ts"
