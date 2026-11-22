@@ -7,21 +7,30 @@ export interface AuthHeaderProps {
   readonly title: string;
   readonly subtitle?: string;
   readonly onBack?: () => void;
+  /**
+   * A prancha de 22/11 não tem logo em "Criar conta" (só no login/boas-vindas, ficha
+   * P02 item 4). Padrão `true` para não mudar quem já chama sem a prop; as telas sem
+   * logo (cadastro, código, esqueci/redefinir senha) passam `false` explicitamente.
+   */
+  readonly showLogo?: boolean;
 }
 
 /**
  * Cabeçalho das telas de login/cadastro (P02-criar-conta.webp): seta de voltar
- * isolada no topo, logo centralizada, depois título e subtítulo da tela — layout
- * diferente do `ScreenHeader` genérico (que coloca título ao lado da seta), por
- * isso fica local em vez de forçar uma variação no pacote compartilhado.
+ * isolada no topo, logo centralizada (só quando `showLogo`), depois título e
+ * subtítulo da tela — layout diferente do `ScreenHeader` genérico (que coloca
+ * título ao lado da seta), por isso fica local em vez de forçar uma variação no
+ * pacote compartilhado.
  */
-export const AuthHeader = memo(function AuthHeader({ title, subtitle, onBack }: AuthHeaderProps) {
+export const AuthHeader = memo(function AuthHeader({ title, subtitle, onBack, showLogo = true }: AuthHeaderProps) {
   return (
     <View style={styles.root}>
       {onBack ? <BackButton onPress={onBack} /> : null}
-      <View style={styles.logoRow}>
-        <BrandLogo variant="lockup" size="sm" />
-      </View>
+      {showLogo ? (
+        <View style={styles.logoRow}>
+          <BrandLogo variant="lockup" size="sm" />
+        </View>
+      ) : null}
       <Text style={styles.title} accessibilityRole="header">
         {title}
       </Text>

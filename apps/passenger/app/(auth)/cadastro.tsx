@@ -187,9 +187,14 @@ export default function CadastroScreen() {
   const showSummary = submitCount > 0 && invalidLabels.length > 0 && failure === null;
 
   return (
-    <AppShell scroll testID="cadastro-screen">
+    <AppShell scroll glow testID="cadastro-screen">
       <View style={styles.content}>
-        <AuthHeader title="Criar conta" subtitle="Informe seus dados para começar." onBack={() => goBackOr('/boas-vindas')} />
+        <AuthHeader
+          title="Criar conta"
+          subtitle="Informe seus dados para começar."
+          onBack={() => goBackOr('/boas-vindas')}
+          showLogo={false}
+        />
 
         <View style={styles.form}>
           <Controller

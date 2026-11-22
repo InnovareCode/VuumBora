@@ -140,12 +140,13 @@ function VerifyForm({ verification }: { readonly verification: PendingVerificati
   const requestLabel = `Pedir novo código${waitSuffix}`;
 
   return (
-    <AppShell scroll testID="codigo-screen">
+    <AppShell scroll glow testID="codigo-screen">
       <View style={styles.content}>
         <AuthHeader
           title="Confirme seu e-mail"
           subtitle={`Enviamos um código de 6 dígitos para ${target}. Digite o código e a senha que você escolheu no cadastro.`}
           onBack={() => goBackOr('/login')}
+          showLogo={false}
         />
 
         {verification.origin === 'login' ? (

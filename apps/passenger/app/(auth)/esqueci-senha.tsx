@@ -70,12 +70,13 @@ export default function EsqueciSenhaScreen() {
   const submit = handleSubmit(onSubmit);
 
   return (
-    <AppShell scroll testID="esqueci-senha-screen">
+    <AppShell scroll glow testID="esqueci-senha-screen">
       <View style={styles.content}>
         <AuthHeader
           title="Esqueci a senha"
           subtitle="Informe o e-mail da sua conta. Se ele estiver cadastrado e confirmado, enviaremos um código para você criar uma nova senha."
           onBack={() => goBackOr('/login')}
+          showLogo={false}
         />
 
         <View style={styles.form}>

@@ -52,7 +52,7 @@ export default function WelcomeScreen() {
 
           <View style={styles.bottomBlock}>
             <LinearGradient colors={SCRIM_COLORS} locations={SCRIM_LOCATIONS} style={styles.scrim} pointerEvents="none" />
-            <Text style={styles.headline}>
+            <Text style={styles.headline} accessibilityRole="header">
               Bem-vindo ao <Text style={styles.headlineAccent}>VuumBora!</Text>
             </Text>
             <Text style={styles.promise}>Sua mobilidade urbana com mais praticidade, segurança e economia.</Text>
@@ -82,6 +82,7 @@ export default function WelcomeScreen() {
                 label="Cadastrar"
                 onPress={() => router.push('/cadastro')}
                 accessibilityLabel="Cadastrar"
+                size="prominent"
                 testID="welcome-cadastro-button"
               />
             </View>
@@ -95,7 +96,11 @@ export default function WelcomeScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.role.screen },
-  content: { flex: 1, minHeight: 480 },
+  // `AppShell.scrollFill` (flexGrow:1) já estica este `View` até a altura visível da
+  // tela (bug_appshell_scroll_sem_flexgrow, 18/11/2026); o `minHeight:480` que existia
+  // aqui era fora da escala de 4pt (G-01) e, medido, redundante com essa correção —
+  // removido e reconferido nas 4 larguras (G-09/G-11/G-13).
+  content: { flex: 1 },
   brandBlock: { alignItems: 'center', marginTop: theme.spacing['6'] },
   brandBlockCompact: { marginTop: theme.spacing['4'] },
   spacer: { flex: 1, minHeight: theme.spacing['4'] },

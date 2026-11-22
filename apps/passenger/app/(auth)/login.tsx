@@ -108,7 +108,7 @@ export default function LoginScreen() {
   const submit = handleSubmit(onSubmit);
 
   return (
-    <AppShell scroll testID="login-screen">
+    <AppShell scroll glow testID="login-screen">
       <View style={styles.content}>
         <AuthHeader title="Entrar" subtitle="Acesse sua conta para continuar." onBack={() => goBackOr('/boas-vindas')} />
 
