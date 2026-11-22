@@ -12,20 +12,27 @@ import {
   User,
 } from 'lucide-react-native';
 import { AppShell, DangerButton, MockBadge, ScreenHeader, theme, textStyle } from '@vuumbora/ui';
-import { EditableAvatar } from '../src/components/profile/EditableAvatar';
-import { ListMenuRow } from '../src/components/shared/ListMenuRow';
-import { MOCK_PASSENGER_PROFILE } from '../src/data/mockPassengerProfile';
+import { EditableAvatar } from '../../src/components/profile/EditableAvatar';
+import { ListMenuRow } from '../../src/components/shared/ListMenuRow';
+import { MOCK_PASSENGER_PROFILE } from '../../src/data/mockPassengerProfile';
+import { useSession } from '../../src/session/SessionProvider';
+import { useRideRequestStore } from '../../src/store/useRideRequestStore';
 
 /**
  * P13 — Perfil do passageiro (VuumBora_Claude_Design_System/referencias/premium/
  * passageiro/P13-perfil.webp). Nenhuma das seções abaixo tem tela própria ainda —
  * o toque revela `UnavailableNoticeBanner` (dentro de `ListMenuRow`) em vez de navegar
- * para rota vazia. "Sair da conta" é simulado: não existe sessão real para encerrar
- * (pendência 1.6, "Controle de sessão").
+ * para rota vazia. "Sair da conta" encerra a sessão de DEMONSTRAÇÃO (`useSession`): a guarda
+ * de `app/_layout.tsx` desmonta `(app)` e volta para a P01. Limpa também a jornada de corrida
+ * em memória, para a próxima sessão não herdar destino/avaliação da anterior.
  */
 export default function ProfileScreen() {
+  const { signOut } = useSession();
+  const startNewRide = useRideRequestStore((state) => state.startNewRide);
+
   function handleSignOut() {
-    router.replace('/boas-vindas');
+    startNewRide();
+    signOut();
   }
 
   return (

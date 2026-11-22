@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Bell, FileText, Gift, Globe, LocateFixed, SunMoon, Trash2 } from 'lucide-react-native';
 import { AppShell, MockBadge, ScreenHeader, theme, textStyle } from '@vuumbora/ui';
-import { ListMenuRow } from '../src/components/shared/ListMenuRow';
+import { ListMenuRow } from '../../src/components/shared/ListMenuRow';
 
 const PRIVACY_NOTICE =
   'Texto ainda não publicado. Termos de Uso e Política de Privacidade entram antes do lançamento.';

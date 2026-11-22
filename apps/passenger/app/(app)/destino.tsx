@@ -4,9 +4,9 @@ import { router } from 'expo-router';
 import { Circle, MapPin } from 'lucide-react-native';
 import type { Place } from '@vuumbora/domain';
 import { AppShell, EmptyState, MockBadge, PrimaryButton, ScreenHeader, SearchInput, TextInput, theme, textStyle } from '@vuumbora/ui';
-import { PlaceRow } from '../src/components/destination/PlaceRow';
-import { MOCK_SAVED_PLACES, searchMockPlaces } from '../src/data/mockPlaces';
-import { useRideRequestStore } from '../src/store/useRideRequestStore';
+import { PlaceRow } from '../../src/components/destination/PlaceRow';
+import { MOCK_SAVED_PLACES, searchMockPlaces } from '../../src/data/mockPlaces';
+import { useRideRequestStore } from '../../src/store/useRideRequestStore';
 
 type ActiveField = 'origin' | 'destination';
 

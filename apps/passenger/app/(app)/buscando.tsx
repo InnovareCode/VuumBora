@@ -3,9 +3,9 @@ import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Car, MapPin } from 'lucide-react-native';
 import { AppShell, DangerButton, MockBadge, SurfaceRaised, theme, textStyle, tabularNums } from '@vuumbora/ui';
-import { SearchingPulse } from '../src/components/search/SearchingPulse';
-import { findMockRideCategory } from '../src/data/mockRideCategories';
-import { useRideRequestStore } from '../src/store/useRideRequestStore';
+import { SearchingPulse } from '../../src/components/search/SearchingPulse';
+import { findMockRideCategory } from '../../src/data/mockRideCategories';
+import { useRideRequestStore } from '../../src/store/useRideRequestStore';
 
 /**
  * P07 — Buscando motorista. Sem mockup de referência (derivada do design system).

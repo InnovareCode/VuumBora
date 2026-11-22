@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { AppShell, EmptyState, ScreenHeader, theme } from '@vuumbora/ui';
-import { formatMoneyBRL } from '../src/utils/money';
-import { TripFilterChip } from '../src/components/history/TripFilterChip';
-import { TripHistoryCard } from '../src/components/history/TripHistoryCard';
-import { MOCK_TRIP_HISTORY, type TripHistoryPeriod } from '../src/data/mockTripHistory';
+import { formatMoneyBRL } from '../../src/utils/money';
+import { TripFilterChip } from '../../src/components/history/TripFilterChip';
+import { TripHistoryCard } from '../../src/components/history/TripHistoryCard';
+import { MOCK_TRIP_HISTORY, type TripHistoryPeriod } from '../../src/data/mockTripHistory';
 
 type TripFilter = 'all' | TripHistoryPeriod;
 

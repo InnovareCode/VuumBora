@@ -3,10 +3,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Clock, MapPin } from 'lucide-react-native';
 import { AppShell, MockBadge, ScreenHeader, StatusBadge, DangerButton, SurfaceRaised, theme, textStyle, tabularNums, type StatusBadgeVariant } from '@vuumbora/ui';
-import { DriverInfoCard } from '../src/components/assignedDriver/DriverInfoCard';
-import { SafetyActionsRow } from '../src/components/assignedDriver/SafetyActionsRow';
-import { formatEtaMinutes } from '../src/utils/time';
-import { useRideRequestStore } from '../src/store/useRideRequestStore';
+import { DriverInfoCard } from '../../src/components/assignedDriver/DriverInfoCard';
+import { SafetyActionsRow } from '../../src/components/assignedDriver/SafetyActionsRow';
+import { formatEtaMinutes } from '../../src/utils/time';
+import { useRideRequestStore } from '../../src/store/useRideRequestStore';
 
 type EnRoutePhase = 'driver_assigned' | 'driver_en_route' | 'driver_arrived';
 

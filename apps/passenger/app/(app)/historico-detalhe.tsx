@@ -2,10 +2,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Car, Circle, Clock, CreditCard, MapPin } from 'lucide-react-native';
 import { AppShell, ErrorState, MockBadge, ScreenHeader, StatusBadge, theme, textStyle, type StatusBadgeVariant } from '@vuumbora/ui';
-import { formatMoneyBRL } from '../src/utils/money';
-import { TripDetailRow } from '../src/components/history/TripDetailRow';
-import { ReceiptBreakdownRow } from '../src/components/trip/ReceiptBreakdownRow';
-import { findMockTripHistoryEntry, type TripHistoryStatus } from '../src/data/mockTripHistory';
+import { formatMoneyBRL } from '../../src/utils/money';
+import { TripDetailRow } from '../../src/components/history/TripDetailRow';
+import { ReceiptBreakdownRow } from '../../src/components/trip/ReceiptBreakdownRow';
+import { findMockTripHistoryEntry, type TripHistoryStatus } from '../../src/data/mockTripHistory';
 
 const STATUS: Record<TripHistoryStatus, { readonly label: string; readonly variant: StatusBadgeVariant }> = {
   completed: { label: 'Concluída', variant: 'success' },

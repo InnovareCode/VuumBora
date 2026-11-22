@@ -12,7 +12,7 @@ import {
   theme,
   textStyle,
 } from '@vuumbora/ui';
-import { LegalNotice } from '../src/components/auth/LegalNotice';
+import { LegalNotice } from '../../src/components/auth/LegalNotice';
 
 const SCRIM_COLORS = gradientColors(theme.gradient.photoScrim);
 const SCRIM_LOCATIONS = gradientLocations(theme.gradient.photoScrim);

@@ -1,16 +1,17 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { Briefcase, Calendar, Car, Home as HomeIcon, MessageCircle, Star, User } from 'lucide-react-native';
-import { AppShell, BottomTabBar, type BottomTabBarItem, MockBadge, PrimaryButton, theme, textStyle } from '@vuumbora/ui';
-import { HomeHeader } from '../src/components/home/HomeHeader';
-import { GreetingRow } from '../src/components/home/GreetingRow';
-import { HomeMapPreview } from '../src/components/home/HomeMapPreview';
-import { DestinationSearchBar } from '../src/components/home/DestinationSearchBar';
-import { QuickAccessGrid, type QuickAccessItem } from '../src/components/home/QuickAccessGrid';
-import { RideCategoryCard } from '../src/components/home/RideCategoryCard';
-import { SafetyPromoBanner } from '../src/components/home/SafetyPromoBanner';
-import { MOCK_RIDE_CATEGORIES } from '../src/data/mockRideCategories';
-import { useRideRequestStore } from '../src/store/useRideRequestStore';
+import { router } from 'expo-router';
+import { StyleSheet, Text, View } from 'react-native';
+import { Briefcase, Calendar, Car, Home as HomeIcon, MessageCircle, Package, PawPrint, Star, User, UserRound, type LucideIcon } from 'lucide-react-native';
+import { AppShell, BottomTabBar, type BottomTabBarItem, MockBadge, PrimaryButton, theme, textStyle, type VehicleIllustrationVariant } from '@vuumbora/ui';
+import { HomeHeader } from '../../src/components/home/HomeHeader';
+import { GreetingRow } from '../../src/components/home/GreetingRow';
+import { HomeMapPreview } from '../../src/components/home/HomeMapPreview';
+import { DestinationSearchBar } from '../../src/components/home/DestinationSearchBar';
+import { QuickAccessGrid, type QuickAccessItem } from '../../src/components/home/QuickAccessGrid';
+import { RideCategoryCard } from '../../src/components/home/RideCategoryCard';
+import { SafetyPromoBanner } from '../../src/components/home/SafetyPromoBanner';
+import { MOCK_RIDE_CATEGORIES, type RideCategoryKey } from '../../src/data/mockRideCategories';
+import { useRideRequestStore } from '../../src/store/useRideRequestStore';
+import { useSession } from '../../src/session/SessionProvider';
 
 const QUICK_ACCESS_ITEMS: readonly QuickAccessItem[] = [
   { key: 'casa', label: 'Casa', subtitle: 'Ponta Negra', icon: <HomeIcon size={20} color={theme.role.ctaBackground} strokeWidth={1.75} /> },
@@ -21,17 +22,24 @@ const QUICK_ACCESS_ITEMS: readonly QuickAccessItem[] = [
 ];
 
 /**
+ * Como cada categoria aparece no card: as duas que são o próprio veículo (`base_tier`) mostram a
+ * ilustração do carro; as demais, só o símbolo. A arte `economico` é a do nível de entrada.
+ */
+const CATEGORY_VISUALS: Record<RideCategoryKey, { readonly icon: LucideIcon; readonly vehicleVariant?: VehicleIllustrationVariant }> = {
+  vuumbora: { icon: Car, vehicleVariant: 'economico' },
+  conforto: { icon: Car, vehicleVariant: 'comfort' },
+  motorista_mulher: { icon: UserRound },
+  entrega: { icon: Package },
+  pet: { icon: PawPrint },
+};
+
+/**
  * P03 — Início/mapa do passageiro (VuumBora_Claude_Design_System/referencias/passageiro_home.png).
  * Tela só de UI: nenhuma das ações abaixo (destino, atalhos, categoria, solicitar corrida, abas)
  * chama uma API real ainda — não existe contrato/endpoint definido (pendência para Vega).
  */
 export default function PassengerHomeScreen() {
-  const { simulated } = useLocalSearchParams<{ simulated?: string }>();
-  const { width } = useWindowDimensions();
-  // Direção de arte §6/§9 item 5: abaixo de 375pt a grade 3 colunas não cabe com
-  // legibilidade — vira lista vertical (1 card por linha, RideCategoryCard cuida do
-  // próprio layout interno a partir dessa mesma largura).
-  const categoryList = width < 375;
+  const { mode: sessionMode } = useSession();
   const destination = useRideRequestStore((state) => state.destination);
   const categoryId = useRideRequestStore((state) => state.categoryId);
   const setCategory = useRideRequestStore((state) => state.setCategory);
@@ -60,7 +68,7 @@ export default function PassengerHomeScreen() {
     <AppShell scroll glow footer={<BottomTabBar items={tabs} activeKey="inicio" testID="home-tab-bar" />}>
       <View style={styles.content}>
         <HomeHeader notificationCount={3} />
-        {simulated === '1' ? (
+        {sessionMode === 'mock' ? (
           <MockBadge label="acesso simulado, sem autenticação real" testID="simulated-access-badge" />
         ) : null}
         <GreetingRow passengerName="Juliana" />
@@ -71,20 +79,25 @@ export default function PassengerHomeScreen() {
         <View style={styles.categorySection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Escolha sua viagem</Text>
-            <MockBadge label="preço e tempo estimados" />
+            <MockBadge label="preço estimado de demonstração" testID="categories-mock-badge" />
           </View>
-          <View style={categoryList ? styles.categoryColumn : styles.categoryRow}>
-            {MOCK_RIDE_CATEGORIES.map((category) => (
-              <RideCategoryCard
-                key={category.key}
-                name={category.name}
-                vehicleVariant={category.key}
-                etaLabel={category.etaLabel}
-                priceLabel={category.priceLabel}
-                selected={categoryId === category.key}
-                onPress={() => setCategory(category.key)}
-              />
-            ))}
+          <View style={styles.categoryColumn}>
+            {MOCK_RIDE_CATEGORIES.map((category) => {
+              const visual = CATEGORY_VISUALS[category.key];
+              return (
+                <RideCategoryCard
+                  key={category.key}
+                  name={category.name}
+                  icon={visual.icon}
+                  {...(visual.vehicleVariant ? { vehicleVariant: visual.vehicleVariant } : {})}
+                  etaLabel={category.etaLabel}
+                  priceLabel={category.priceLabel}
+                  selected={categoryId === category.key}
+                  onPress={() => setCategory(category.key)}
+                  testID={`ride-category-${category.key}`}
+                />
+              );
+            })}
           </View>
         </View>
 
@@ -111,9 +124,9 @@ export default function PassengerHomeScreen() {
 const styles = StyleSheet.create({
   content: { gap: theme.spacing['5'] },
   categorySection: { gap: theme.spacing['3'] },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing['2'] },
+  // Título e selo empilhados: o selo "preço estimado de demonstração" (~200pt) não cabe ao lado do título em 320pt.
+  sectionHeader: { gap: theme.spacing['2'] },
   sectionTitle: { color: theme.role.textPrimary, ...textStyle('bold', 'body') },
-  categoryRow: { flexDirection: 'row', gap: theme.spacing['2'] },
   categoryColumn: { gap: theme.spacing['2'] },
   helperText: { color: theme.role.textSecondary, ...textStyle('regular', 'small'), textAlign: 'center' },
 });

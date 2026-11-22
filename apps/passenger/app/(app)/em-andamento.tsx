@@ -2,10 +2,10 @@ import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { AppShell, MockBadge, ScreenHeader, theme } from '@vuumbora/ui';
-import { TripProgressBar } from '../src/components/trip/TripProgressBar';
-import { DriverInfoCard } from '../src/components/assignedDriver/DriverInfoCard';
-import { SafetyActionsRow } from '../src/components/assignedDriver/SafetyActionsRow';
-import { useRideRequestStore } from '../src/store/useRideRequestStore';
+import { TripProgressBar } from '../../src/components/trip/TripProgressBar';
+import { DriverInfoCard } from '../../src/components/assignedDriver/DriverInfoCard';
+import { SafetyActionsRow } from '../../src/components/assignedDriver/SafetyActionsRow';
+import { useRideRequestStore } from '../../src/store/useRideRequestStore';
 
 /**
  * P09 — Corrida em andamento. Sem mockup de referência (derivada do design system).

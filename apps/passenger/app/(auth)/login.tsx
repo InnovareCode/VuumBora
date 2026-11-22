@@ -5,18 +5,20 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { StyleSheet, Text, View } from 'react-native';
 import { Lock, User } from 'lucide-react-native';
 import { AppShell, PasswordInput, PrimaryButton, TextInput, theme, textStyle } from '@vuumbora/ui';
-import { AuthHeader } from '../src/components/auth/AuthHeader';
-import { UnavailableNoticeBanner } from '../src/components/auth/UnavailableNoticeBanner';
-import { loginSchema, type LoginFormValues } from '../src/schemas/authSchemas';
-import { simulateAuthRequest } from '../src/lib/simulateAuthRequest';
-import { fieldErrorProps } from '../src/lib/fieldErrorProps';
+import { AuthHeader } from '../../src/components/auth/AuthHeader';
+import { UnavailableNoticeBanner } from '../../src/components/auth/UnavailableNoticeBanner';
+import { loginSchema, type LoginFormValues } from '../../src/schemas/authSchemas';
+import { simulateAuthRequest } from '../../src/lib/simulateAuthRequest';
+import { useSession } from '../../src/session/SessionProvider';
+import { fieldErrorProps } from '../../src/lib/fieldErrorProps';
 
 /**
  * Login — sem referência própria (derivada de P02-criar-conta.webp). Nenhuma
- * autenticação real existe: ao validar, simula a chamada e segue para a Home
- * marcando a entrada como simulada.
+ * autenticação real existe: ao validar, simula a chamada e abre a sessão de
+ * demonstração (`useSession().signInWithMock`) — a Home mostra o selo de simulado.
  */
 export default function LoginScreen() {
+  const { signInWithMock } = useSession();
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | undefined>(undefined);
   const [recoveryNoticeVisible, setRecoveryNoticeVisible] = useState(false);
@@ -32,7 +34,8 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await simulateAuthRequest(values);
-      router.replace({ pathname: '/', params: { simulated: '1' } });
+      // A guarda de `app/_layout.tsx` troca (auth) por (app) quando a sessão abre.
+      signInWithMock();
     } catch {
       setSubmitError('Não foi possível entrar agora. Tente novamente.');
     } finally {

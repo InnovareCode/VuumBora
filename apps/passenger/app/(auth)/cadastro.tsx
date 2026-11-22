@@ -5,18 +5,22 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { StyleSheet, Text, View } from 'react-native';
 import { Lock, Mail, Phone, User } from 'lucide-react-native';
 import { AppShell, PasswordInput, PhoneInput, PrimaryButton, TextInput, theme, textStyle } from '@vuumbora/ui';
-import { AuthHeader } from '../src/components/auth/AuthHeader';
-import { SocialSignInSection } from '../src/components/auth/SocialSignInSection';
-import { cadastroSchema, type CadastroFormValues } from '../src/schemas/authSchemas';
-import { simulateAuthRequest } from '../src/lib/simulateAuthRequest';
-import { fieldErrorProps } from '../src/lib/fieldErrorProps';
+import { AuthHeader } from '../../src/components/auth/AuthHeader';
+import { SocialSignInSection } from '../../src/components/auth/SocialSignInSection';
+import { SOCIAL_SIGN_IN_ENABLED } from '../../src/config/featureFlags';
+import { cadastroSchema, type CadastroFormValues } from '../../src/schemas/authSchemas';
+import { simulateAuthRequest } from '../../src/lib/simulateAuthRequest';
+import { useSession } from '../../src/session/SessionProvider';
+import { fieldErrorProps } from '../../src/lib/fieldErrorProps';
 
 /**
  * P02 — Criar conta (VuumBora_Claude_Design_System/referencias/premium/passageiro/
  * P02-criar-conta.webp). Nenhuma autenticação real existe: ao validar, simula a
- * chamada e segue para a Home marcando a entrada como simulada.
+ * chamada e abre a sessão de demonstração (`useSession().signInWithMock`) — a Home
+ * mostra o selo de simulado.
  */
 export default function CadastroScreen() {
+  const { signInWithMock } = useSession();
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | undefined>(undefined);
 
@@ -31,7 +35,8 @@ export default function CadastroScreen() {
     setSubmitting(true);
     try {
       await simulateAuthRequest(values);
-      router.replace({ pathname: '/', params: { simulated: '1' } });
+      // A guarda de `app/_layout.tsx` troca (auth) por (app) quando a sessão abre.
+      signInWithMock();
     } catch {
       setSubmitError('Não foi possível concluir o cadastro agora. Tente novamente.');
     } finally {
@@ -136,7 +141,7 @@ export default function CadastroScreen() {
             testID="cadastro-submit-button"
           />
 
-          <SocialSignInSection />
+          {SOCIAL_SIGN_IN_ENABLED ? <SocialSignInSection /> : null}
 
           <Text style={styles.footerText}>
             Já tem uma conta?{' '}

@@ -22,9 +22,9 @@ import {
 const starIcon = ({ filled, size, color }: StarRatingIconProps) => (
   <Star size={size} color={color} fill={filled ? color : 'none'} strokeWidth={1.75} />
 );
-import { ReceiptBreakdownRow } from '../src/components/trip/ReceiptBreakdownRow';
-import { formatMoneyBRL } from '../src/utils/money';
-import { useRideRequestStore } from '../src/store/useRideRequestStore';
+import { ReceiptBreakdownRow } from '../../src/components/trip/ReceiptBreakdownRow';
+import { formatMoneyBRL } from '../../src/utils/money';
+import { useRideRequestStore } from '../../src/store/useRideRequestStore';
 
 /**
  * P10 — Corrida concluída. Sem mockup de referência (derivada do design system).

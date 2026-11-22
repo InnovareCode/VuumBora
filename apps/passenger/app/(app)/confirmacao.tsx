@@ -3,11 +3,11 @@ import { router } from 'expo-router';
 import { Car, Circle, MapPin } from 'lucide-react-native';
 import { canRequestRide } from '@vuumbora/domain/passenger';
 import { AppShell, MockBadge, PrimaryButton, ScreenHeader, theme, textStyle, tabularNums } from '@vuumbora/ui';
-import { RouteSummaryRow } from '../src/components/confirmation/RouteSummaryRow';
-import { PaymentMethodOption } from '../src/components/confirmation/PaymentMethodOption';
-import { MOCK_PAYMENT_METHODS } from '../src/data/mockPaymentMethods';
-import { findMockRideCategory } from '../src/data/mockRideCategories';
-import { toRideDraft, useRideRequestStore } from '../src/store/useRideRequestStore';
+import { RouteSummaryRow } from '../../src/components/confirmation/RouteSummaryRow';
+import { PaymentMethodOption } from '../../src/components/confirmation/PaymentMethodOption';
+import { MOCK_PAYMENT_METHODS } from '../../src/data/mockPaymentMethods';
+import { findMockRideCategory } from '../../src/data/mockRideCategories';
+import { toRideDraft, useRideRequestStore } from '../../src/store/useRideRequestStore';
 
 /**
  * P06 — Confirmação da corrida. Sem mockup de referência (derivada do design system +
@@ -60,7 +60,7 @@ export default function ConfirmationScreen() {
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Categoria e preço</Text>
-            <MockBadge label="preço estimado" />
+            <MockBadge label="preço estimado de demonstração" />
           </View>
           {category ? (
             <View style={styles.categoryRow}>

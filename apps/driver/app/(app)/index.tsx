@@ -10,15 +10,16 @@ import {
   User,
   Wallet,
 } from 'lucide-react-native';
-import { AppShell, BottomTabBar, driverDemoAvatarSource, theme, type BottomTabBarItem } from '@vuumbora/ui';
-import { DriverHeader } from '../src/components/home/DriverHeader';
-import { DriverProfileRow } from '../src/components/home/DriverProfileRow';
-import { OnlineToggle } from '../src/components/home/OnlineToggle';
-import { DriverMapPreview } from '../src/components/home/DriverMapPreview';
-import { HighDemandBanner } from '../src/components/home/HighDemandBanner';
-import { DailySummarySection } from '../src/components/home/DailySummarySection';
-import { NewRideOfferCard } from '../src/components/home/NewRideOfferCard';
-import { QuickActionsRow, type QuickActionItem } from '../src/components/home/QuickActionsRow';
+import { AppShell, BottomTabBar, SecondaryButton, driverDemoAvatarSource, theme, type BottomTabBarItem } from '@vuumbora/ui';
+import { DriverHeader } from '../../src/components/home/DriverHeader';
+import { DriverProfileRow } from '../../src/components/home/DriverProfileRow';
+import { OnlineToggle } from '../../src/components/home/OnlineToggle';
+import { DriverMapPreview } from '../../src/components/home/DriverMapPreview';
+import { HighDemandBanner } from '../../src/components/home/HighDemandBanner';
+import { DailySummarySection } from '../../src/components/home/DailySummarySection';
+import { NewRideOfferCard } from '../../src/components/home/NewRideOfferCard';
+import { QuickActionsRow, type QuickActionItem } from '../../src/components/home/QuickActionsRow';
+import { useSession } from '../../src/session/SessionProvider';
 
 const OFFER_COUNTDOWN_SECONDS = 15;
 
@@ -37,6 +38,7 @@ const QUICK_ACTIONS: readonly QuickActionItem[] = [
  * contador da oferta é só demonstração local — quem expira de verdade é o servidor.
  */
 export default function DriverHomeScreen() {
+  const { signOut } = useSession();
   const [online, setOnline] = useState(true);
   const [secondsRemaining, setSecondsRemaining] = useState(OFFER_COUNTDOWN_SECONDS);
 
@@ -94,6 +96,11 @@ export default function DriverHomeScreen() {
         />
 
         <QuickActionsRow items={QUICK_ACTIONS} />
+
+        {/* ANDAIME DA SESSÃO DE DEMONSTRAÇÃO: não está na referência da M05. Existe só para quem revisa
+            conseguir encerrar a sessão e ver a guarda de rota. Sai quando houver tela de perfil/menu
+            do motorista com "Sair" de verdade (A2/Bloco B). */}
+        <SecondaryButton label="Sair da demonstração" onPress={signOut} accessibilityLabel="Sair da demonstração" testID="driver-demo-sign-out" />
       </View>
     </AppShell>
   );

@@ -5,9 +5,12 @@ import { MockBadge, SecondaryButton, theme, textStyle } from '@vuumbora/ui';
 /**
  * "Continuar com Google/Apple" (P02-criar-conta.webp) — login social é decisão de
  * negócio pendente (docs/decisoes-do-dono.md item 8: obriga conta de desenvolvedor
- * nas duas plataformas e, no iOS, oferecer Apple se oferecer Google). Por isso os
- * botões ficam SEMPRE desabilitados e marcados com `MockBadge`, sem nenhum SDK de
- * login social instalado.
+ * nas duas plataformas e, no iOS, oferecer Apple se oferecer Google). Por isso
+ * `cadastro.tsx` só monta esta seção quando `SOCIAL_SIGN_IN_ENABLED`
+ * (`src/config/featureFlags.ts`) for `true` — hoje é `false` e os botões não aparecem.
+ * Os botões abaixo seguem desabilitados e com `MockBadge` porque nenhum SDK de login
+ * social está instalado: quando a decisão sair, ligar o interruptor NÃO basta, é preciso
+ * trocar este corpo pela integração real.
  */
 export const SocialSignInSection = memo(function SocialSignInSection() {
   return (
