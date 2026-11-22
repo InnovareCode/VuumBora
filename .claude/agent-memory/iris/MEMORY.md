@@ -10,3 +10,4 @@
 - [CORS segregado (admin x site)](project_admin_v0_cors_segregado.md) — boot ok, site bloqueado por navegador real (não só curl), rota pública intacta
 - [S1: validação independente (21/11/2026)](project_s1_validacao_independente.md) — flakes (virada do TOTP, .env), mutações que sobreviveram, portas do CI limpo
 - [S1: ambiente e ferramentas](project_s1_ambiente_de_teste_e_ferramentas.md) — PG isolado, Node 22 do CI, cópia limpa, mutação em cópia, Playwright WebKit/Firefox
+- [S1: passada final de QA (ff7af13)](project_s1_passada_final_qa.md) — APROVADO; F1 Firefox (-mt-1); falsos FAIL de motor e do meu harness

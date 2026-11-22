@@ -1,2 +1,3 @@
 - [S1 identidade+2FA+SMTP](project_s1_identidade_2fa.md) — rodadas 1-2 (2026-11-21): sem crítico; rodada 2 tem 8 IMPORTANTES (SMTP exfiltra senha do env, step-up, papel restrito, spam/IPv6)
-- [Admin v0 — segurança](project_admin_v0_seguranca.md) — 3 rodadas 2026-11-20: RBAC/PII-log/teto-sessão resolvidos; gap de CSRF via CORS+www público (IMPORTANTE); domínio certo é admin.vuumbora.com.br
+- [S1 rodada 3 — recadastro e aceite](project_s1_rodada3_recadastro_aceite.md) — 2026-11-21: 0 crítico, 1 alto (CPU bcrypt), 5 médios; 0020/0019 sólidas; padrões novos
+- [Admin v0 — segurança](project_admin_v0_seguranca.md) — 3 rodadas 2026-11-20: RBAC/PII-log/teto-sessão resolvidos; gap de CSRF via CORS JÁ RESOLVIDO (CORS separado, conferido na rodada 3 do S1); domínio certo é admin.vuumbora.com.br

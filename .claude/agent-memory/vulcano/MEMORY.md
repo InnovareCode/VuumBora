@@ -7,3 +7,4 @@
 - [@rnmapbox/maps não tem suporte web de verdade](rnmapbox-maps-sem-web.md) — usar mapbox-gl direto em `.web.tsx`; peer dependency não prova suporte.
 - [VuumBora: empacotamento e deploy no Easypanel (site + admin)](vuumbora-deploy-easypanel.md) — Dockerfiles com contexto na raiz; admin: ARG de build do Vite, @types/node escondido por hoisting, Rolldown ≠ esbuild, admin. vs painel. no domínio.
 - [VuumBora: CI e backup do Postgres (preparados, nao ativados)](vuumbora-ci-e-backup.md) — drill precisa imitar o runner (schema_migrations); sem script test na API; sem Docker aqui.
+- [nginx do site/admin: cabeçalhos, herança do add_header e HSTS em etapas](nginx-cabecalhos-heranca-e-hsts.md) — add_header só no server; home do site passa por location de regex; HSTS 300 s sem includeSubDomains.
