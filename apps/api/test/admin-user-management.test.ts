@@ -90,11 +90,25 @@ describe('criar', () => {
     assert.equal(second.body.error.code, 'email_taken');
   });
 
-  test('senha do ator errada: 401 password_invalid; sem CSRF: 403', async () => {
+  test('senha do ator errada: 403 password_invalid em TODA rota de step-up (401 deslogaria o painel); sem CSRF: 403', async () => {
     const owner = await session('dono', 'owner-badpw');
     const wrongPassword = await post(owner, '/users', { name: 'Pessoa A', email: `x-${Date.now()}@teste.vuumbora.dev`, role: 'suporte', password: 'senha-errada-123' });
-    assert.equal(wrongPassword.status, 401, JSON.stringify(wrongPassword.body));
+    assert.equal(wrongPassword.status, 403, JSON.stringify(wrongPassword.body));
     assert.equal(wrongPassword.body.error.code, 'password_invalid');
+
+    // O par status + code é o contrato com o painel (apps/admin/src/api/client.ts), não só o code: regressão da QA da F07b.
+    // Um dono novo por rota: depois da 1ª senha errada a espera progressiva do par ator+IP responde 423, não 403.
+    const target = await session('suporte', 'target-badpw');
+    for (const [label, path, body] of [
+      ['deactivate', `/users/${target.admin.id}/deactivate`, { password: 'senha-errada-123' }],
+      ['reactivate', `/users/${target.admin.id}/reactivate`, { password: 'senha-errada-123' }],
+      ['role', `/users/${target.admin.id}/role`, { password: 'senha-errada-123', role: 'operacao' }],
+    ] as const) {
+      const actor = await session('dono', `owner-badpw-${label}`);
+      const res = await post(actor, path, body);
+      assert.equal(res.status, 403, `${path}: ${JSON.stringify(res.body)}`);
+      assert.equal(res.body.error.code, 'password_invalid', path);
+    }
 
     const noCsrf = await postNoCsrf(owner, '/users', { name: 'Pessoa A', email: `x2-${Date.now()}@teste.vuumbora.dev`, role: 'suporte', password: PASSWORD });
     assert.equal(noCsrf.status, 403);

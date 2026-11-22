@@ -60,7 +60,7 @@ token à pessoa por um canal fora do painel (WhatsApp, e-mail, em mãos) para el
 "ver de novo" nesta fatia; se a pessoa perder o prazo (7 dias) ou o token, o único jeito hoje é desativar e criar de
 novo (ou pedir ao Vega um "reemitir ativação" numa próxima fatia, se isso incomodar no uso real).
 
-Erros: `409 email_taken` (e-mail já cadastrado), `401 password_invalid`, `423 account_locked` (espera progressiva do
+Erros: `409 email_taken` (e-mail já cadastrado), `403 password_invalid`, `423 account_locked` (espera progressiva do
 par e-mail+IP do PRÓPRIO dono — mesma mecânica do login), e (só quando `role` é `dono`/`financeiro`)
 `401 invalid_second_factor`, `429 two_factor_locked`, `503 two_factor_unavailable`, `409 two_factor_not_enrolled`.
 
@@ -74,7 +74,7 @@ daquele usuário (logout forçado).
 { "ok": true, "data": { "id", "name", "email", "role", "createdAt", "deactivatedAt": "2026-11-22T18:00:00.000Z" } }
 ```
 
-Erros: `404 not_found`, `409 last_owner` (é o último `dono` ativo — recusado), `401 password_invalid`, `423 account_locked`,
+Erros: `404 not_found`, `409 last_owner` (é o último `dono` ativo — recusado), `403 password_invalid`, `423 account_locked`,
 `409 concurrent_update` (deadlock passageiro contra outra mutação concorrente sobre um dono diferente — repita a
 chamada).
 
@@ -84,7 +84,7 @@ Corpo: `{ password, code? }`. `code` (TOTP do dono que chama) é **obrigatório 
 reativar `financeiro` ou qualquer outro papel continua só com senha. Idempotente (reativar quem já está ativo
 devolve `200` sem novo registro). Mesmo formato de resposta do item 3, com `deactivatedAt: null`.
 
-Erros: `404 not_found`, `401 password_invalid`, `423 account_locked`, `409 concurrent_update` (mesmo motivo do
+Erros: `404 not_found`, `403 password_invalid`, `423 account_locked`, `409 concurrent_update` (mesmo motivo do
 item 3; aqui também cobre o papel do alvo ter mudado entre a checagem e a aplicação — repita a chamada), e (só
 quando o alvo é `dono`) `401 invalid_second_factor`, `429 two_factor_locked`, `503 two_factor_unavailable`,
 `409 two_factor_not_enrolled`.
@@ -96,7 +96,7 @@ rebaixar um `dono` para papel normal continua só com senha. Idempotente (mesmo 
 sem derrubar sessão). Toda troca **aplicada** (papel de fato mudou) derruba as sessões do alvo — sensível ou não.
 
 Erros: `404 not_found`, `409 last_owner` (o usuário é o último `dono` ATIVO e o novo papel não é `dono`),
-`401 password_invalid`, `423 account_locked`, `400 validation_failed` (papel fora da lista), `409 concurrent_update`
+`403 password_invalid`, `423 account_locked`, `400 validation_failed` (papel fora da lista), `409 concurrent_update`
 (mesmo motivo do item 3), e (só quando o novo papel é `dono`/`financeiro`) `401 invalid_second_factor`,
 `429 two_factor_locked`, `503 two_factor_unavailable`, `409 two_factor_not_enrolled`.
 
