@@ -65,3 +65,16 @@ export type TripStatus =
   | 'failed';
 
 export type PaymentStatus = 'pending' | 'authorized' | 'declined' | 'refunded';
+
+/**
+ * Transições de `TripStatus` no nível do servidor (quem pode cancelar o quê) — compartilhadas por
+ * `./passenger` e `./driver`. Ver `trip-lifecycle.ts` para a regra completa e o porquê de morar aqui.
+ */
+export {
+  TRIP_TRANSITIONS,
+  canTransitionTrip,
+  cancelTrip,
+  isTripCancellable,
+  transitionTrip,
+} from './trip-lifecycle';
+export type { CancelActor, TripTransitionResult } from './trip-lifecycle';

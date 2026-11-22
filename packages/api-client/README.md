@@ -6,8 +6,13 @@ Portas (interfaces) que as telas consomem + adaptadores `mock` e `http` **distin
   `attemptsLeft`, `retryAfterSeconds` opcionais do servidor), `Result<T>`. O `AuthPort` antigo foi removido.
 - `@vuumbora/api-client/identity`: **identidade dos apps** (passageiro e motorista), contrato em
   `docs/contrato-identidade-apps.md`. Ver abaixo.
-- `@vuumbora/api-client/passenger`: `PassengerRidePort`, `PlacesPort` — só `apps/passenger`.
-- `@vuumbora/api-client/driver`: `DriverJourneyPort`, `DriverOfferPort` — só `apps/driver`.
+- `@vuumbora/api-client/trip`: `TripSnapshot`, `TripEvent`, `TripRealtimePort`, `CancelActor` — o que
+  `./passenger` e `./driver` precisam concordar sobre uma corrida. Nenhum perfil importa o subcaminho do
+  outro (`scripts/check-boundaries.mjs`); o que é comum mora aqui.
+- `@vuumbora/api-client/passenger`: `PassengerRidePort` (cotação, pedido, status, cancelamento, tempo
+  real), `PlacesPort` — só `apps/passenger`.
+- `@vuumbora/api-client/driver`: `DriverJourneyPort`, `DriverOfferPort` (oferta/aceite atômico),
+  `DriverTripPort` (status/cancelamento depois do aceite) — só `apps/driver`.
 - `@vuumbora/api-client/waitlist`: `WaitlistPort` + `createWaitlistHttpAdapter` — só `apps/site`. Primeiro
   adaptador `http` real do monorepo (backend em `apps/api`); contrato completo em
   `docs/lista-de-espera.md`.
@@ -102,11 +107,79 @@ const identity = createIdentityClient({
   progressiva do login, `attemptsLeft`, `reset_locked`, reuso de refresh, 15 min de access token). Opções em `mock`
   (`verificationCode`, `latencyMs`, `clock`). Não reproduz limites por IP/e-mail do servidor nem `503`.
 
+## Corrida (`/trip`, `/passenger`, `/driver`)
+
+Contratos de cotação, corrida, oferta, disponibilidade e tempo real (`docs/plano-sistema.md` §6.2–§6.4;
+`docs/plano-sistema-arquitetura.md` §5.2–§5.6). A pendência do S0 (`docs/plano-apps-execucao.md`, fatia A5).
+
+- **Cotação (`PassengerRidePort.quote`)**: `Quote` tem `quoteId`, `expiresAt` (padrão 5 min, §5.6) e
+  `categories: CategoryQuote[]`, cada uma com `estimate` (`FareEstimate` de `@vuumbora/domain/passenger`) e
+  `availability: 'high' | 'low' | 'none'` (§5.3 — a UI avisa de espera maior ANTES do pedido). No mock,
+  **Entrega sai sempre `'none'`**: está desligada até parecer jurídico (§13.3), não é falta de motorista.
+- **Pedido (`PassengerRidePort.request`)**: recebe `{ quoteId, categoryId, paymentMethodId }` +
+  `idempotencyKey`. Cria a corrida já em `searching_driver` (a transição `requested -> searching_driver` é
+  imediata no servidor, §5.2). Erros: `404 not_found` (quoteId desconhecido), `409 conflict` com
+  `reason: 'quote_expired'` (cotação vencida) ou `'category_unavailable'` (categoria desligada/indisponível),
+  `400 validation` (categoria fora da cotação).
+- **Status (`.status`)**: `TripSnapshot { tripId, status, driver? }`. `404 not_found` se a corrida não existe.
+- **Cancelamento (`.cancel` / `DriverTripPort.cancel`)**: recebe `idempotencyKey`. **Não é idempotente no
+  sentido de "sempre sucesso"**: cancelar uma corrida já terminal dá `409 conflict` (`reason:
+  'invalid_transition'`) — o que a `idempotencyKey` garante é que a MESMA chave repetida (retry de rede)
+  devolve a MESMA resposta, sem tentar cancelar de novo por baixo.
+  - **A correção do S0**: cancelamento do PASSAGEIRO, admin ou sistema sempre mata a corrida (`cancelled`).
+    Cancelamento do MOTORISTA em `driver_assigned`/`driver_en_route` **volta para `searching_driver`** — o
+    passageiro não perde o pedido porque o motorista desistiu. Em `driver_arrived` o motorista também mata
+    (não há como voltar à busca depois do embarque). Essa regra é UMA função só —
+    `cancelTrip(from, actor)` em `@vuumbora/domain` — usada pelos dois lados; não há como um app decidir o
+    destino sozinho.
+- **Oferta (`DriverOfferPort.accept`/`.decline`)**: `RideOffer` (`@vuumbora/domain/driver`) sempre traz
+  `tripId`, `pickup`, `destination` e `categoryId` — "destino visível" (§5.4): o motorista decide com o
+  destino à vista. `accept` é atômico (`idempotencyKey`): `404 not_found` (oferta desconhecida), `409
+  conflict` com `reason: 'offer_expired'` (venceu) ou `'offer_taken'` (outro motorista venceu, OU a corrida
+  por baixo já não está em `searching_driver`). `decline` é idempotente e nunca falha (oferta
+  desconhecida/já resolvida também dá sucesso).
+- **Tempo real (`TripRealtimePort.subscribe`)**: `(tripId, onEvent) => unsubscribe`. Evento sempre com
+  `type`, `seq` (crescente **por corrida**, não por assinante — quem assina depois de alguma transição já
+  ter ocorrido começa num `seq` maior que 1) e `sentAt`. Sem `Result`: é um stream — "WS avisa, REST é a
+  verdade"; corrida inexistente na assinatura é silenciosa (nenhum evento chega).
+
+### O mock não despacha motorista sozinho — isso é `control`
+
+Ao contrário da identidade (que se comporta como um servidor sozinho), o mock de corrida não decide
+"quando" a coisa acontece: `createMockPassengerRidePort()` e `createMockDriverRidePort()` devolvem, cada
+um, `{ port/offerPort+tripPort, control }`. As telas usam só a porta; `control` é quem avança o tempo —
+com a MESMA validação do domínio (`transitionTrip`/`cancelTrip`): uma transição que o domínio recusaria
+também é recusada em `control`, nunca forçada.
+
+```ts
+const { port, control } = createMockPassengerRidePort();
+const unsubscribe = port.subscribe(tripId, onEvent);
+
+// Troque o setTimeout do rideSimulator.ts de hoje por chamadas a control, na mesma cadência:
+setTimeout(() => control.advance(tripId, 'driver_assigned', { driverId, firstName, plate }), 2600);
+setTimeout(() => control.advance(tripId, 'driver_en_route'), 2600 + 2600);
+// control.cancel(tripId, 'driver') simula o motorista desistindo — volta para searching_driver.
+```
+
+**Trocar o simulador por este mock (para a Lyra, mais tarde):** `apps/passenger/src/sim/rideSimulator.ts`
+de hoje chama `transitionRide` direto e grava o resultado na store Zustand. O equivalente aqui é: 1) pedir a
+corrida por `port.request(...)`; 2) assinar `port.subscribe(tripId, onEvent)` e projetar cada `TripEvent` na
+store (no lugar de `advancePhaseFromSimulator`); 3) mover os `setTimeout`/`setInterval` do simulador para
+chamar `control.advance`/`control.emitLocation` em vez de `transitionRide` — a cadência (2600ms por etapa,
+progresso de corrida a cada 500ms) pode ser copiada como está. Nenhuma tela trata `control` como real: ele
+só existe no adaptador `mock`, o `http` não o exporta.
+
+**Os dois lados com a MESMA corrida:** passe a mesma `TripStore` (`createTripStore()` de `./trip`) para
+`createMockPassengerRidePort({ store })` e `createMockDriverRidePort({ store })` — útil para um demo com
+os dois apps ao vivo, ou para testar que o cancelamento do motorista aparece do lado do passageiro (ver
+`test/driver-ride-mock.test.ts`, suíte "store compartilhada").
+
 ### Testes
 
 ```bash
 npm test -w @vuumbora/api-client      # node --test + tsx, como a API (sem banco)
 npm run typecheck -w @vuumbora/api-client   # src (com DOM) + src SEM DOM + test
+npm test -w @vuumbora/domain                # máquina de estados (TripStatus e PassengerTripPhase)
 ```
 
 O pacote **não depende dos tipos de DOM** (`window`, `document`, `Crypto`): lê o ambiente por `globalThis`. Os apps

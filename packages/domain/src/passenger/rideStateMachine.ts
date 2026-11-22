@@ -14,27 +14,34 @@
  * atribuído → a caminho → no embarque → em andamento → finalizada | cancelada.
  * `quoted` é fase de UI prevista mas ainda sem tela própria (o fluxo atual pula direto
  * de `draft` para `requested` em `requestRide`).
+ *
+ * As fases que já são `TripStatus` (tudo menos `draft`/`quoted`) usam a MESMA tabela que o
+ * servidor usa (`../trip-lifecycle.ts`) — não uma cópia. Isso é o que garante que a correção
+ * "cancelamento do motorista volta para a busca" (plano-sistema.md §6.1) valha aqui e no
+ * `api-client` ao mesmo tempo, sem duas tabelas podendo divergir.
  */
+import { TRIP_TRANSITIONS, cancelTrip } from '../trip-lifecycle';
+import type { CancelActor } from '../trip-lifecycle';
 import type { TripStatus } from '../index';
+
+export type { CancelActor };
 
 /** Fases de UI do passageiro. `draft`/`quoted` são locais; o resto é `TripStatus` (servidor). */
 export type PassengerTripPhase = 'draft' | 'quoted' | TripStatus;
 
 export type RideState = PassengerTripPhase;
 
-/** Grafo de transições válidas. Terminal = array vazio (nenhuma saída). */
+/**
+ * Grafo de transições válidas. Terminal = array vazio (nenhuma saída).
+ * `draft`/`quoted` são extensões LOCAIS (o servidor não as conhece); o resto vem direto de
+ * `TRIP_TRANSITIONS`, com uma única extensão de UI: de `failed` dá para voltar a `draft` para
+ * tentar outra corrida (no servidor, `failed` é terminal — é um pedido NOVO, não uma transição).
+ */
 const RIDE_TRANSITIONS: Readonly<Record<RideState, readonly RideState[]>> = {
   draft: ['quoted', 'requested'],
   quoted: ['requested', 'draft'],
-  requested: ['searching_driver', 'cancelled'],
-  searching_driver: ['driver_assigned', 'cancelled', 'failed'],
-  driver_assigned: ['driver_en_route', 'cancelled'],
-  driver_en_route: ['driver_arrived', 'cancelled'],
-  driver_arrived: ['in_progress', 'cancelled'],
-  in_progress: ['completed'],
-  completed: [],
-  cancelled: [],
-  failed: ['draft'],
+  ...TRIP_TRANSITIONS,
+  failed: [...TRIP_TRANSITIONS.failed, 'draft'],
 };
 
 export type RideTransitionResult =
@@ -62,4 +69,17 @@ export function transitionRide(from: RideState, to: RideState): RideTransitionRe
 /** Fases em que a corrida ainda pode ser cancelada pelo passageiro (antes de iniciar o trajeto). */
 export function isRideCancellable(phase: RideState): boolean {
   return canTransitionRide(phase, 'cancelled');
+}
+
+/**
+ * Cancela a fase ATUAL, decidindo o destino por quem cancela (delega a `cancelTrip` do domínio
+ * raiz): motorista em `driver_assigned`/`driver_en_route` volta para `searching_driver`; qualquer
+ * outro ator mata a corrida. Fases locais (`draft`/`quoted`) não existem no servidor — cancelá-las
+ * é só voltar ao rascunho, sempre aceito, não importa o ator.
+ */
+export function cancelRide(phase: RideState, actor: CancelActor): RideTransitionResult {
+  if (phase === 'draft') return { ok: true, state: 'draft' }; // já é rascunho — nada a desfazer
+  if (phase === 'quoted') return transitionRide(phase, 'draft');
+  const result = cancelTrip(phase, actor);
+  return result.ok ? { ok: true, state: result.state } : { ok: false, from: phase, to: result.to, reason: result.reason };
 }

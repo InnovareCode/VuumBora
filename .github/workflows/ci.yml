@@ -50,6 +50,9 @@ jobs:
       # Sem este passo, o pacote so teria o typecheck no CI.
       - name: Testes do api-client
         run: npm test -w @vuumbora/api-client
+      # Maquina de estados da corrida (tabela inteira de transicoes e cancelamento por ator), fatia F08.
+      - name: Testes do packages/domain
+        run: npm test -w @vuumbora/domain
       # Cofre da sessao (primeira execucao e Keychain), SHA-256 do texto legal e UTF-8 estrito:
       # packages/ui/src/device. O `npm run check` so tipa estes testes.
       - name: Testes do packages/ui
