@@ -131,7 +131,21 @@ jobs:
               echo "::error::$app: controle negativo de identidade simulada gerou arquivo(s) em vez de abortar vazio"; exit 1
             fi
 
-            echo "== $app: ok (export real + canário ausente + 2 controles negativos)"
+            echo "== $app: controle negativo (perfil de release com expo export --dev) tem de ABORTAR sem gerar nada"
+            set +e
+            (cd "$DIR" && VUUMBORA_BUILD_PROFILE=production EXPO_PUBLIC_API_URL="$HTTPS_URL" \
+              npx expo export --platform web --dev --output-dir "$OUT/devflag") >"$OUT.devflag.log" 2>&1
+            devflag_status=$?
+            set -e
+            if [ "$devflag_status" -eq 0 ]; then
+              echo "::error::$app: export de produção com --dev NÃO abortou (sairia com __DEV__ ligado)"; cat "$OUT.devflag.log"; exit 1
+            fi
+            grep -q "__DEV__" "$OUT.devflag.log" || { echo "::error::$app: aborto do --dev não mencionou __DEV__"; cat "$OUT.devflag.log"; exit 1; }
+            if [ -n "$(find "$OUT/devflag" -type f 2>/dev/null)" ]; then
+              echo "::error::$app: controle negativo do --dev gerou arquivo(s) em vez de abortar vazio"; exit 1
+            fi
+
+            echo "== $app: ok (export real + canário ausente + 3 controles negativos)"
           done
 
   api:

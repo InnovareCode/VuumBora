@@ -113,6 +113,15 @@ function resolveBuildProfile(env, interactive) {
           'desenvolvimento e a identidade simulada dentro. Use VUUMBORA_BUILD_PROFILE=production (loja) ou preview (interna).',
       );
     }
+    // Espelho da guarda acima (rodada 3f do Órion): preview/production com NODE_ENV de desenvolvimento
+    // (ex.: `expo export --dev`) gera um bundle rotulado de release com __DEV__ verdadeiro, que liga
+    // allowInsecureHttp e o gancho de depuração da identidade. Aborta em vez de sair "quase produção".
+    if (explicit !== 'development' && (nodeEnv === 'development' || nodeEnv === 'test')) {
+      throw new Error(
+        `VUUMBORA_BUILD_PROFILE=${explicit} com NODE_ENV=${nodeEnv} (por exemplo, expo export --dev): uma build de ` +
+          'release não pode sair com __DEV__ ligado. Rode sem --dev, ou use VUUMBORA_BUILD_PROFILE=development.',
+      );
+    }
     if (explicit !== 'production' && eas === 'production') {
       throw new Error(
         `VUUMBORA_BUILD_PROFILE=${explicit} contradiz EAS_BUILD_PROFILE=production. Corrija o eas.json: o perfil de loja é production.`,
