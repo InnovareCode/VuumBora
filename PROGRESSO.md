@@ -108,9 +108,16 @@ e deixa a decisão 17, contas de loja da Apple e do Google, como bloqueio de iPh
   identidade simulada na loja), M-4 (o `SessionManager` apaga a sessão por status HTTP, sem olhar o `code`).
 - **No `main`:** A-1 e B-1, API do M-3 com a migração 0021, A1, A2, B1 (identidade do passageiro sobre o cliente mock), painel
   que falha fechado, `nginx.conf` do admin e do site.
-- **CI:** o `HEAD` estava vermelho no teste de tempo do pool de bcrypt (2 threads fixas num runner de 2 vCPUs); ajustado em
-  `148dc8d` (pool dimensionado como em produção e limite de 250 ms; o defeito que o teste caça mede 606 ms). Não reproduzi a
-  falha localmente: diagnóstico plausível, não provado. Um commit meu levou de carona uma remoção staged da Lyra e quebrou o
+- **Íris, passada 3: REPROVADO** sobre `1707546` (`docs/veredito-iris-s1-passada-3.md`). Motivos: CI vermelho no próprio SHA;
+  testes de concorrência frágeis por construção depois do teto do A-1 (a fila do ambiente de teste é menor que o maior disparo
+  de 12 requisições); botão "Mostrar senha" some no Firefox (373 px ou menos) e no WebKit (365 px ou menos) porque o `InputCore`
+  não tem `minWidth: 0`. **Passou:** migrações 0001 a 0021 do zero, suíte 323/323 em 6 de 6 (inclusive presa a 2 CPUs), M-3 de
+  ponta a ponta na API real, A-1 sob carga, guardas de rota e estados de identidade do B1. Correções em andamento (Vega e Lyra).
+- **CI vermelho: causa real achada.** O teste do pool de bcrypt falhava na asserção `elapsed > 800` ("o trabalho de bcrypt tem
+  que ter acontecido de verdade", 769 ms no runner): um piso fixo que depende da velocidade da CPU. **O diagnóstico que
+  registrei antes (contenção de CPU, 2 threads num runner de 2 vCPUs) estava errado**, e o ajuste de `148dc8d` mexeu na
+  asserção errada. Correção com a Vega (medir uma comparação no próprio processo e afirmar relações, não pisos fixos). O CI agora
+  publica o bloco do erro em TAP. Um commit meu levou de carona uma remoção staged da Lyra e quebrou o
   `check`; corrigido em `0f6417a`. Regra nova: conferir `git diff --cached` antes de todo commit.
 - **Produção:** API **antiga** e painel do S1 incompatível com ela. Reverter o painel para `producao-admin-estavel` (ação do dono,
   roteiro no guia) ou publicar API e painel juntos.
