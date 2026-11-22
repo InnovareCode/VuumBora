@@ -99,6 +99,15 @@ e deixa a decisão 17, contas de loja da Apple e do Google, como bloqueio de iPh
 
 ## Estado em 22/11/2026 (madrugada)
 
+- **CI verde em `33b2401`** (4 de 4 jobs): o teste do pool de bcrypt foi corrigido de fato (mede uma comparação no próprio
+  processo e afirma proporções). **Íris, passada 4: REPROVADO só por 2 defeitos de TESTE** (`docs/veredito-iris-s1-passada-4.md`),
+  com o código de produção provado: M-1 (titular recusado de 21 a 68% para 0%), B-1 e F4 (503 não grava tentativa), B-3, B-4,
+  B-5, `api-client` (216/216, SF4 e SF10 agora morrem), B3 do passageiro, e F3 a F12 nos três navegadores. Defeitos: (N1) limite
+  absoluto de 200 ms no `/healthz` do `bcrypt-ceiling` falhou 3 de ~107 vezes (223 a 233 ms); (N2) `uniqueEmail()` só é único por
+  processo e o `bcrypt-ceiling` falha da 2ª execução no mesmo banco. Correção em andamento (Vega). **`d7e21e1` (B2 do motorista,
+  anel de foco do `packages/ui`) ainda NÃO foi validado pela Íris.**
+- **B2 no `main` (`d7e21e1`):** identidade do motorista sobre o cliente mock, copy "conta não é cadastro", lock regenerado.
+- **A3 (armazenamento seguro e conferência do SHA-256 dos textos)** em andamento depois da passada 4.
 - **Íris, passada 2: APROVADO** sobre `79f41d8` (`docs/veredito-iris-s1-passada-2.md`): painel que falha fechado contra a API
   real do S1 (Chromium e Firefox), botão do Firefox, A1 nos dois apps e A2 (114/114 e fluxo real). Duas lacunas de teste do
   `SessionManager` (SF4 e SF10) com os testes prontos para incorporar. **Vale só para esse commit**: o `HEAD` andou depois.
