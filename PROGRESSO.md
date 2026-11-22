@@ -97,6 +97,41 @@ e deixa a decisão 17, contas de loja da Apple e do Google, como bloqueio de iPh
 - Apps móveis (quando forem ligados à API): serializar a renovação do token,
   porque duas renovações simultâneas com o mesmo token derrubam a sessão.
 
+## Estado em 22/11/2026 (tarde): plano mestre em execução, toda fatia passa pelo painel
+
+**Processo:** cada fatia vira commit candidato numa branch `fatia/<id>` com CI. Ela só entra na `main` por merge que preserva o
+SHA validado, depois da Íris (QA em cópia limpa) e, quando toca segurança, do Órion. Achado de segurança aberto fica em
+`docs/privado/` (repositório público). Teto de cerca de 4 agentes simultâneos: 7 em paralelo estouraram o limite de uso da conta.
+
+**Na `main` hoje:**
+- **F01** (QA e segurança pós-M1): Íris passada 6 APROVADO; Órion 3d sem crítico nem alto, alto da 3c resolvido.
+- **F11 + F03 + F01-M1** (`db821a3`): exclusão de conta (migração 0022), access_log 180 dias, retenção de candidatura e lista de
+  espera (180 dias provisório, espera o advogado), IP fora dos logs, limite próprio de legal/current e auth/me. Íris passada 7
+  APROVADO, Órion 3e sem achado.
+- **F02** (`b9b4cfa`): apps em modo http em preview e production; simulação só em development, por troca de módulo no build; CI
+  com export real de produção, marcador do mock ausente e 3 controles negativos. Íris passada 8 APROVADO (apps de verdade contra
+  API e Postgres reais); Órion 3f, o médio foi corrigido em `35233d8`, e o 3c-B3 fechou.
+- **F07 backend** (`7687c00`): usuários e papéis do painel (só dono, senha em toda mutação, senha + TOTP para dono e financeiro,
+  último dono protegido, sessão derrubada na troca de papel), migração 0023 (escrita estreita em admin_users, classificada
+  PARCIAL pelo Órion e aceita com o TOTP), limite próprio em toda rota com teste de inventário. Íris passada 9 e delta APROVADO.
+- **F10** (`9ed6865`): 86/100 endereços de Natal no Mapbox; o plano alternativo (POIs próprios e pino com confirmação) é escopo do
+  M4. PostGIS não está na imagem do banco.
+- Ferramenta do portão de qualidade (`tools/qualidade-tela`, captura pelo Metro vivo desde `daeabf9`).
+- Decisões do dono de hoje: papéis do painel aprovados; embarque na oferta só pelo bairro.
+
+**Candidatas fora da `main`:**
+- `fatia/f09-onda0` (`a03961e`): tokens, dependências e componentes C-01 a C-17. O portão reprovou pelo logo; logo e cabeçalho de
+  login foram corrigidos, e a Íris está reabrindo o portão.
+- `fatia/f08-v2` (`c5f8fa0`): contratos da corrida. A Nova pediu os ajustes R1 a R8, que esperam a decisão do dono sobre o destino
+  na oferta.
+- `fatia/f07b` (`bfba646`): tela de usuários do painel. A QA contra a API real espera o dono autorizar contas de admin de teste
+  (o sistema de permissão bloqueou a Lyra).
+
+**Esperando o dono:** F05 (publicação: data, segredos, SMTP; o roteiro agora inclui as migrações 0022 e 0023), F06 (conta Expo e
+identificadores), destino na oferta, contas de admin de teste, limpeza de ~20 GB de pastas temporárias (disco a 99%), 3c-M1.
+
+**Marco 2:** todas as fatias que dependiam da squad (F01, F02, F03, F04 em rascunho) estão prontas. Faltam F05 e F06, do dono.
+
 ## Estado em 22/11/2026 (madrugada)
 
 - **Íris, passada 5: APROVADO** sobre `6a3ff24` (`docs/veredito-iris-s1-passada-5.md`): CI 4/4; suíte 384/384 em 5 de 5; o
