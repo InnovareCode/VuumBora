@@ -131,6 +131,11 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
+            # Bloco "failing tests:" do relatorio (mensagem da asserção e valores medidos), em UMA anotacao.
+            clean=$(sed 's/\x1b\[[0-9;]*m//g' api-test.log)
+            block=$(printf '%s\n' "$clean" | sed -n '/failing tests:/,$p' | head -60)
+            [ -n "$block" ] || block=$(printf '%s\n' "$clean" | tail -40)
+            echo "::error title=detalhe da falha::$(printf '%s' "$block" | sed ':a;N;$!ba;s/\n/%0A/g')"
             sed 's/\x1b\[[0-9;]*m//g' api-test.log | grep -E "✖|not ok" | sort -u | head -9 | while IFS= read -r line; do echo "::error::${line}"; done
             echo "::error::testes do apps/api falharam (exit ${status}); os nomes estao nas anotacoes acima"
           fi
