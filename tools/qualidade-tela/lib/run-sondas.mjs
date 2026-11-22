@@ -6,8 +6,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { getChromium } from './browsers.mjs';
-import { iniciarServidorEstatico } from './server.mjs';
-import { APPS_DIST } from './paths.mjs';
+import { iniciarServidorDev } from './dev-server.mjs';
 import { rodarSondas } from './probes/index.mjs';
 
 export async function rodarSondasNaMatriz({ telas, tamanhos, saidaDir }) {
@@ -21,7 +20,7 @@ export async function rodarSondasNaMatriz({ telas, tamanhos, saidaDir }) {
   try {
     for (const tela of telas) {
       if (!servidoresPorApp.has(tela.app)) {
-        servidoresPorApp.set(tela.app, await iniciarServidorEstatico(APPS_DIST[tela.app]));
+        servidoresPorApp.set(tela.app, await iniciarServidorDev(tela.app));
       }
       const { url: baseUrl } = servidoresPorApp.get(tela.app);
 
@@ -33,10 +32,12 @@ export async function rodarSondasNaMatriz({ telas, tamanhos, saidaDir }) {
             reducedMotion: 'reduce',
           });
           const page = await context.newPage();
-          await page.goto(baseUrl + tela.rota, { waitUntil: 'load' });
+          // timeout generoso: ver o comentário equivalente em capture.mjs (1ª navegação
+          // de cada app paga o custo de compilar o bundle no Metro ao vivo).
+          await page.goto(baseUrl + tela.rota, { waitUntil: 'load', timeout: 60000 });
           await page.evaluate(() => (document.fonts ? document.fonts.ready : null));
           // ver o comentário em capture.mjs: sem isto, a sonda roda numa página em branco.
-          await page.waitForFunction(() => document.body.innerText.trim().length > 10, { timeout: 20000 });
+          await page.waitForFunction(() => document.body.innerText.trim().length > 10, { timeout: 30000 });
           await page.waitForTimeout(700); // ver o comentário em capture.mjs (latência da identidade mock)
           if (estado === 'sem-rede') {
             await context.setOffline(true);

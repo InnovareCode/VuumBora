@@ -1,6 +1,7 @@
 // Caminhos centrais da ferramenta. Nada aqui lê nem escreve fora de
-// tools/qualidade-tela/ e dos diretórios `dist/` dos apps (saída do `expo export`,
-// já ignorados pelo .gitignore da raiz).
+// tools/qualidade-tela/ — `APPS_SRC` só serve de `cwd` para `expo start --web`
+// (dev-server.mjs); a ferramenta não gera mais `dist/` (ver docs/qualidade-tela.md,
+// "por que Metro ao vivo e não export estático").
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,11 +10,6 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 export const TOOL_DIR = path.join(HERE, '..');
 export const REPO_ROOT = path.join(TOOL_DIR, '..', '..');
-
-export const APPS_DIST = {
-  passageiro: path.join(REPO_ROOT, 'apps', 'passenger', 'dist'),
-  motorista: path.join(REPO_ROOT, 'apps', 'driver', 'dist'),
-};
 
 export const APPS_SRC = {
   passageiro: path.join(REPO_ROOT, 'apps', 'passenger'),

@@ -3,11 +3,10 @@
 // Uso: node cli.mjs <comando> [opções]. Ver docs/qualidade-tela.md para o passo a
 // passo completo; `node cli.mjs ajuda` imprime este resumo.
 
-import { execSync } from 'node:child_process';
 import { mkdirSync, cpSync, existsSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { TELAS, TAMANHOS, telaPorId } from './screens.config.mjs';
-import { APPS_SRC, APPS_DIST, BASELINE_DIR, SAIDA_DIR } from './lib/paths.mjs';
+import { BASELINE_DIR, SAIDA_DIR } from './lib/paths.mjs';
 import { capturarMatriz } from './lib/capture.mjs';
 import { compararMatriz } from './lib/compare.mjs';
 import { rodarSondasNaMatriz } from './lib/run-sondas.mjs';
@@ -31,38 +30,6 @@ function filtrarTelas(opt) {
   if (!opt.telas) return TELAS;
   const ids = String(opt.telas).split(',').map((s) => s.trim());
   return ids.map(telaPorId);
-}
-
-async function cmdExportar() {
-  for (const [app, dir] of Object.entries(APPS_SRC)) {
-    console.log(`[qualidade-tela] exportando ${app} (expo export --platform web)…`);
-    execSync('npx expo export --platform web --dev --output-dir dist', {
-      cwd: dir,
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        // Contrato de perfil de build do metro.config.js (fatia F02, 22/11/2026):
-        // "development" usa identidade simulada (dados de demonstração, sem API) —
-        // é o perfil certo para o portão de qualidade. O escape antigo
-        // (VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION) não existe mais.
-        //
-        // O `--dev` do `expo export` é obrigatório aqui: sem ele, o próprio `expo`
-        // força `NODE_ENV=production` por dentro do processo filho (não dá para
-        // sobrescrever só passando NODE_ENV no `env` do execSync — tentei; o export
-        // falhou dizendo "development com NODE_ENV=production" mesmo assim), e a
-        // guarda do metro.config.js aborta a build (ela existe para impedir
-        // exatamente uma build de LOJA com identidade simulada dentro — não é o
-        // nosso caso, mas o `expo` não distingue "bundle de teste local" disso).
-        VUUMBORA_BUILD_PROFILE: 'development',
-        // runtime (não é a guarda do metro.config.js) pede EXPO_PUBLIC_API_URL mesmo em
-        // development — vira parte do bundle, então precisa estar presente já no export.
-        // Não precisa responder: as telas desta rodada (login/cadastro/boas-vindas) usam
-        // IDENTITY_MODE='mock' e não chamam a API de verdade.
-        EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3101',
-      },
-    });
-  }
-  console.log('[qualidade-tela] export concluído para os dois apps.');
 }
 
 async function cmdCapturar(opt) {
@@ -128,7 +95,6 @@ async function cmdAutoteste() {
 }
 
 async function cmdTudo(opt) {
-  if (!opt['sem-export']) await cmdExportar();
   await cmdCapturar(opt);
   await cmdSondas(opt);
   await cmdLadoALado(opt);
@@ -142,21 +108,21 @@ async function cmdTudo(opt) {
 function ajuda() {
   console.log(`
 Comandos:
-  exportar                  expo export --platform web dos dois apps (VUUMBORA_BUILD_PROFILE=development: identidade simulada)
-  capturar [--telas P01,M01] matriz tela x estado x tamanho -> .saida/capturas
+  capturar [--telas P01,M01] sobe "expo start --web" ao vivo dos dois apps (Metro de
+                             desenvolvimento, VUUMBORA_BUILD_PROFILE=development) e
+                             gera a matriz tela x estado x tamanho -> .saida/capturas
   linha-base [--de <dir>]    promove capturas para a linha de base aprovada (.baseline)
   comparar [--telas ...] [--capturas <dir>] [--linha-base <dir>] [--limite 0.002]
-  sondas [--telas ...]       estilo, geometria, texto, contraste e foco (§14.3)
+  sondas [--telas ...]       estilo, geometria, texto, contraste e foco (§14.3) — também sobe o Metro ao vivo
   lado-a-lado [--telas ...]  G-07b: recorte da prancha + captura 390x844 lado a lado
   autoteste                  controle negativo: injeta uma mudança visual e prova que o comparador detecta
-  tudo [--sem-export]        exportar + capturar + sondas + lado-a-lado + comparar (se houver linha de base)
+  tudo                       capturar + sondas + lado-a-lado + comparar (se houver linha de base)
 `);
 }
 
 try {
   const opt = opcoes(resto);
   switch (comando) {
-    case 'exportar': await cmdExportar(); break;
     case 'capturar': await cmdCapturar(opt); break;
     case 'linha-base': await cmdLinhaBase(opt); break;
     case 'comparar': await cmdComparar(opt); break;

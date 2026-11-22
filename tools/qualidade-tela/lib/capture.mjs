@@ -1,5 +1,6 @@
-// Gera a matriz tela × estado × tamanho (padrão premium §14.2) a partir do
-// `expo export --platform web` já gerado em apps/<app>/dist.
+// Gera a matriz tela × estado × tamanho (padrão premium §14.2) contra um `expo start
+// --web` ao vivo (Metro de desenvolvimento) — ver dev-server.mjs para o porquê de não
+// ser mais um `expo export` servido estaticamente (achado Q9 da Íris, passada 8).
 //
 // Uma captura = abrir um contexto novo do Chromium, navegar até a rota, esperar
 // fontes carregarem, aplicar o estado (hoje: nada, para "padrao"; cortar a rede
@@ -11,8 +12,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { getChromium, describeBrowserSetup } from './browsers.mjs';
-import { iniciarServidorEstatico } from './server.mjs';
-import { APPS_DIST } from './paths.mjs';
+import { iniciarServidorDev } from './dev-server.mjs';
 import { nomeArquivo } from '../screens.config.mjs';
 
 /**
@@ -36,7 +36,7 @@ export async function capturarMatriz({ telas, tamanhos, saidaDir, mutarEstilo = 
   try {
     for (const tela of telas) {
       if (!servidoresPorApp.has(tela.app)) {
-        servidoresPorApp.set(tela.app, await iniciarServidorEstatico(APPS_DIST[tela.app]));
+        servidoresPorApp.set(tela.app, await iniciarServidorDev(tela.app));
       }
       const { url: baseUrl } = servidoresPorApp.get(tela.app);
 
@@ -49,7 +49,11 @@ export async function capturarMatriz({ telas, tamanhos, saidaDir, mutarEstilo = 
           });
           const page = await context.newPage();
 
-          await page.goto(baseUrl + tela.rota, { waitUntil: 'load' });
+          // timeout generoso: contra o Metro ao vivo, a PRIMEIRA navegação de cada app
+          // paga o custo de compilar o bundle inteiro no servidor (medido: ~11s para um
+          // bundle de ~13MB, não-minificado, em modo --dev) — as rotas seguintes do
+          // MESMO app reaproveitam o cache do Metro e voltam a ser quase instantâneas.
+          await page.goto(baseUrl + tela.rota, { waitUntil: 'load', timeout: 60000 });
           await page.evaluate(() => (document.fonts ? document.fonts.ready : null));
           // Achado real (22/11/2026): `waitUntil: 'load'` só garante que o HTML e os
           // scripts baixaram — o bundle do RN Web (3MB+) ainda leva bem mais que
@@ -57,7 +61,7 @@ export async function capturarMatriz({ telas, tamanhos, saidaDir, mutarEstilo = 
           // aparecer, a captura sai em branco (uma página toda branca passa
           // despercebida se ninguém abrir o PNG — foi descoberto só ao depurar
           // uma sonda que achava zero elementos).
-          await page.waitForFunction(() => document.body.innerText.trim().length > 10, { timeout: 20000 });
+          await page.waitForFunction(() => document.body.innerText.trim().length > 10, { timeout: 30000 });
           // Folga para o layout assentar E para a identidade mock (latência artificial de
           // 350ms, `identityClient.ts`) resolver o "Carregando os Termos..." do cadastro —
           // sem isto, a captura "padrao" do P02b/M02 pega o estado de carregamento por acidente.

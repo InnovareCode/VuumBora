@@ -3,8 +3,9 @@
 Implementa `docs/padrao-premium-telas.md` §14 (portão G-01 a G-28, §14.2 regressão
 visual por captura, §14.3 sondas automáticas) para as telas de login, cadastro e
 boas-vindas dos dois apps — o escopo desta rodada (F09, onda 0, parte a). Mora em
-`tools/qualidade-tela/`. Não altera nenhum app; só lê o `expo export --platform web`
-que já existe, ou que você gera com o comando `exportar` abaixo.
+`tools/qualidade-tela/`. Não altera nenhum app; sobe um `expo start --web` (Metro de
+desenvolvimento) de cada app e navega nele com Playwright — ver "Por que Metro ao
+vivo" abaixo para o motivo de não ser mais um `expo export` servido estaticamente.
 
 ## Como rodar
 
@@ -21,41 +22,73 @@ exatamente o que rodar — nunca em silêncio (`lib/resolve-dep.mjs`).
 ```bash
 cd tools/qualidade-tela
 
-node cli.mjs exportar                 # expo export --platform web dos dois apps
-node cli.mjs capturar                 # matriz tela x estado x tamanho -> .saida/capturas
+node cli.mjs capturar                 # sobe o Metro ao vivo dos 2 apps, matriz tela x estado x tamanho -> .saida/capturas
 node cli.mjs linha-base               # promove .saida/capturas -> .baseline (só depois de aprovar)
 node cli.mjs comparar                 # compara .saida/capturas (ou --capturas <dir>) contra .baseline
-node cli.mjs sondas                   # estilo, geometria, texto, contraste, foco e ativação de links (§14.3)
+node cli.mjs sondas                   # estilo, geometria, texto, contraste, foco e ativação de links (§14.3) — também sobe o Metro ao vivo
 node cli.mjs lado-a-lado              # G-07b: recorte da prancha + captura 390x844 lado a lado
 node cli.mjs autoteste                # controle negativo: prova que o comparador detecta mudança de verdade
-node cli.mjs tudo                     # exportar + capturar + sondas + lado-a-lado + comparar (se houver linha de base)
+node cli.mjs tudo                     # capturar + sondas + lado-a-lado + comparar (se houver linha de base)
 ```
 
 Todo comando aceita `--telas P01,M01` para rodar só um subconjunto (ver os IDs em
 `screens.config.mjs`). `node cli.mjs ajuda` lista as opções de cada um.
 
-### O comando `exportar` e o perfil de build
+### Por que Metro ao vivo, e não mais um `expo export` servido estaticamente (22/11/2026)
 
-`apps/<app>/metro.config.js` exige um `VUUMBORA_BUILD_PROFILE` explícito (fatia F02,
-22/11/2026): `development` usa identidade simulada (dados de demonstração, sem API)
-e é o perfil certo para esta ferramenta — **não existe mais** o escape antigo
-(`VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION`); `preview`/`production` agora abortam
-a build sem exceção se a identidade não for `'http'`.
+A versão anterior desta ferramenta gerava `apps/<app>/dist` com
+`expo export --platform web --dev` e servia essa pasta com um servidor estático
+próprio (`lib/server.mjs`, removido nesta rodada). A Íris achou (Q9, passada 8,
+`docs/veredito-iris-s1-passada-8.md`) que isso quebra em QUALQUER rota com
+"Requiring unknown module NNN" assim que o Chromium navega de verdade — confirmado
+também ANTES da F02 (não é regressão de ninguém, é um problema estrutural do próprio
+caminho).
 
-`cli.mjs exportar` já roda com:
+**Causa raiz confirmada:** o bundle do `--dev` pede módulos em `lazy=true` (visível
+na própria URL: `...entry.bundle?...&lazy=true...`) — o runtime do RN Web faz
+`require` de módulos por ID NUMÉRICO sob demanda, um protocolo que só um Metro
+rodando sabe responder (ele resolve o ID contra o grafo de dependências ao vivo).
+Servido como arquivo estático, qualquer rota que dispare um desses requires não tem
+para quem perguntar "o que é o módulo 847" e quebra. Não é uma falha de configuração
+do servidor — é inerente ao formato do export `--dev`.
 
-```
-VUUMBORA_BUILD_PROFILE=development
-EXPO_PUBLIC_API_URL=http://localhost:3101   (placeholder; as telas desta rodada usam identidade mock e não chamam a API de verdade)
-npx expo export --platform web --dev --output-dir dist
-```
+**Por que não dá para consertar o export estático sem afrouxar a guarda:** o
+`metro.config.js` dos dois apps (fatia F02) só libera identidade simulada em
+`VUUMBORA_BUILD_PROFILE=development` COM `NODE_ENV` diferente de `production` — e
+`expo export` (sem `--dev`) força `NODE_ENV=production` por dentro do processo
+filho (testado, ver a nota antiga abaixo), então a única forma de pedir um export
+`development` pela CLI é `--dev`, que é exatamente o que mantém o `lazy=true`
+quebrado. Desligar o lazy bundling do export exigiria mexer em
+`apps/*/metro.config.js` (fora da fronteira desta ferramenta: a zona desta tarefa é
+só `tools/qualidade-tela/` e este documento). **Caminho escolhido:** falar com o
+Metro vivo (`expo start --web`), que é como qualquer dev roda o app de verdade — e é
+o único jeito de ter identidade simulada depois da F02 de qualquer forma (ver
+comentário de topo de `metro.config.js`: "a identidade simulada só existe com o
+Metro de desenvolvimento").
 
-O `--dev` é obrigatório: **testei e confirmei** que `expo export` sem `--dev` força
-`NODE_ENV=production` por dentro do processo filho, não importa o que se passe no
-`env` do `execSync` — e `development` com `NODE_ENV=production` é exatamente a
-combinação que a guarda do `metro.config.js` recusa ("build de release com telas de
-desenvolvimento e identidade simulada dentro"). `--dev` é o único jeito de pedir um
-export `development` de verdade pela CLI.
+**Como funciona (`lib/dev-server.mjs`):** sobe `npx expo start --web --port <porta>`
+por app, com `cwd` dentro do app, `CI=1` (desliga file-watching/Fast Refresh — não
+precisamos, é uma captura única, não uma sessão de edição; também é o que deixa o
+bundle em `hot=false`) e `VUUMBORA_BUILD_PROFILE=development`. Espera o servidor
+responder (qualquer status HTTP, nem precisa ser 200 — só prova que o listener do
+Metro subiu) antes de navegar, e mata a árvore do processo inteira ao fechar
+(`taskkill /T` no Windows, porque `shell:true` cria um `cmd.exe` intermediário entre
+o `npx` e o `node` de verdade).
+
+**Portas:** fixas, 8201 (passageiro) e 8202 (motorista), ACIMA de 8100 — escolhidas
+para não colidir com outra sessão de QA rodando ao mesmo tempo na mesma máquina.
+Override por `QUALIDADE_TELA_PORTA_PASSAGEIRO`/`QUALIDADE_TELA_PORTA_MOTORISTA`.
+
+**Custo medido:** a PRIMEIRA navegação de cada app paga o compile completo do bundle
+no Metro (~11s para ~13MB não-minificado, nesta máquina) — rotas seguintes do MESMO
+app reaproveitam o cache do Metro e voltam a ser quase instantâneas. `capture.mjs` e
+`run-sondas.mjs` usam timeouts generosos (`goto`: 60s, `waitForFunction`: 30s) por
+causa disso.
+
+(Nota histórica, ainda verdadeira sobre o `expo export` em si, só não é mais o
+caminho desta ferramenta: `expo export` sem `--dev` força `NODE_ENV=production` por
+dentro do processo filho, não importa o que se passe no `env` do `execSync` —
+testado e confirmado antes desta mudança.)
 
 ## Onde fica a linha de base (decisão do Vulcano)
 
@@ -98,24 +131,18 @@ ou para onde `QUALIDADE_TELA_BASELINE_DIR` apontar) — só rode depois de algu�
 
 ## O que esta ferramenta NÃO validou
 
-1. **O autoteste e a primeira matriz completa foram rodados com um export agora
-   impossível de reproduzir pelo comando `exportar`.** Entre a primeira rodada
-   (bem-sucedida, com o escape `VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION`, hoje
-   removido) e o fim desta tarefa, `apps/passenger` e `apps/driver` passaram a ter
-   `src/identity/mode.ts` + `mode.http.ts` + `mode.mock.ts` (arquivos novos,
-   **não commitados** no momento em que escrevo isto) e um resolver em
-   `metro.config.js` que deveria redirecionar `./mode` para um dos dois — e esse
-   redirecionamento **não está terminado**: toda tentativa de export com `--dev`
-   nesta janela falhou em runtime com `src/identity/mode.ts foi carregado
-   diretamente — o metro.config.js deveria ter redirecionado...`. Confirmei que é
-   trabalho em andamento (`git status` mostra os arquivos como modificados/novos,
-   não é bug desta ferramenta) e não tentei consertar código de outro agente em
-   voo. **A linha de base em `.baseline/` (40 PNGs, 5 telas × 2 estados × 4
-   tamanhos) e os relatórios em `.saida/` foram gerados ANTES disso, com conteúdo
-   real renderizado (não páginas em branco) — ver prova abaixo — mas
-   `node cli.mjs exportar` vai falhar até a fatia que mexe em `mode.ts` terminar.**
-   Quando terminar, rode `node cli.mjs tudo` de novo para gerar uma linha de base
-   limpa com o export funcionando.
+1. ~~O autoteste e a primeira matriz completa foram rodados com um export agora
+   impossível de reproduzir~~ **RESOLVIDO (22/11/2026, rodada seguinte).** O
+   bloqueio do `mode.ts`/`mode.http.ts`/`mode.mock.ts` (trabalho de outro agente,
+   em andamento quando esta nota foi escrita pela primeira vez) terminou — o
+   resolver de identidade em `metro.config.js` está funcionando. Mas a causa de
+   fundo do problema era outra: a Íris achou (Q9, passada 8) que `expo export --dev`
+   servido estaticamente quebra em runtime com "Requiring unknown module NNN"
+   mesmo com o `mode.ts` resolvido — é inerente ao formato do export `--dev`
+   (lazy bundling, ver "Por que Metro ao vivo" acima), não ao bloqueio do `mode.ts`.
+   A ferramenta não exporta mais: fala com `expo start --web` ao vivo. A linha de
+   base e os relatórios atuais (ver "Prova do que FOI validado") foram gerados por
+   esse caminho novo.
 2. **Armadilha real encontrada e corrigida:** a primeira versão do `capture.mjs`
    esperava só 150ms depois do `load` antes de tirar a foto — o bundle do RN Web
    (3-4 MB) ainda não tinha montado nada, e as primeiras 40 capturas (e a primeira
@@ -146,15 +173,13 @@ ou para onde `QUALIDADE_TELA_BASELINE_DIR` apontar) — só rode depois de algu�
    tira screenshot), mas isso não é a combinação que o próprio Playwright testa.
    Rodar a sonda de foco no WebKit é só trocar `getChromium()` por `getWebkit()`
    em `run-sondas.mjs`, mas não validei essa segunda perna.
-6. **O controle de mouse do anel de foco tem uma guarda nova, não reverificada ao
-   vivo depois do bloqueio do item 1:** descobri que pressionar o mouse (só
-   `mouse.down()`, sem soltar) em pelo menos um botão já disparava a navegação da
-   tela — o Tab-walk original achava só 1 alvo em vez de 4 por causa disso.
-   Corrigi (`lib/probes/foco.mjs`: detecta a navegação pela URL e volta antes de
-   continuar), mas **não consegui rodar de novo depois da correção** porque o
-   export parou de funcionar (item 1) bem nessa hora. A correção é defensiva e
-   deveria resolver o problema independente da causa exata, mas isso é dedução,
-   não prova — reabra esta nota depois de rodar `node cli.mjs sondas` de novo.
+6. ~~O controle de mouse do anel de foco tem uma guarda nova, não reverificada~~
+   **REVERIFICADO (22/11/2026, rodada seguinte) — a correção se sustenta.**
+   `node cli.mjs sondas` rodou sobre as 40 combinações com o Metro ao vivo e a
+   contagem de `aneisDeMouse` (anel de foco acendendo por PRESSIONAR o mouse, o
+   que não devia acontecer) deu **0 em todas as 40** — a guarda de
+   `lib/probes/foco.mjs` (detecta a navegação pela URL e volta antes de continuar)
+   funciona de verdade, não só na dedução.
 7. **Estados além de "padrao" e "sem-rede"**: as fichas pedem "erro de campo",
    "carregando", "sessão expirada" etc. (`docs/padrao-premium-telas.md` §14.2).
    Esta rodada só cobre os dois que dão para alcançar sem interação com a
@@ -174,26 +199,39 @@ ou para onde `QUALIDADE_TELA_BASELINE_DIR` apontar) — só rode depois de algu�
 
 ## Prova do que FOI validado
 
-- **40 capturas reais** (5 telas × 2 estados × 4 tamanhos) em `.baseline/`, com
-  conteúdo renderizado de verdade (logo, textos, campos, CTA) — conferidas a olho.
-- **Determinismo:** recapturei a matriz inteira duas vezes (rodadas separadas, cada
-  uma com export + servidor + Chromium do zero) e comparei contra a linha de base:
-  **0 reprovadas nas 40** as duas vezes — mesma Fonte carregada
-  (`document.fonts.ready`), `reducedMotion: 'reduce'` e `deviceScaleFactor: 2`.
-- **Controle negativo (`node cli.mjs autoteste`):** capturei A (referência) e B
-  (idêntica) → comparação deu `pass=true, ratio=0`; capturei C com uma mudança
-  visual injetada em tempo de execução (`page.addStyleTag`, nunca edição de
-  arquivo) → comparação deu `pass=false, ratio≈4,4%`. O comparador detecta
-  diferença de verdade, não é um "sempre aprova" disfarçado.
-- **G-07b funcionando de ponta a ponta:** as 5 montagens lado a lado
-  (`.saida/lado-a-lado/*.png` + o `.md` com a tabela de 8 linhas) foram geradas e
-  conferidas a olho (P01 em anexo a este handoff) — recorte da prancha à esquerda,
-  captura 390×844 à direita, mesma altura.
-- **Sondas de estilo/geometria/texto/contraste rodaram sobre conteúdo real** (não
-  a versão em branco) em P01 e M01, com achados plausíveis (CTA achado em
-  geometria, textos "Termos de Uso"/"Política de Privacidade" achados por
-  `ativacao-links.mjs`, com Enter ativando, Espaço/Alt+Enter não ativando e o
-  clique de mouse confirmando que os links não estão mortos).
+Rodada de 22/11/2026 (depois da troca para Metro ao vivo), `node cli.mjs tudo` de
+ponta a ponta, sem intervenção manual entre os passos:
+
+- **40 capturas reais** (5 telas × 2 estados × 4 tamanhos, os dois apps) contra o
+  Metro ao vivo — **abertas a olho** (não só "o comando não deu erro"): boas-vindas,
+  login e cadastro do passageiro, entrar e criar-conta do motorista, em tamanhos
+  diferentes (320×568 e 430×932) e no estado "sem-rede" — todas com conteúdo real
+  (logo, textos em português, campos, CTA amarelo, aviso "A conta não é o cadastro
+  de motorista" no M02), nenhuma em branco.
+- **Zero erro "Requiring unknown module"** em nenhuma das 40 capturas nem nas 40
+  sondas — o problema que o Q9 reportou (navegação direta sobre o export estático)
+  não reaparece navegando contra o Metro ao vivo.
+- **Determinismo:** promovi essas 40 capturas a `.baseline/` (`node cli.mjs
+  linha-base`) e, na MESMA rodada de `tudo`, recapturei a matriz inteira do zero
+  (subir e derrubar os dois Metro de novo) e comparei contra essa linha de base:
+  **40 ok, 0 reprovadas, 0 sem linha de base.** Mesma fonte carregada
+  (`document.fonts.ready`), `reducedMotion: 'reduce'`, `deviceScaleFactor: 2`.
+- **Controle negativo (`node cli.mjs autoteste`), rerrodado já no caminho novo:**
+  A (referência) vs B (idêntica) → `pass=true, ratio=0`; A vs C (mudança visual
+  injetada em tempo de execução via `page.addStyleTag`, nunca edição de arquivo) →
+  `pass=false, ratio≈4,37%`. O comparador segue detectando diferença de verdade.
+- **G-07b funcionando de ponta a ponta nas 5 telas** (não só P01 como na rodada
+  anterior): `.saida/lado-a-lado/{P01,P02a,P02b,M01,M02}-lado-a-lado.png` + o `.md`
+  com a tabela de 8 linhas cada — recorte da prancha à esquerda, captura 390×844 à
+  direita, mesma altura. Conferidas a olho (P01 e M01 em anexo a este handoff):
+  conteúdo e proporção batem com a prancha de referência dos dois apps.
+- **As 5 sondas rodaram sobre as 40 combinações** (não só 2 telas como na rodada
+  anterior), com achados plausíveis e não-triviais: 136 ocorrências de "sem
+  indicador de foco visível" (achado real de UI, não bug da sonda — fica para
+  quem mexe na tela), 8 de contraste reprovado, 8 de controle inválido em link,
+  **0 falhas de ativação por teclado** (Enter sempre ativou os links achados) e
+  **0 "anéis de mouse"** (a guarda do item 6 de "O que esta ferramenta NÃO
+  validou" se sustenta nas 40 combinações, não só numa amostra).
 
 ## Arquivos
 
@@ -204,8 +242,8 @@ tools/qualidade-tela/
   lib/
     resolve-dep.mjs          acha playwright/pngjs no cache do npx sem declarar dependência
     browsers.mjs             casa a revisão do Chromium/WebKit instalada com um Playwright em cache
-    paths.mjs                caminhos (dist dos apps, linha de base, saída)
-    server.mjs                servidor estático com fallback de SPA
+    paths.mjs                caminhos (apps, linha de base, saída)
+    dev-server.mjs            sobe/derruba "expo start --web" ao vivo por app (ver "Por que Metro ao vivo")
     tokens.mjs                 lê vuumbora.tokens.json -> conjunto de cores aprovadas
     capture.mjs                 gera a matriz de capturas
     compare.mjs                   compara contra a linha de base (decodifica PNG com pngjs, diff pixel a pixel)
