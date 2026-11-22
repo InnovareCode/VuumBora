@@ -1,14 +1,17 @@
 import { memo } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { Clock, MapPin, User, Zap } from 'lucide-react-native';
+import { Clock, MapPin, Zap } from 'lucide-react-native';
 import { MockBadge, PrimaryButton, SecondaryButton, theme, textStyle, tabularNums, tokens } from '@vuumbora/ui';
 
 export interface NewRideOfferCardProps {
-  /** Dado de DEMONSTRAÇÃO — nenhuma oferta real existe sem backend. */
-  readonly passengerName: string;
-  readonly pickupDistanceLabel: string;
-  readonly pickupAddress: string;
-  readonly destinationLabel: string;
+  /** Só o BAIRRO (decisão do dono, 22/11/2026: `RideOffer.pickup`/`destination` são `ApproximatePlace`
+   *  — nunca o endereço nem o nome do passageiro antes do aceite). */
+  readonly pickupNeighborhood: string;
+  readonly destinationNeighborhood: string;
+  /** Em metros, já arredondado a 100 m pelo servidor (`RideOffer.pickupDistanceM`) — ver `formatPickupDistance`. */
+  readonly pickupDistanceM: number;
+  /** Em segundos, já arredondado a 1 min pelo servidor (`RideOffer.pickupEtaS`) — ver `formatPickupEta`. */
+  readonly pickupEtaS: number;
   readonly priceLabel: string;
   readonly surgeLabel?: string;
   /** Contador LOCAL, só de demonstração — ver nota no corpo do componente. */
@@ -17,9 +20,23 @@ export interface NewRideOfferCardProps {
   readonly onDecline: () => void;
 }
 
+/** "2,3 km" (≥1000 m) ou "300 m" (<1000 m); arredondado a 0 vira "menos de 100 m" — nunca "0 m". */
+export function formatPickupDistance(distanceM: number): string {
+  if (distanceM <= 0) return 'menos de 100 m';
+  if (distanceM < 1000) return `${distanceM} m`;
+  return `${(distanceM / 1000).toFixed(1).replace('.', ',')} km`;
+}
+
+/** "6 min"; arredondado a 0 vira "menos de 1 min" — nunca "0 min". */
+export function formatPickupEta(etaS: number): string {
+  const minutes = Math.round(etaS / 60);
+  if (minutes <= 0) return 'menos de 1 min';
+  return `${minutes} min`;
+}
+
 /**
- * Card de nova oferta de corrida. Duas regras de domínio (MOTORISTA.md) importam aqui,
- * não só a aparência:
+ * Card de nova oferta de corrida. Três regras de domínio (MOTORISTA.md, `docs/decisoes-do-dono.md`)
+ * importam aqui, não só a aparência:
  * 1. "Oferta deve expirar no servidor; contador visual não é fonte de verdade" — o
  *    `secondsRemaining` vem de um timer local no componente pai, só para DEMONSTRAR
  *    a interação; por isso o `MockBadge` ao lado do relógio deixa explícito que quem
@@ -27,20 +44,23 @@ export interface NewRideOfferCardProps {
  * 2. "Aceite precisa ser atômico" — `onAccept`/`onDecline` são só callbacks: a tela
  *    não assume sucesso otimista nem resolve a corrida sozinha (isso é tarefa da Vega
  *    quando o endpoint existir).
- * Nome do passageiro, endereços, distância, valor e "Dinâmica +20%" são todos dado
- * fabricado — um único `MockBadge` cobre o bloco inteiro (mesmo padrão do
- * `SafetyPromoBanner` do passageiro: vários pontos fabricados, um selo por bloco),
- * agora abaixo das DUAS colunas (não só da coluna de rota).
+ * 3. **Embarque e destino só o bairro, antes do aceite** (decisão do dono, 22/11/2026): nada de nome
+ *    do passageiro nem endereço aqui — isso só existe depois do aceite (`DriverTripSnapshot`, fora
+ *    deste card). Distância e tempo até o embarque chegam já arredondados (servidor); este
+ *    componente só formata (`formatPickupDistance`/`formatPickupEta`), nunca arredonda sozinho.
+ * Bairros, distância/tempo, valor e "Dinâmica +20%" são todos dado fabricado — um único
+ * `MockBadge` cobre o bloco inteiro (mesmo padrão do `SafetyPromoBanner` do passageiro: vários
+ * pontos fabricados, um selo por bloco), agora abaixo das DUAS colunas (não só da coluna de rota).
  * **Duas colunas a partir de 360px** (rota à esquerda, valor estimado à direita —
  * referência motorista-home-alvo.webp item 2); abaixo disso empilha (rota, depois
  * valor com divisor), porque "Valor estimado" + "R$ 32,40" + selo de dinâmica
  * precisam de ~120pt mínimos e não sobram ao lado da rota em 320/340px.
  */
 export const NewRideOfferCard = memo(function NewRideOfferCard({
-  passengerName,
-  pickupDistanceLabel,
-  pickupAddress,
-  destinationLabel,
+  pickupNeighborhood,
+  destinationNeighborhood,
+  pickupDistanceM,
+  pickupEtaS,
   priceLabel,
   surgeLabel,
   secondsRemaining,
@@ -54,28 +74,24 @@ export const NewRideOfferCard = memo(function NewRideOfferCard({
     <View style={[styles.routeBlock, twoColumn && styles.routeBlockTwoCol]}>
       <View style={styles.routeRow}>
         <View style={[styles.dot, { backgroundColor: tokens.color.map.pickup }]} />
-        {/* 2 linhas (não 1): medido (Playwright, 360px) que "2,3 km até o embarque"
-            (153px) estourava os ~137px de conteúdo da coluna de rota no modo duas
-            colunas — a coluna de valor ao lado consome parte da largura do card. */}
-        <Text style={styles.routeDistance} numberOfLines={2}>
-          {pickupDistanceLabel}
+        {/* 3 linhas (não 2): medido (Playwright, 390px) que o pior caso — "menos de 100 m •
+            menos de 1 min até o embarque" (quando os dois arredondam a zero, F08b) — cortava a
+            palavra "embarque" em 2 linhas; "2,3 km até o embarque" (texto de antes, só distância)
+            cabia em 2, mas o par distância+tempo é mais longo e precisa da 3ª. */}
+        <Text style={styles.routeDistance} numberOfLines={3}>
+          {formatPickupDistance(pickupDistanceM)} • {formatPickupEta(pickupEtaS)} até o embarque
         </Text>
       </View>
       <View style={styles.routeRow}>
-        <User size={16} color={theme.role.textSecondary} strokeWidth={2} />
-        <View style={styles.routeTextBlock}>
-          <Text style={styles.passengerName} numberOfLines={1}>
-            {passengerName}
-          </Text>
-          <Text style={styles.pickupAddress} numberOfLines={2}>
-            {pickupAddress}
-          </Text>
-        </View>
+        <MapPin size={16} color={tokens.color.map.pickup} strokeWidth={2} />
+        <Text style={styles.destinationLabel} numberOfLines={2}>
+          Embarque: {pickupNeighborhood}
+        </Text>
       </View>
       <View style={styles.routeRow}>
         <MapPin size={16} color={tokens.color.map.destination} strokeWidth={2} />
         <Text style={styles.destinationLabel} numberOfLines={2}>
-          Destino: {destinationLabel}
+          Destino: {destinationNeighborhood}
         </Text>
       </View>
     </View>
@@ -162,9 +178,6 @@ const styles = StyleSheet.create({
   routeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing['2'] },
   dot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
   routeDistance: { color: theme.role.textPrimary, ...textStyle('semibold', 'small') },
-  routeTextBlock: { flex: 1, gap: 1 },
-  passengerName: { color: theme.role.textPrimary, ...textStyle('bold', 'body') },
-  pickupAddress: { color: theme.role.textSecondary, ...textStyle('regular', 'caption') },
   destinationLabel: { flex: 1, color: theme.role.textPrimary, ...textStyle('semibold', 'small') },
   priceBlock: { gap: 4 },
   // Empilhado (<360px): vira uma linha horizontal com divisor acima, igual ao

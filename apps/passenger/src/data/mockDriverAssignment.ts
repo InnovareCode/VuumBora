@@ -6,6 +6,11 @@
  * que o consomem.
  */
 export interface AssignedDriverInfo {
+  /**
+   * Id estável só para marcar ESTE motorista no mock da porta de corrida (`control.advance`/
+   * `control.setDriverSummary`, `@vuumbora/api-client/passenger`) — nenhuma tela exibe isto.
+   */
+  readonly driverId: string;
   readonly name: string;
   readonly rating: number;
   readonly vehicleModel: string;
@@ -15,6 +20,7 @@ export interface AssignedDriverInfo {
 }
 
 export const MOCK_ASSIGNED_DRIVER: AssignedDriverInfo = {
+  driverId: 'mock-driver-roberto-silva',
   name: 'Roberto Silva',
   rating: 4.8,
   vehicleModel: 'Chevrolet Onix',

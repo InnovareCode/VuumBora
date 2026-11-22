@@ -6,23 +6,29 @@ import { AppShell, MockBadge, PrimaryButton, ScreenHeader, theme, textStyle, tab
 import { RouteSummaryRow } from '../../src/components/confirmation/RouteSummaryRow';
 import { PaymentMethodOption } from '../../src/components/confirmation/PaymentMethodOption';
 import { MOCK_PAYMENT_METHODS } from '../../src/data/mockPaymentMethods';
-import { findMockRideCategory } from '../../src/data/mockRideCategories';
+import { rideCategoryName } from '../../src/data/rideCategoryDisplay';
+import { formatQuotePickupEta, formatQuotePrice } from '../../src/utils/rideQuoteFormatting';
 import { toRideDraft, useRideRequestStore } from '../../src/store/useRideRequestStore';
 
 /**
  * P06 — Confirmação da corrida. Sem mockup de referência (derivada do design system +
  * da P03/Home). Preço é sempre "estimado" (regra de domínio) — nunca exibido como final.
+ *
+ * F08b: a categoria/preço/tempo aqui vêm da MESMA cotação viva que a Home buscou
+ * (`quoteCategories`), nunca de um catálogo local — se a cotação não tem mais a categoria
+ * escolhida (ex.: ficou muito tempo nesta tela e ela desligou), o botão "Solicitar" desliga.
  */
 export default function ConfirmationScreen() {
   const origin = useRideRequestStore((state) => state.origin);
   const destination = useRideRequestStore((state) => state.destination);
   const categoryId = useRideRequestStore((state) => state.categoryId);
   const paymentMethodId = useRideRequestStore((state) => state.paymentMethodId);
+  const quoteCategories = useRideRequestStore((state) => state.quoteCategories);
   const setPaymentMethod = useRideRequestStore((state) => state.setPaymentMethod);
   const requestRide = useRideRequestStore((state) => state.requestRide);
 
-  const category = findMockRideCategory(categoryId);
-  const canRequest = canRequestRide(toRideDraft({ origin, destination, categoryId, paymentMethodId }));
+  const category = quoteCategories.find((c) => c.categoryId === categoryId);
+  const canRequest = canRequestRide(toRideDraft({ origin, destination, categoryId, paymentMethodId })) && category !== undefined;
 
   const missing: string[] = [];
   if (!origin) missing.push('origem');
@@ -66,10 +72,10 @@ export default function ConfirmationScreen() {
             <View style={styles.categoryRow}>
               <Car size={24} color={theme.role.ctaBackground} strokeWidth={1.75} />
               <View style={styles.categoryTextBlock}>
-                <Text style={styles.categoryName}>{category.name}</Text>
-                <Text style={styles.categoryEta}>Chegada estimada em {category.etaLabel}</Text>
+                <Text style={styles.categoryName}>{rideCategoryName(category.categoryId)}</Text>
+                <Text style={styles.categoryEta}>Chegada estimada em {formatQuotePickupEta(category)}</Text>
               </View>
-              <Text style={styles.categoryPrice}>{category.priceLabel}</Text>
+              <Text style={styles.categoryPrice}>{formatQuotePrice(category)}</Text>
             </View>
           ) : (
             <Text style={styles.helperText}>Nenhuma categoria selecionada. Volte e escolha uma na tela inicial.</Text>
