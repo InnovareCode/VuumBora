@@ -18,11 +18,18 @@ export function isValidInstallationId(value: unknown): value is string {
  * na montagem do cliente é melhor do que gerar id previsível em silêncio.
  */
 export function defaultRandomId(): (() => string) | null {
-  const cryptoApi = (globalThis as { crypto?: Crypto }).crypto;
-  if (cryptoApi && typeof cryptoApi.randomUUID === 'function') return () => cryptoApi.randomUUID();
-  if (cryptoApi && typeof cryptoApi.getRandomValues === 'function') {
+  // Forma mínima do `crypto` global, declarada aqui: o pacote não usa o tipo `Crypto` do DOM (ver `resolvePlatform`).
+  const cryptoApi = (
+    globalThis as {
+      crypto?: { randomUUID?: () => string; getRandomValues?: <T extends ArrayBufferView | null>(array: T) => T };
+    }
+  ).crypto;
+  const randomUUID = cryptoApi?.randomUUID?.bind(cryptoApi);
+  if (randomUUID) return () => randomUUID();
+  const getRandomValues = cryptoApi?.getRandomValues?.bind(cryptoApi);
+  if (getRandomValues) {
     return () => {
-      const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
+      const bytes = getRandomValues(new Uint8Array(16));
       return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
     };
   }

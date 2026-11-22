@@ -24,17 +24,24 @@ export type { SessionStoragePort } from './session-storage';
 export { createIdentityHttpAdapter } from './http-adapter';
 export type { IdentityHttpOptions } from './http-adapter';
 export { createMockIdentityApi } from './mock-adapter';
-export type { MockIdentityOptions } from './mock-adapter';
+export type { MockIdentityOptions, MockLegalVersions } from './mock-adapter';
 
 export type {
+  AcceptConsentsInput,
   AccountSummary,
   AccountType,
+  AccountWithConsent,
   AuthenticatedSession,
+  ConsentStatus,
+  CurrentLegal,
   DeviceInfo,
   DevicePlatform,
   ForgotPasswordInput,
   IdentityApi,
+  LegalDocumentName,
+  LegalDocumentView,
   LoginInput,
+  PendingConsentDocument,
   RegisterInput,
   RegisterOutput,
   ResendOutput,

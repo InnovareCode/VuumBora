@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 import { createIdentityClient } from '../src/identity/client';
-import { createMockIdentityApi } from '../src/identity/mock-adapter';
+import { parseConsentStatus, parseCurrentLegal } from '../src/identity/legal';
+import { createMockIdentityApi, type MockLegalVersions } from '../src/identity/mock-adapter';
 import type { IdentityApi, RegisterInput } from '../src/identity/types';
 import type { ApiError, Result } from '../src/index';
 
@@ -16,6 +17,10 @@ const PASSWORD = 'senha-segura-1';
 const DEVICE = { installationId: 'install-12345678', platform: 'android' } as const;
 const NOW = Date.UTC(2026, 10, 21, 15, 0, 0); // 21/11/2026 12:00 em Natal
 
+/** As versões vigentes NESTE mock de teste. Não são as do padrão do mock: quem decide é o que a suíte configura. */
+const LEGAL = { terms: 'termos-2026-11', privacy: 'privacidade-2026-11' } as const;
+const freshLegal = (): MockLegalVersions => ({ ...LEGAL });
+
 const REGISTER: RegisterInput = {
   fullName: 'Ana Souza',
   email: EMAIL,
@@ -23,6 +28,8 @@ const REGISTER: RegisterInput = {
   birthDate: '1990-05-15',
   termsAccepted: true,
   privacyAccepted: true,
+  termsVersion: LEGAL.terms,
+  privacyVersion: LEGAL.privacy,
 };
 
 const emitted = new Set<string>();
@@ -33,10 +40,12 @@ function track<T>(result: Result<T>): Result<T> {
   return result;
 }
 
-function fresh(options: { now?: () => number } = {}): IdentityApi {
-  const raw = createMockIdentityApi('passenger', { clock: options.now ?? (() => NOW) });
+function fresh(options: { now?: () => number; legal?: MockLegalVersions } = {}): IdentityApi {
+  const raw = createMockIdentityApi('passenger', { clock: options.now ?? (() => NOW), legal: options.legal ?? freshLegal() });
   const wrap = <A extends unknown[], T>(fn: (...args: A) => Promise<Result<T>>) => async (...args: A) => track(await fn(...args));
   return {
+    legalCurrent: wrap(raw.legalCurrent),
+    acceptConsents: wrap(raw.acceptConsents),
     register: wrap(raw.register),
     verifyEmail: wrap(raw.verifyEmail),
     resendVerification: wrap(raw.resendVerification),
@@ -91,6 +100,10 @@ describe('mock — cadastro', () => {
     ['menor de 18 (faltando 1 dia)', { birthDate: '2008-11-22' }, { kind: 'forbidden', code: 'underage' }],
     ['sem aceite dos termos', { termsAccepted: false }, { kind: 'validation', code: 'consent_required', fields: { consent: 'É preciso aceitar os Termos de Uso e a Política de Privacidade.' } }],
     ['sem aceite da privacidade', { privacyAccepted: undefined }, { kind: 'validation', code: 'consent_required' }],
+    ['sem a versão dos Termos exibida', { termsVersion: undefined }, { kind: 'validation', code: 'consent_required' }],
+    ['sem a versão da Política exibida', { privacyVersion: undefined }, { kind: 'validation', code: 'consent_required' }],
+    ['versão com espaço sobrando (malformada, não é a mesma versão)', { termsVersion: ` ${LEGAL.terms}` }, { kind: 'validation', code: 'consent_required' }],
+    ['versão que não é texto', { privacyVersion: 7 as unknown as string }, { kind: 'validation', code: 'consent_required' }],
     ['nome vazio', { fullName: '   ' }, { kind: 'validation', code: 'invalid_body' }],
   ];
   for (const [name, patch, expected] of invalid) {
@@ -128,8 +141,8 @@ describe('mock — cadastro', () => {
   });
 
   test('o mesmo e-mail pode existir como passageiro e como motorista (contas separadas)', async () => {
-    const passenger = createMockIdentityApi('passenger');
-    const driver = createMockIdentityApi('driver');
+    const passenger = createMockIdentityApi('passenger', { legal: freshLegal() });
+    const driver = createMockIdentityApi('driver', { legal: freshLegal() });
     assert.ok((await passenger.register(REGISTER)).ok);
     const asDriver = await driver.register(REGISTER);
     assert.ok(asDriver.ok && asDriver.data.account.accountType === 'driver');
@@ -302,10 +315,143 @@ describe('mock — login, tokens e sessão', () => {
   });
 });
 
+describe('mock — Termos e Política com a versão exibida (M-2)', () => {
+  const ordered = (items: ReadonlyArray<{ document: string; version: string }>) => items.map((item) => `${item.document}:${item.version}`);
+
+  async function signedIn(legal = freshLegal()) {
+    const api = fresh({ legal });
+    await verified(api);
+    const login = await api.login({ identifier: EMAIL, password: PASSWORD }, DEVICE);
+    assert.ok(login.ok);
+    return { api, legal, accessToken: login.data.accessToken };
+  }
+
+  test('legalCurrent devolve as versões configuradas do perfil, com a MESMA forma que o adaptador http valida', async () => {
+    const result = await fresh().legalCurrent();
+    assert.ok(result.ok && result.origin === 'mock');
+    assert.equal(result.data.audience, 'passenger');
+    assert.equal(result.data.terms.version, LEGAL.terms);
+    assert.equal(result.data.privacy.version, LEGAL.privacy);
+    assert.deepEqual(parseCurrentLegal(result.data, 'passenger'), result.data, 'o que o mock devolve passa pelo validador do http (mesmos formatos)');
+
+    const driver = await createMockIdentityApi('driver', { legal: freshLegal() }).legalCurrent();
+    assert.ok(driver.ok && driver.data.audience === 'driver');
+    assert.ok(parseCurrentLegal(driver.data, 'passenger') === null, 'e é de outro perfil para o app do passageiro');
+  });
+
+  test('sem opção legal o mock tem o catálogo dele (mock-1), e versão inválida na configuração falha na montagem', async () => {
+    const result = await createMockIdentityApi('passenger').legalCurrent();
+    assert.ok(result.ok && result.data.terms.version === 'mock-1');
+    assert.throws(() => createMockIdentityApi('passenger', { legal: { terms: 'com espaço', privacy: 'p' } }), /legal\.terms/);
+  });
+
+  test('cadastro com versão que NÃO é a vigente: 409 consent_outdated com a vigente em error.current, e nada é criado', async () => {
+    const api = fresh();
+    const stale = await api.register({ ...REGISTER, termsVersion: 'termos-antigos' });
+    const error = expectError(stale, { kind: 'conflict', reason: 'consent_outdated', code: 'consent_outdated' });
+    const current = await api.legalCurrent();
+    assert.ok(current.ok);
+    assert.deepEqual(error.current, current.data, 'a tela mostra de novo exatamente o que o GET devolveria');
+
+    expectError(await api.login({ identifier: EMAIL, password: PASSWORD }, DEVICE), { kind: 'unauthorized', code: 'invalid_credentials' }); // não existe conta
+    assert.ok((await api.register(REGISTER)).ok, 'com a vigente passa');
+  });
+
+  test('a versão da Política também é conferida (não só a dos Termos)', async () => {
+    expectError(await fresh().register({ ...REGISTER, privacyVersion: 'privacidade-antiga' }), { code: 'consent_outdated' });
+  });
+
+  test('a versão exibida é entrada: outro catálogo, outras versões aceitas', async () => {
+    const other = fresh({ legal: { terms: 'T-9', privacy: 'P-4' } });
+    expectError(await other.register(REGISTER), { code: 'consent_outdated' });
+    assert.ok((await other.register({ ...REGISTER, termsVersion: 'T-9', privacyVersion: 'P-4' })).ok);
+  });
+
+  test('o erro de campo (e-mail) vem antes do 409 de versão, como na API; o 409 vem antes do e-mail já usado', async () => {
+    const api = fresh();
+    expectError(await api.register({ ...REGISTER, email: 'x', termsVersion: 'velha' }), { code: 'invalid_email' });
+    await verified(api);
+    expectError(await api.register({ ...REGISTER, termsVersion: 'velha' }), { code: 'consent_outdated' });
+  });
+
+  test('me traz consent em dia logo depois do cadastro e passa a listar o pendente quando o catálogo muda (Termos antes da Política)', async () => {
+    const { api, legal, accessToken } = await signedIn();
+    const first = await api.me(accessToken);
+    assert.ok(first.ok);
+    assert.deepEqual(first.data.consent, { upToDate: true, pending: [] });
+    assert.deepEqual(parseConsentStatus(first.data.consent), first.data.consent);
+
+    legal.privacy = 'privacidade-2027-01';
+    legal.terms = 'termos-2027-01'; // trocados nesta ordem: a ordem do resultado não pode depender dela
+    const later = await api.me(accessToken);
+    assert.ok(later.ok && later.data.consent);
+    assert.equal(later.data.consent.upToDate, false);
+    assert.deepEqual(ordered(later.data.consent.pending), ['terms:termos-2027-01', 'privacy:privacidade-2027-01']);
+    assert.deepEqual(parseConsentStatus(later.data.consent), later.data.consent, 'e passa pelo validador do http');
+  });
+
+  test('acceptConsents: tudo ou nada com a vigente, idempotente, e um documento por vez', async () => {
+    const { api, legal, accessToken } = await signedIn();
+    legal.terms = 'termos-2027-01';
+    legal.privacy = 'privacidade-2027-01';
+
+    const termsOnly = await api.acceptConsents(accessToken, { termsVersion: 'termos-2027-01' });
+    assert.ok(termsOnly.ok && termsOnly.origin === 'mock');
+    assert.deepEqual(ordered(termsOnly.data.pending), ['privacy:privacidade-2027-01'], 'só a Política continua pendente');
+
+    const again = await api.acceptConsents(accessToken, { termsVersion: 'termos-2027-01' });
+    assert.ok(again.ok);
+    assert.deepEqual(again.data, termsOnly.data, 'idempotente');
+
+    const both = await api.acceptConsents(accessToken, { termsVersion: 'termos-2027-01', privacyVersion: 'privacidade-2027-01' });
+    assert.ok(both.ok && both.data.upToDate && both.data.pending.length === 0);
+    const me = await api.me(accessToken);
+    assert.ok(me.ok && me.data.consent?.upToDate === true);
+  });
+
+  test('acceptConsents com versão que não é a vigente: 409 com a vigente e NADA é aceito (nem a versão certa que veio junto)', async () => {
+    const { api, legal, accessToken } = await signedIn();
+    legal.terms = 'termos-2027-01';
+    legal.privacy = 'privacidade-2027-01';
+
+    const result = await api.acceptConsents(accessToken, { termsVersion: 'termos-2027-01', privacyVersion: 'privacidade-velha' });
+
+    const error = expectError(result, { kind: 'conflict', reason: 'consent_outdated', code: 'consent_outdated' });
+    assert.equal(error.current?.privacy.version, 'privacidade-2027-01');
+    const me = await api.me(accessToken);
+    assert.ok(me.ok && me.data.consent && ordered(me.data.consent.pending).length === 2, 'tudo ou nada: nenhum documento foi aceito');
+  });
+
+  test('acceptConsents sem versão nenhuma ou malformada = 400 consent_required; sem sessão = 401', async () => {
+    const { api, accessToken } = await signedIn();
+    expectError(await api.acceptConsents(accessToken, {}), { kind: 'validation', code: 'consent_required', fields: { consent: 'Informe a versão dos Termos e/ou da Política que foi exibida.' } });
+    expectError(await api.acceptConsents(accessToken, { termsVersion: 'com espaço' }), { code: 'consent_required' });
+    expectError(await api.acceptConsents(accessToken, { termsVersion: 7 as unknown as string }), { code: 'consent_required' });
+    expectError(await api.acceptConsents('mock-access-token-lixo', { termsVersion: LEGAL.terms }), { kind: 'unauthorized', code: 'unauthorized' });
+  });
+
+  test('o aceite é por conta: a versão aceita por uma não vale para a outra', async () => {
+    const legal = freshLegal();
+    const api = fresh({ legal });
+    await verified(api);
+    const other = await registered(api, { email: 'outra@example.com', fullName: 'Outra' });
+    assert.ok(other.account.id);
+    legal.terms = 'termos-2027-01';
+    const first = await api.login({ identifier: EMAIL, password: PASSWORD }, DEVICE);
+    assert.ok(first.ok);
+    assert.ok((await api.acceptConsents(first.data.accessToken, { termsVersion: 'termos-2027-01' })).ok);
+    assert.ok((await api.verifyEmail({ identifier: 'outra@example.com', code: '123456', password: PASSWORD })).ok);
+    const second = await api.login({ identifier: 'outra@example.com', password: PASSWORD }, DEVICE);
+    assert.ok(second.ok);
+    const me = await api.me(second.data.accessToken);
+    assert.ok(me.ok && me.data.consent && ordered(me.data.consent.pending).join() === 'terms:termos-2027-01');
+  });
+});
+
 describe('mock — pelo IdentityClient (a forma que as telas usam)', () => {
   test('jornada completa em modo mock: cadastro → código → login → me → 15 min depois renova sozinho → logout', async () => {
     let now = NOW;
-    const identity = createIdentityClient({ mode: 'mock', accountType: 'passenger', platform: 'ios', appVersion: '1.0.0', clock: () => now });
+    const identity = createIdentityClient({ mode: 'mock', accountType: 'passenger', platform: 'ios', appVersion: '1.0.0', clock: () => now, mock: { legal: freshLegal() } });
 
     assert.ok((await identity.register(REGISTER)).ok);
     assert.ok((await identity.verifyEmail({ identifier: EMAIL, code: '123456', password: PASSWORD })).ok);
@@ -320,6 +466,25 @@ describe('mock — pelo IdentityClient (a forma que as telas usam)', () => {
     const out = await identity.logout();
     assert.ok(out.ok && out.data.serverRevoked);
     assert.equal((await identity.me()).ok, false);
+  });
+
+  test('fluxo dos Termos pelo cliente: a tela lê legalCurrent, cadastra com o que leu, e o reaceite usa a sessão', async () => {
+    const legal = freshLegal();
+    const identity = createIdentityClient({ mode: 'mock', accountType: 'passenger', platform: 'ios', appVersion: '1.0.0', clock: () => NOW, mock: { legal } });
+
+    const shown = await identity.legalCurrent();
+    assert.ok(shown.ok);
+    assert.ok((await identity.register({ ...REGISTER, termsVersion: shown.data.terms.version, privacyVersion: shown.data.privacy.version })).ok);
+    assert.ok((await identity.verifyEmail({ identifier: EMAIL, code: '123456', password: PASSWORD })).ok);
+    assert.ok((await identity.login({ identifier: EMAIL, password: PASSWORD })).ok);
+
+    legal.terms = 'termos-2027-01';
+    const me = await identity.me();
+    assert.ok(me.ok && me.data.consent?.upToDate === false);
+    const stale = await identity.acceptConsents({ termsVersion: LEGAL.terms });
+    assert.ok(!stale.ok && stale.error.code === 'consent_outdated' && stale.error.current?.terms.version === 'termos-2027-01');
+    const accepted = await identity.acceptConsents({ termsVersion: stale.error.current?.terms.version ?? '' });
+    assert.ok(accepted.ok && accepted.data.upToDate);
   });
 
   test('modo mock não precisa de baseUrl; http precisa', () => {
@@ -337,7 +502,7 @@ describe('mock x contrato', () => {
     const missing = [...emitted].filter((code) => !realButUndocumented.has(code) && !new RegExp(`\\b${code}\\b`).test(contract));
     assert.deepEqual(missing, [], `o mock inventou códigos que o contrato não tem: ${missing.join(', ')}`);
     // Sanidade: a suíte exercitou a maior parte do vocabulário do contrato (senão a conferência acima é vazia).
-    for (const code of ['invalid_email', 'invalid_password', 'invalid_phone', 'invalid_birth_date', 'underage', 'consent_required', 'email_taken', 'invalid_code', 'code_locked', 'code_expired', 'reset_locked', 'invalid_credentials', 'email_not_verified', 'too_many_attempts', 'invalid_refresh_token', 'invalid_body']) {
+    for (const code of ['invalid_email', 'invalid_password', 'invalid_phone', 'invalid_birth_date', 'underage', 'consent_required', 'consent_outdated', 'email_taken', 'invalid_code', 'code_locked', 'code_expired', 'reset_locked', 'invalid_credentials', 'email_not_verified', 'too_many_attempts', 'invalid_refresh_token', 'invalid_body']) {
       assert.ok(emitted.has(code), `a suíte nunca provocou ${code}`);
     }
   });

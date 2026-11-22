@@ -12,8 +12,11 @@
  */
 import type { ApiError } from '@vuumbora/api-client';
 
-/** `code_request` = pedir código por e-mail (esqueci a senha, reenviar o código de confirmação). */
-export type AuthErrorContext = 'login' | 'register' | 'verify' | 'code_request' | 'reset';
+/**
+ * `code_request` = pedir código por e-mail (esqueci a senha, reenviar o código de confirmação).
+ * `consent` = carregar os Termos/Política e o reaceite (`src/legal`): chamadas que não são de login nem de cadastro.
+ */
+export type AuthErrorContext = 'login' | 'register' | 'verify' | 'code_request' | 'reset' | 'consent';
 
 /** Chave estável de cada estado de tela (a revisão e os testes usam estes nomes). */
 export type AuthErrorKey =
@@ -32,6 +35,7 @@ export type AuthErrorKey =
   | 'underage'
   | 'consent_required'
   | 'consent_unavailable'
+  | 'consent_outdated'
   | 'invalid_body'
   | 'network'
   | 'unavailable'
@@ -40,7 +44,7 @@ export type AuthErrorKey =
 /** Campo do formulário a que o erro pertence (a tela decide como mapear para os próprios campos). */
 export type AuthErrorField = 'email' | 'password' | 'newPassword' | 'phone' | 'birthDate' | 'consent' | 'code';
 
-export type AuthErrorAction = 'go_verify' | 'go_login' | 'go_forgot' | 'resend_code' | 'restart_register';
+export type AuthErrorAction = 'go_verify' | 'go_login' | 'go_forgot' | 'resend_code' | 'restart_register' | 'retry';
 
 export type AuthErrorTone = 'danger' | 'warning' | 'info';
 
@@ -74,6 +78,7 @@ const KNOWN_KEYS: ReadonlySet<string> = new Set<AuthErrorKey>([
   'underage',
   'consent_required',
   'consent_unavailable',
+  'consent_outdated',
   'invalid_body',
 ]);
 
@@ -100,6 +105,7 @@ const WAIT_TITLE: Record<AuthErrorContext, string> = {
   verify: 'Muitas tentativas de confirmação',
   code_request: 'Muitos pedidos de código',
   reset: 'Muitas tentativas de redefinição',
+  consent: 'Muitas tentativas seguidas',
 };
 
 const WAIT_MESSAGE: Record<AuthErrorContext, string> = {
@@ -108,6 +114,7 @@ const WAIT_MESSAGE: Record<AuthErrorContext, string> = {
   verify: 'Aguarde um pouco antes de tentar confirmar de novo.',
   code_request: 'Aguarde um pouco antes de pedir outro código.',
   reset: 'Aguarde um pouco antes de tentar de novo.',
+  consent: 'Aguarde um pouco antes de tentar de novo.',
 };
 
 function attemptsText(attemptsLeft: number | undefined): string {
@@ -206,6 +213,14 @@ export function describeAuthError(context: AuthErrorContext, error: ApiError): A
       // 503 do servidor enquanto os textos legais não foram publicados: não é erro da pessoa nem falha passageira.
       return alert(key, 'info', 'Estamos finalizando os Termos de Uso e a Política de Privacidade. Tente de novo em breve.', {
         title: 'O cadastro ainda não está aberto',
+      });
+
+    case 'consent_outdated':
+      // 409: a versão que a pessoa VIU deixou de ser a vigente. Nada foi gravado. Quem renderiza troca os textos (usa
+      // `error.current` ou busca de novo) e desmarca os aceites: o cliente nunca reenvia sozinho. Sem `field`: não é
+      // um campo errado, é o texto que mudou.
+      return alert(key, 'warning', 'Os Termos de Uso ou a Política de Privacidade foram atualizados. Leia os textos novos e aceite de novo para continuar.', {
+        title: 'Os textos foram atualizados',
       });
 
     case 'invalid_body':

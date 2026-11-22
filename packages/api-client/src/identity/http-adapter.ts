@@ -4,6 +4,10 @@
  * - `accountType` é fixo (da fábrica) e entra em todo corpo que o contrato pede; o chamador não consegue trocá-lo.
  * - Cada corpo é montado CAMPO A CAMPO: um formulário que carrega `confirmPassword` (ou qualquer sobra) não a envia.
  * - `X-App-Version` em TODA chamada (o servidor ainda ignora; a §6 prevê `426` para versão velha).
+ * - `baseUrl` é https. `http:` só com `allowInsecureHttp: true`, que é coisa de DESENVOLVIMENTO (o app liga isto ao
+ *   `__DEV__`): senha e tokens não podem viajar em claro por causa de uma URL errada numa build de loja (B-8d).
+ * - As versões dos Termos e da Política que vão no cadastro e no reaceite são ENTRADA (o que a tela renderizou); nada
+ *   aqui as inventa nem as guarda (M-2).
  * - Sem retentativa automática aqui: POST de cadastro/redefinição não é seguro de repetir; quem repete é a UI.
  *   (A única repetição automática é a do `SessionManager` depois de um 401.)
  * - Timeout em toda chamada (padrão 15 s) → `network`.
@@ -13,10 +17,13 @@
  */
 import type { Result } from '../index';
 import { apiErrorFromReply, NETWORK_ERROR, UNEXPECTED_RESPONSE } from './errors';
+import { parseConsentStatus, parseCurrentLegal } from './legal';
 import { failWith, succeed } from './result';
 import type {
   AccountSummary,
   AccountType,
+  AccountWithConsent,
+  ConsentStatus,
   IdentityApi,
   RegisterOutput,
   ResendOutput,
@@ -34,6 +41,11 @@ export interface IdentityHttpOptions {
   readonly appVersion: string;
   readonly fetch?: typeof fetch;
   readonly timeoutMs?: number;
+  /**
+   * Aceita `baseUrl` com `http:` (texto claro). SÓ DESENVOLVIMENTO — emulador, aparelho na rede local, servidor
+   * local. Padrão `false`: em build de loja a montagem recusa `http:`.
+   */
+  readonly allowInsecureHttp?: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -65,6 +77,16 @@ function parseTokens(value: unknown): SessionTokens | null {
   return { accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt };
 }
 
+/** `GET /me`: a conta e o `consent` (objeto, ou `null` sem configuração dos textos). `consent` ausente é inválido. */
+function parseAccountWithConsent(value: unknown, accountType: AccountType): AccountWithConsent | null {
+  const account = parseAccount(value, accountType);
+  if (!account || !isRecord(value)) return null;
+  const raw = value['consent'];
+  if (raw === null) return { ...account, consent: null };
+  const consent = parseConsentStatus(raw);
+  return consent ? { ...account, consent } : null;
+}
+
 function parseResend(value: unknown): ResendOutput | null {
   if (!isRecord(value)) return null;
   const seconds = value['resendAfterSeconds'];
@@ -84,6 +106,11 @@ export function createIdentityHttpAdapter(options: IdentityHttpOptions): Identit
   }
   if ((base.protocol !== 'http:' && base.protocol !== 'https:') || base.search || base.hash) {
     throw new Error('createIdentityHttpAdapter: baseUrl deve ser http(s) sem query nem fragmento.');
+  }
+  if (base.protocol === 'http:' && options.allowInsecureHttp !== true) {
+    throw new Error(
+      'createIdentityHttpAdapter: baseUrl deve ser https. http só com allowInsecureHttp (apenas desenvolvimento): senha e tokens iriam em texto claro.',
+    );
   }
   if (!APP_VERSION_PATTERN.test(appVersion)) {
     throw new Error('createIdentityHttpAdapter: appVersion inválida (use algo como "1.4.0").');
@@ -122,7 +149,7 @@ export function createIdentityHttpAdapter(options: IdentityHttpOptions): Identit
 
       if (!response.ok) {
         return failWith(
-          apiErrorFromReply({ status: response.status, body: json, retryAfterHeader: response.headers.get('retry-after') }),
+          apiErrorFromReply({ status: response.status, body: json, retryAfterHeader: response.headers.get('retry-after') }, accountType),
         );
       }
       if (!isRecord(json) || json['ok'] !== true) return failWith(UNEXPECTED_RESPONSE);
@@ -140,6 +167,13 @@ export function createIdentityHttpAdapter(options: IdentityHttpOptions): Identit
     request<T>(bearer === undefined ? { method: 'POST', path, body, parse } : { method: 'POST', path, body, parse, bearer });
 
   return {
+    legalCurrent: () =>
+      request({
+        method: 'GET',
+        path: `/v1/legal/current?audience=${accountType}`,
+        parse: (data) => parseCurrentLegal(data, accountType),
+      }),
+
     register: (input) =>
       post<RegisterOutput>(
         '/v1/auth/register',
@@ -152,6 +186,8 @@ export function createIdentityHttpAdapter(options: IdentityHttpOptions): Identit
           birthDate: input.birthDate,
           termsAccepted: input.termsAccepted,
           privacyAccepted: input.privacyAccepted,
+          termsVersion: input.termsVersion,
+          privacyVersion: input.privacyVersion,
         },
         (data) => {
           if (!isRecord(data) || !isRecord(data['verification'])) return null;
@@ -225,7 +261,18 @@ export function createIdentityHttpAdapter(options: IdentityHttpOptions): Identit
         method: 'GET',
         path: '/v1/auth/me',
         bearer: accessToken,
-        parse: (data) => parseAccount(data, accountType),
+        parse: (data) => parseAccountWithConsent(data, accountType),
       }),
+
+    acceptConsents: (accessToken, input) =>
+      post<ConsentStatus>(
+        '/v1/auth/consents',
+        {
+          ...(input.termsVersion !== undefined ? { termsVersion: input.termsVersion } : {}),
+          ...(input.privacyVersion !== undefined ? { privacyVersion: input.privacyVersion } : {}),
+        },
+        (data) => (isRecord(data) ? parseConsentStatus(data['consent']) : null),
+        accessToken,
+      ),
   };
 }

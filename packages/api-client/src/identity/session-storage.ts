@@ -31,10 +31,15 @@ export function createMemorySessionStorage(initial: Readonly<Record<string, stri
 }
 
 /** Um conjunto de chaves por tipo de conta (um app = um tipo; o prefixo evita colisão no web e em testes). */
-export function storageKeys(accountType: AccountType): { readonly session: string; readonly installationId: string } {
+export function storageKeys(accountType: AccountType): {
+  readonly session: string;
+  readonly installationId: string;
+  readonly pendingRevocations: string;
+} {
   return {
     session: `vuumbora.${accountType}.session`,
     installationId: `vuumbora.${accountType}.installation_id`,
+    pendingRevocations: `vuumbora.${accountType}.pending_revocations`,
   };
 }
 
@@ -71,4 +76,47 @@ export function parseStoredSession(raw: string | null): SessionTokens | null {
   if (typeof refreshToken !== 'string' || refreshToken.length === 0) return null;
   if (!isIsoDate(accessTokenExpiresAt) || !isIsoDate(refreshTokenExpiresAt)) return null;
   return { accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt };
+}
+
+/**
+ * Refresh de uma sessão que saiu do aparelho (logout, ou troca de conta por cima de uma sessão aberta) mas que o
+ * servidor AINDA não confirmou ter revogado (sem rede, servidor fora). Fica no mesmo cofre da sessão, é repetido na
+ * abertura do app e some assim que o servidor confirma ou o token vence. `expiresAt` = `refreshTokenExpiresAt`.
+ */
+export interface PendingRevocation {
+  readonly refreshToken: string;
+  readonly expiresAt: string;
+}
+
+/** Teto da fila: mais antigo sai primeiro. Nenhum uso real chega perto; é só para o cofre não crescer sem limite. */
+export const MAX_PENDING_REVOCATIONS = 10;
+
+export function serializePendingRevocations(items: readonly PendingRevocation[]): string {
+  return JSON.stringify({
+    v: STORED_VERSION,
+    items: items.map((item) => ({ refreshToken: item.refreshToken, expiresAt: item.expiresAt })),
+  });
+}
+
+/** Lixo, versão estranha ou item malformado = vazio/descartado (nunca derruba a abertura do app). */
+export function parsePendingRevocations(raw: string | null): PendingRevocation[] {
+  if (raw === null) return [];
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (typeof value !== 'object' || value === null) return [];
+  const { v, items } = value as Record<string, unknown>;
+  if (v !== STORED_VERSION || !Array.isArray(items)) return [];
+  const parsed: PendingRevocation[] = [];
+  for (const item of items.slice(0, MAX_PENDING_REVOCATIONS)) {
+    if (typeof item !== 'object' || item === null) continue;
+    const { refreshToken, expiresAt } = item as Record<string, unknown>;
+    if (typeof refreshToken !== 'string' || refreshToken.length === 0 || !isIsoDate(expiresAt)) continue;
+    if (parsed.some((other) => other.refreshToken === refreshToken)) continue;
+    parsed.push({ refreshToken, expiresAt });
+  }
+  return parsed;
 }

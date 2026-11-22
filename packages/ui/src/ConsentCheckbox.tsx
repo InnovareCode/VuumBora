@@ -12,6 +12,11 @@ export interface ConsentCheckboxProps {
   /** Texto do link que abre o documento ("Ler os Termos de Uso"). Sem `onPressLink`, não há link. */
   readonly linkLabel?: string;
   readonly onPressLink?: () => void;
+  /**
+   * Texto curto ao lado do link ("versão mock-2"): diz QUAL texto está sendo aceito. Fica FORA do link (que continua
+   * uma linha só, com alvo de 44pt) e quebra para baixo dele quando não cabe (320pt). Só aparece com `linkLabel`.
+   */
+  readonly linkCaption?: string;
   readonly disabled?: boolean;
   readonly error?: boolean;
   readonly errorMessage?: string;
@@ -32,6 +37,7 @@ export const ConsentCheckbox = memo(function ConsentCheckbox({
   onChange,
   linkLabel,
   onPressLink,
+  linkCaption,
   disabled = false,
   error = false,
   errorMessage,
@@ -83,6 +89,11 @@ export const ConsentCheckbox = memo(function ConsentCheckbox({
       {linkLabel && onPressLink ? (
         <View style={styles.linkRow}>
           <LinkButton label={linkLabel} onPress={onPressLink} align="flex-start" disabled={disabled} testID={linkTestID} />
+          {linkCaption ? (
+            <Text style={styles.linkCaption} testID={linkTestID ? `${linkTestID}-caption` : undefined}>
+              {linkCaption}
+            </Text>
+          ) : null}
         </View>
       ) : null}
       {error && errorMessage ? (
@@ -122,7 +133,15 @@ const styles = StyleSheet.create({
   check: { color: theme.role.ctaText, ...glyphStyle(theme.typography.weight.bold, 'body') },
   label: { flex: 1, color: theme.role.textPrimary, ...textStyle('regular', 'body') },
   // Alinha o link com o texto da frase (largura da caixa + vão), não com a borda da tela.
-  linkRow: { paddingLeft: BOX_SIZE + theme.spacing['3'] - theme.spacing['2'] },
+  linkRow: {
+    paddingLeft: BOX_SIZE + theme.spacing['3'] - theme.spacing['2'],
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  // `marginLeft` = o respiro lateral do `LinkButton` (spacing 2): quando a legenda quebra para baixo do link, ela fica
+  // alinhada ao TEXTO do link, e não à borda do alvo de toque.
+  linkCaption: { color: theme.role.textSecondary, ...textStyle('regular', 'small'), flexShrink: 1, marginLeft: theme.spacing['2'] },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['1'], marginTop: theme.spacing['1'] },
   // Glifo (✕): fonte do sistema de propósito — ver nota em typography.ts.
   errorGlyph: { color: theme.role.danger, ...glyphStyle(theme.typography.weight.bold, 'small') },

@@ -27,6 +27,7 @@ import {
   createMemorySessionStorage,
   type DevicePlatform,
   type IdentityClient,
+  type MockLegalVersions,
 } from '@vuumbora/api-client/identity';
 
 /**
@@ -35,6 +36,14 @@ import {
  */
 const IDENTITY_MODE = 'mock' as const;
 const MOCK_LATENCY_MS = 350;
+
+/**
+ * Catálogo de versões dos Termos/Política DO MOCK, mutável de propósito (o mock o lê a cada chamada): a revisão troca
+ * `terms`/`privacy` pelo gancho abaixo para simular "o jurídico publicou uma versão nova" (409 no cadastro, aceite
+ * pendente no `me`). SÓ em desenvolvimento: fora de `__DEV__` o mock usa o catálogo padrão dele. NÃO é versão do app:
+ * a tela nunca lê isto — ela recebe as versões do `identity.legalCurrent()` e envia ESSAS (`src/legal/legalModel.ts`).
+ */
+const mockLegal: MockLegalVersions | undefined = __DEV__ ? { terms: 'mock-1', privacy: 'mock-1' } : undefined;
 
 function devicePlatform(): DevicePlatform {
   // `Platform.OS` também pode ser 'windows' | 'macos': o contrato só conhece estas três.
@@ -56,7 +65,7 @@ function createPassengerIdentity(): IdentityClient {
     storage: createMemorySessionStorage(),
     // O Hermes não tem `crypto` global: `uuid` do `expo` usa o gerador nativo (e `crypto.randomUUID` no web).
     randomId: () => uuid.v4(),
-    mock: { latencyMs: MOCK_LATENCY_MS },
+    mock: { latencyMs: MOCK_LATENCY_MS, ...(mockLegal !== undefined ? { legal: mockLegal } : {}) },
     // O armazenamento nunca devolve o conteúdo no erro (só o erro): seguro registrar o motivo.
     onStorageError: (error) => {
       console.warn('[identity] armazenamento da sessão falhou', error instanceof Error ? error.name : 'erro');
@@ -67,7 +76,10 @@ function createPassengerIdentity(): IdentityClient {
 export const identity: IdentityClient = createPassengerIdentity();
 
 // Gancho de prova, SÓ em desenvolvimento no web (`__DEV__` é removido do bundle de produção): permite à revisão
-// forçar respostas que o mock não produz (503, sem rede) e acionar `session_expired`. Nunca existe no app da loja.
+// forçar respostas que o mock não produz (503, sem rede) e acionar `session_expired`, e trocar as versões legais do
+// mock (`__vuumboraMockLegal.terms = 'mock-2'`). Nunca existe no app da loja.
 if (__DEV__ && Platform.OS === 'web') {
-  (globalThis as { __vuumboraIdentity?: IdentityClient }).__vuumboraIdentity = identity;
+  const hooks = globalThis as { __vuumboraIdentity?: IdentityClient; __vuumboraMockLegal?: MockLegalVersions };
+  hooks.__vuumboraIdentity = identity;
+  if (mockLegal !== undefined) hooks.__vuumboraMockLegal = mockLegal;
 }

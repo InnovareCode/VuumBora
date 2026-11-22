@@ -9,6 +9,7 @@ const ACTION_LABEL: Record<AuthErrorAction, string> = {
   go_forgot: 'Esqueci minha senha',
   resend_code: 'Pedir novo código',
   restart_register: 'Refazer o cadastro',
+  retry: 'Tentar de novo',
 };
 
 /** Troca o texto ou desliga uma ação (ex.: "Pedir novo código" enquanto o reenvio ainda está em espera). */
@@ -55,7 +56,7 @@ export const AuthErrorAlert = memo(function AuthErrorAlert({
         <LinkButton
           key={action}
           label={actionOverrides?.[action]?.label ?? ACTION_LABEL[action]}
-          role={action === 'resend_code' ? 'button' : 'link'}
+          role={action === 'resend_code' || action === 'retry' ? 'button' : 'link'}
           align="flex-start"
           disabled={actionOverrides?.[action]?.disabled ?? false}
           onPress={() => onAction?.(action)}

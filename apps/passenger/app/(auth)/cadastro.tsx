@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { Controller, useForm, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -6,11 +6,9 @@ import { StyleSheet, Text, View } from 'react-native';
 import { CalendarDays, Lock, Mail, Phone, User } from 'lucide-react-native';
 import {
   AppShell,
-  ConsentCheckbox,
   DateInput,
   InlineAlert,
   LinkButton,
-  MockBadge,
   PasswordInput,
   PhoneInput,
   PrimaryButton,
@@ -24,6 +22,7 @@ import {
 import { AuthErrorAlert } from '../../src/components/auth/AuthErrorAlert';
 import { AuthHeader } from '../../src/components/auth/AuthHeader';
 import { SocialSignInSection } from '../../src/components/auth/SocialSignInSection';
+import { LegalConsentFields } from '../../src/components/legal/LegalConsentFields';
 import { SOCIAL_SIGN_IN_ENABLED } from '../../src/config/featureFlags';
 import {
   describeAuthError,
@@ -35,7 +34,7 @@ import { useAuthFlowStore } from '../../src/identity/authFlowStore';
 import { identity } from '../../src/identity/identityClient';
 import { safeCall } from '../../src/identity/safeCall';
 import { useRetryLock } from '../../src/identity/useRetryLock';
-import { consentPayload, LEGAL_ROUTE, useLegalDocuments } from '../../src/legal/legalDocuments';
+import { consentPayload, refreshLegalAfterOutdated, useLegalDocuments } from '../../src/legal/legalDocuments';
 import { goBackOr } from '../../src/navigation/goBack';
 import { cadastroSchema, type CadastroFormValues } from '../../src/schemas/authSchemas';
 import { fieldErrorProps } from '../../src/lib/fieldErrorProps';
@@ -66,13 +65,19 @@ const FIELD_LABEL: Record<keyof CadastroFormValues, string> = {
  * Cadastro (P02 — criar conta). Campos do contrato: nome, e-mail, senha (8 a 72 bytes), celular OPCIONAL, data de
  * nascimento e os DOIS aceites (Termos e Política), cada um com acesso ao texto. Nenhum aceite nasce marcado.
  *
+ * Aceite com versão (B3): os textos vêm de `useLegalDocuments` (carregando | erro | pronto) e o envio só é habilitado
+ * com `pronto`. As versões enviadas são as do documento que ESTA tela renderizou, nunca uma constante. Se a versão
+ * mudou (`409 consent_outdated`), os textos são trocados, os dois aceites são desmarcados e a pessoa aceita de novo —
+ * o app não reenvia sozinho. Isso vale para QUALQUER troca de textos (efeito abaixo), não só para o 409.
+ *
  * Quem decide é o servidor: `underage` (18 anos), `email_taken`, `consent_unavailable` ("o cadastro ainda não está
  * aberto"), limite de tentativas etc. têm estado de tela próprio (`describeAuthError`). A data de nascimento fica só
  * no formulário (estado local): é enviada e nunca guardada — sair da tela a descarta. Sucesso leva à tela do código;
  * o app NÃO abre sessão aqui (o servidor não devolve token no cadastro).
  */
 export default function CadastroScreen() {
-  const legal = useLegalDocuments();
+  // Quem ENVIA o aceite confere a idade da cópia ao abrir: a cópia de uma visita antiga não é a que a pessoa vai ver.
+  const legal = useLegalDocuments({ refreshIfStale: true });
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<{ readonly view: AuthErrorView; readonly attempt: number } | null>(null);
   const lock = useRetryLock();
@@ -81,7 +86,7 @@ export default function CadastroScreen() {
   const birthRef = useRef<TextInputHandle>(null);
   const passwordRef = useRef<TextInputHandle>(null);
 
-  const { control, handleSubmit, setError, formState } = useForm<CadastroFormValues>({
+  const { control, handleSubmit, setError, setValue, clearErrors, formState } = useForm<CadastroFormValues>({
     resolver: zodResolver(cadastroSchema),
     defaultValues: {
       fullName: '',
@@ -99,8 +104,25 @@ export default function CadastroScreen() {
   const locked = waitSeconds > 0;
   const invalidLabels = (Object.keys(errors) as (keyof CadastroFormValues)[]).map((name) => FIELD_LABEL[name]);
 
+  // Os aceites valem para os textos que estavam na tela quando foram marcados. Chegou uma cópia NOVA dos textos
+  // (409 com `error.current`, ou nova busca): desmarca os dois. A 1ª cópia (a da abertura) não desmarca nada — antes
+  // dela nem havia caixa para marcar.
+  const shownDocuments = legal.status === 'ready' ? legal.documents : null;
+  const lastShown = useRef<typeof shownDocuments>(null);
+  useEffect(() => {
+    if (shownDocuments === null) return;
+    if (lastShown.current !== null && lastShown.current !== shownDocuments) {
+      setValue('termsAccepted', false);
+      setValue('privacyAccepted', false);
+      clearErrors(['termsAccepted', 'privacyAccepted']);
+    }
+    lastShown.current = shownDocuments;
+  }, [shownDocuments, setValue, clearErrors]);
+
   async function onSubmit(values: CadastroFormValues) {
-    if (submitting || locked) return;
+    // O envio só existe com os textos na tela (o botão fica desligado fora de `pronto`); isto é a segunda trava.
+    if (legal.status !== 'ready' || submitting || locked) return;
+    const documents = legal.documents; // o que a tela RENDERIZOU neste toque: as versões enviadas saem DAQUI
     const birthDate = brazilianDateToIso(values.birthDate);
     if (birthDate === null) return; // o schema já recusou; só estreita o tipo
     setFailure(null);
@@ -115,8 +137,7 @@ export default function CadastroScreen() {
         password: values.password,
         ...(phone !== '' ? { phone } : {}),
         birthDate,
-        // B3: aqui entram as versões EXIBIDAS dos Termos e da Política (ver `src/legal/legalDocuments.ts`).
-        ...consentPayload(),
+        ...consentPayload(documents),
       }),
     );
     setSubmitting(false);
@@ -133,6 +154,7 @@ export default function CadastroScreen() {
     }
 
     const view = describeAuthError('register', result.error);
+    if (view.key === 'consent_outdated') refreshLegalAfterOutdated(result.error);
     if (view.key === 'too_many_attempts' && view.retryAfterSeconds !== undefined) lock.lockFor(view.retryAfterSeconds);
     if (view.field !== undefined) {
       const [first, ...rest] = FORM_FIELDS[view.field];
@@ -269,45 +291,7 @@ export default function CadastroScreen() {
           />
         </View>
 
-        <View style={styles.consents}>
-          {legal.documents.terms.provisional || legal.documents.privacy.provisional ? (
-            <MockBadge label="textos legais provisórios" testID="cadastro-legal-provisional" />
-          ) : null}
-          <Controller
-            control={control}
-            name="termsAccepted"
-            render={({ field, fieldState }) => (
-              <ConsentCheckbox
-                label={`Li e aceito os ${legal.documents.terms.title}`}
-                checked={field.value}
-                onChange={field.onChange}
-                disabled={submitting}
-                {...fieldErrorProps(fieldState.error)}
-                linkLabel={`Ler os ${legal.documents.terms.title}`}
-                onPressLink={() => router.push(LEGAL_ROUTE.terms)}
-                testID="cadastro-terms-checkbox"
-                linkTestID="cadastro-terms-link"
-              />
-            )}
-          />
-          <Controller
-            control={control}
-            name="privacyAccepted"
-            render={({ field, fieldState }) => (
-              <ConsentCheckbox
-                label={`Li e aceito a ${legal.documents.privacy.title}`}
-                checked={field.value}
-                onChange={field.onChange}
-                disabled={submitting}
-                {...fieldErrorProps(fieldState.error)}
-                linkLabel={`Ler a ${legal.documents.privacy.title}`}
-                onPressLink={() => router.push(LEGAL_ROUTE.privacy)}
-                testID="cadastro-privacy-checkbox"
-                linkTestID="cadastro-privacy-link"
-              />
-            )}
-          />
-        </View>
+        <LegalConsentFields control={control} legal={legal} disabled={submitting} />
 
         <View style={styles.actions}>
           {failure !== null ? (
@@ -331,7 +315,8 @@ export default function CadastroScreen() {
             label={locked ? `Aguarde ${formatWait(waitSeconds)}` : 'Criar conta'}
             onPress={() => void submit()}
             loading={submitting}
-            disabled={locked}
+            // Sem os textos na tela não há o que aceitar: o envio só vale com `pronto` (carregando e erro desligam).
+            disabled={locked || legal.status !== 'ready'}
             accessibilityLabel={locked ? `Criar conta, disponível em ${formatWait(waitSeconds)}` : 'Criar conta'}
             testID="cadastro-submit-button"
           />
@@ -351,7 +336,6 @@ export default function CadastroScreen() {
 const styles = StyleSheet.create({
   content: { gap: theme.spacing['6'] },
   form: { gap: theme.spacing['4'] },
-  consents: { gap: theme.spacing['2'] },
   actions: { gap: theme.spacing['3'] },
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' },
   footerText: { color: theme.role.textSecondary, ...textStyle('regular', 'small') },

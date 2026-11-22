@@ -8,9 +8,10 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import type { ApiError } from '../src/index';
 import { createIdentityClient, type IdentityClient } from '../src/identity/client';
 import { createIdentityHttpAdapter } from '../src/identity/http-adapter';
-import { createMemorySessionStorage, storageKeys } from '../src/identity/session-storage';
+import { createMemorySessionStorage, parseStoredSession, storageKeys } from '../src/identity/session-storage';
 import type { RegisterInput } from '../src/identity/types';
-import { ACCOUNT, EMAIL, FakeIdentityServer, PASSWORD } from './helpers/fake-identity-server';
+import { ACCOUNT, CONSENT_UP_TO_DATE, EMAIL, FakeIdentityServer, LEGAL, legalCurrentBody, PASSWORD } from './helpers/fake-identity-server';
+import { waitFor, waitForAsync } from './helpers/session-kit';
 
 const APP_VERSION = '2.3.4';
 const KEYS = storageKeys('passenger');
@@ -24,14 +25,17 @@ beforeEach(() => {
   server.refreshDelayMs = 0;
   server.meDelayMs = () => 0;
   server.refreshOverride = null;
+  server.legal = { ...LEGAL };
   server.expireAccessTokens();
 });
 
+// O servidor falso fala http em 127.0.0.1: os testes ligam allowInsecureHttp (a regra que o recusa tem testes próprios).
 function adapter(overrides: { baseUrl?: string; timeoutMs?: number } = {}) {
   return createIdentityHttpAdapter({
     baseUrl: overrides.baseUrl ?? server.url,
     accountType: 'passenger',
     appVersion: APP_VERSION,
+    allowInsecureHttp: true,
     ...(overrides.timeoutMs !== undefined ? { timeoutMs: overrides.timeoutMs } : {}),
   });
 }
@@ -43,6 +47,7 @@ function client(extra: Partial<Parameters<typeof createIdentityClient>[0]> = {})
     accountType: 'passenger',
     platform: 'android',
     appVersion: APP_VERSION,
+    allowInsecureHttp: true,
     ...extra,
   });
 }
@@ -54,6 +59,9 @@ const REGISTER: RegisterInput = {
   birthDate: '1990-05-15',
   termsAccepted: true,
   privacyAccepted: true,
+  // O que a tela "exibiu": vem do servidor falso (`LEGAL`), nunca de uma constante do pacote.
+  termsVersion: LEGAL.terms,
+  privacyVersion: LEGAL.privacy,
 };
 
 const okReply = (data?: unknown) => ({ status: 200, body: data === undefined ? { ok: true } : { ok: true, data } });
@@ -113,7 +121,7 @@ describe('adaptador http — o que vai no fio', () => {
 
     assert.ok(result.ok && result.data.verification.emailSent === false);
     const body = server.last('POST', '/v1/auth/register')?.body as Record<string, unknown>;
-    assert.deepEqual(Object.keys(body).sort(), ['accountType', 'birthDate', 'email', 'fullName', 'password', 'phone', 'privacyAccepted', 'termsAccepted']);
+    assert.deepEqual(Object.keys(body).sort(), ['accountType', 'birthDate', 'email', 'fullName', 'password', 'phone', 'privacyAccepted', 'privacyVersion', 'termsAccepted', 'termsVersion']);
     assert.equal(body['accountType'], 'passenger');
   });
 
@@ -128,7 +136,7 @@ describe('adaptador http — o que vai no fio', () => {
   });
 
   test('baseUrl com prefixo de caminho e barra final funciona', async () => {
-    server.script('GET /api/v1/auth/me', okReply(ACCOUNT));
+    server.script('GET /api/v1/auth/me', okReply({ ...ACCOUNT, consent: CONSENT_UP_TO_DATE }));
     const result = await adapter({ baseUrl: `${server.url}/api/` }).me('qualquer');
     assert.ok(result.ok);
   });
@@ -145,7 +153,7 @@ describe('adaptador http — o que vai no fio', () => {
       assert.throws(() => createIdentityHttpAdapter({ ...base, baseUrl }), /baseUrl/, baseUrl);
     }
     for (const appVersion of ['', '1.0 beta', 'a\r\nX-Evil: 1', 'x'.repeat(41)]) {
-      assert.throws(() => createIdentityHttpAdapter({ ...base, baseUrl: server.url, appVersion }), /appVersion/);
+      assert.throws(() => createIdentityHttpAdapter({ ...base, baseUrl: server.url, appVersion, allowInsecureHttp: true }), /appVersion/);
     }
   });
 });
@@ -222,9 +230,222 @@ describe('adaptador http — mapeamento de erro (kind estável + code do servido
   });
 
   test('conta de OUTRO tipo na resposta não entra na sessão (accountType é fixo por app)', async () => {
-    server.script('GET /v1/auth/me', okReply({ ...ACCOUNT, accountType: 'driver' }));
+    server.script('GET /v1/auth/me', okReply({ ...ACCOUNT, accountType: 'driver', consent: CONSENT_UP_TO_DATE }));
     const result = await adapter().me('x');
     assert.ok(!result.ok && result.error.kind === 'unknown');
+  });
+});
+
+describe('adaptador http — Termos e Política com a versão exibida (M-2)', () => {
+  const registered = { status: 201, body: { ok: true, data: { account: ACCOUNT, verification: { required: true, emailSent: true, resendAfterSeconds: 60 } } } };
+  const envelope = (code: string, extras: Record<string, unknown> = {}) => ({ ok: false, error: { code, message: `msg ${code}`, ...extras } });
+  const NEW_VERSIONS = { terms: 'termos-v4', privacy: 'privacidade-v6' };
+
+  test('o cadastro leva as versões que a tela exibiu, exatamente como vieram (nunca uma constante do pacote)', async () => {
+    server.script('POST /v1/auth/register', registered);
+    // Dois pares diferentes, ambos com formato válido: uma constante no pacote só acertaria um deles.
+    for (const shown of [{ terms: 'termos-v3', privacy: 'privacidade-v5' }, { terms: '2027.01.15', privacy: 'p:9+b_x' }]) {
+      const result = await adapter().register({ ...REGISTER, termsVersion: shown.terms, privacyVersion: shown.privacy });
+      assert.ok(result.ok);
+      const body = server.last('POST', '/v1/auth/register')?.body as Record<string, unknown>;
+      assert.equal(body['termsVersion'], shown.terms);
+      assert.equal(body['privacyVersion'], shown.privacy);
+      assert.equal(body['termsAccepted'], true, 'as caixas de seleção continuam indo');
+    }
+  });
+
+  test('legalCurrent: GET com o perfil do app na querystring, sem Bearer nem corpo; devolve os dois documentos', async () => {
+    const result = await adapter().legalCurrent();
+
+    assert.ok(result.ok);
+    assert.equal(result.origin, 'real');
+    assert.deepEqual(result.data, legalCurrentBody('passenger'));
+    const request = server.last('GET', '/v1/legal/current');
+    assert.equal(request?.query, 'audience=passenger');
+    assert.equal(request?.headers['authorization'], undefined, 'texto legal é público: sem sessão');
+    assert.equal(request?.headers['x-app-version'], APP_VERSION);
+    assert.equal(request?.rawBody, '');
+
+    const driver = await createIdentityHttpAdapter({ baseUrl: server.url, accountType: 'driver', appVersion: APP_VERSION, allowInsecureHttp: true }).legalCurrent();
+    assert.ok(driver.ok && driver.data.audience === 'driver');
+    assert.equal(server.last('GET', '/v1/legal/current')?.query, 'audience=driver');
+  });
+
+  test('legalCurrent: o servidor sem textos (503 consent_unavailable) e o erro de perfil chegam como erro, não como documento', async () => {
+    server.script('GET /v1/legal/current', { status: 503, body: envelope('consent_unavailable') });
+    const down = await adapter().legalCurrent();
+    assert.ok(!down.ok && down.error.kind === 'unavailable' && down.error.code === 'consent_unavailable');
+  });
+
+  const view = (version = 'termos-v3') => ({ version, sha256: 'a'.repeat(64), publishedAt: '2026-11-20T12:00:00.000Z', url: `https://textos.example.com/t/${version}` });
+  const badCurrent: ReadonlyArray<[string, unknown]> = [
+    ['perfil de OUTRO app', { ...legalCurrentBody('driver') }],
+    ['sem a Política', { audience: 'passenger', terms: view() }],
+    ['sem audience', { terms: view(), privacy: view('p1') }],
+    ['versão com espaço', { audience: 'passenger', terms: view('termos v3'), privacy: view('p1') }],
+    ['versão vazia', { audience: 'passenger', terms: view(''), privacy: view('p1') }],
+    ['sha256 curto', { audience: 'passenger', terms: { ...view(), sha256: 'a'.repeat(63) }, privacy: view('p1') }],
+    ['sha256 em maiúsculas', { audience: 'passenger', terms: { ...view(), sha256: 'A'.repeat(64) }, privacy: view('p1') }],
+    ['url javascript:', { audience: 'passenger', terms: { ...view(), url: 'javascript:alert(1)' }, privacy: view('p1') }],
+    ['url relativa', { audience: 'passenger', terms: { ...view(), url: '/textos/termos-v3' }, privacy: view('p1') }],
+    ['url com credencial embutida', { audience: 'passenger', terms: { ...view(), url: 'https://user:pw@textos.example.com/t' }, privacy: view('p1') }],
+    ['publishedAt inválido', { audience: 'passenger', terms: { ...view(), publishedAt: 'ontem' }, privacy: view('p1') }],
+    ['lista em vez de objeto', []],
+    ['texto', 'Termos de Uso'],
+  ];
+  for (const [name, data] of badCurrent) {
+    test(`legalCurrent: corpo fora do contrato (${name}) vira unknown, não texto para a tela`, async () => {
+      server.script('GET /v1/legal/current', okReply(data));
+      const result = await adapter().legalCurrent();
+      assert.ok(!result.ok && result.error.kind === 'unknown');
+    });
+  }
+
+  test('me traz o consent: com pendências, em dia, ou null (API sem os textos)', async () => {
+    const pending = [{ document: 'terms', ...view('termos-v4') }, { document: 'privacy', ...view('privacidade-v6') }];
+    server.script('GET /v1/auth/me', okReply({ ...ACCOUNT, consent: { upToDate: false, pending } }));
+    const withPending = await adapter().me('x');
+    assert.ok(withPending.ok && withPending.data.consent?.upToDate === false);
+    assert.deepEqual(withPending.data.consent?.pending.map((item) => `${item.document}:${item.version}`), ['terms:termos-v4', 'privacy:privacidade-v6']);
+
+    server.script('GET /v1/auth/me', okReply({ ...ACCOUNT, consent: CONSENT_UP_TO_DATE }));
+    const upToDate = await adapter().me('x');
+    assert.ok(upToDate.ok && upToDate.data.consent?.upToDate === true && upToDate.data.consent.pending.length === 0);
+    assert.equal(upToDate.data.id, ACCOUNT.id, 'a conta continua igual');
+
+    server.script('GET /v1/auth/me', okReply({ ...ACCOUNT, consent: null }));
+    const unavailable = await adapter().me('x');
+    assert.ok(unavailable.ok && unavailable.data.consent === null, 'null = textos indisponíveis na API; a sessão vale');
+  });
+
+  const badConsent: ReadonlyArray<[string, Record<string, unknown>]> = [
+    ['consent ausente (resposta fora do contrato, não "em dia")', { ...ACCOUNT }],
+    ['upToDate verdadeiro com pendência', { ...ACCOUNT, consent: { upToDate: true, pending: [{ document: 'terms', ...view() }] } }],
+    ['upToDate falso sem pendência', { ...ACCOUNT, consent: { upToDate: false, pending: [] } }],
+    ['documento repetido', { ...ACCOUNT, consent: { upToDate: false, pending: [{ document: 'terms', ...view() }, { document: 'terms', ...view('v2') }] } }],
+    ['documento desconhecido', { ...ACCOUNT, consent: { upToDate: false, pending: [{ document: 'cookies', ...view() }] } }],
+    ['consent texto', { ...ACCOUNT, consent: 'em dia' }],
+    ['upToDate não booleano', { ...ACCOUNT, consent: { upToDate: 'sim', pending: [] } }],
+  ];
+  for (const [name, data] of badConsent) {
+    test(`me: ${name} vira unknown`, async () => {
+      server.script('GET /v1/auth/me', okReply(data));
+      const result = await adapter().me('x');
+      assert.ok(!result.ok && result.error.kind === 'unknown');
+    });
+  }
+
+  test('acceptConsents: POST com Bearer e SÓ as versões enviadas; devolve o estado do aceite', async () => {
+    server.script('POST /v1/auth/consents', okReply({ consent: { upToDate: false, pending: [{ document: 'privacy', ...view('privacidade-v5') }] } }));
+    const only = await adapter().acceptConsents('tok-de-acesso', { termsVersion: 'termos-v3' });
+    assert.ok(only.ok && only.data.upToDate === false && only.data.pending[0]?.document === 'privacy');
+    let request = server.last('POST', '/v1/auth/consents');
+    assert.deepEqual(request?.body, { termsVersion: 'termos-v3' }, 'só o que a tela exibiu: nenhum campo extra, nenhuma versão inventada');
+    assert.equal(request?.headers['authorization'], 'Bearer tok-de-acesso');
+
+    server.script('POST /v1/auth/consents', okReply({ consent: CONSENT_UP_TO_DATE }));
+    const both = await adapter().acceptConsents('tok', { termsVersion: 'termos-v3', privacyVersion: 'privacidade-v5', ...({ role: 'admin' } as object) });
+    assert.ok(both.ok && both.data.upToDate);
+    request = server.last('POST', '/v1/auth/consents');
+    assert.deepEqual(Object.keys(request?.body as object).sort(), ['privacyVersion', 'termsVersion']);
+
+    server.script('POST /v1/auth/consents', okReply({ semConsent: true }));
+    const strange = await adapter().acceptConsents('tok', { termsVersion: 'x' });
+    assert.ok(!strange.ok && strange.error.kind === 'unknown');
+  });
+
+  for (const route of ['register', 'consents'] as const) {
+    test(`409 consent_outdated em ${route}: error.current vem completo e do perfil do app`, async () => {
+      const path = route === 'register' ? 'POST /v1/auth/register' : 'POST /v1/auth/consents';
+      server.script(path, { status: 409, body: envelope('consent_outdated', { current: legalCurrentBody('passenger', NEW_VERSIONS) }) });
+      const result = route === 'register'
+        ? await adapter().register(REGISTER)
+        : await adapter().acceptConsents('x', { termsVersion: 'termos-v3', privacyVersion: 'privacidade-v5' });
+
+      assert.ok(!result.ok);
+      assert.equal(result.error.kind, 'conflict');
+      assert.equal(result.error.kind === 'conflict' && result.error.reason, 'consent_outdated');
+      assert.equal(result.error.code, 'consent_outdated');
+      assert.deepEqual(result.error.current, legalCurrentBody('passenger', NEW_VERSIONS), 'a tela mostra ESTES textos e reenvia');
+    });
+  }
+
+  test('409 consent_outdated com current inválido, de outro perfil ou ausente sai SEM current (a tela chama legalCurrent)', async () => {
+    for (const current of [undefined, null, 'x', { audience: 'passenger' }, legalCurrentBody('driver', NEW_VERSIONS), { ...legalCurrentBody('passenger'), terms: view('com espaço') }]) {
+      server.script('POST /v1/auth/register', { status: 409, body: envelope('consent_outdated', current === undefined ? {} : { current }) });
+      const result = await adapter().register(REGISTER);
+      assert.ok(!result.ok && result.error.code === 'consent_outdated' && result.error.kind === 'conflict');
+      assert.equal(result.error.current, undefined, JSON.stringify(current));
+    }
+  });
+
+  test('só o consent_outdated carrega current: o mesmo campo em outro erro é ignorado', async () => {
+    server.script('POST /v1/auth/register', { status: 409, body: envelope('email_taken', { current: legalCurrentBody('passenger', NEW_VERSIONS) }) });
+    const result = await adapter().register(REGISTER);
+    assert.ok(!result.ok && result.error.current === undefined);
+  });
+});
+
+describe('IdentityClient sobre http — fluxo dos Termos (M-2)', () => {
+  test('a tela lê legalCurrent, cadastra com as versões que leu e, depois de uma publicação, o 409 devolve o que mostrar de novo', async () => {
+    server.legal = { terms: 'termos-v7', privacy: 'privacidade-v9' };
+    const identity = client();
+
+    const shown = await identity.legalCurrent();
+    assert.ok(shown.ok);
+    const first = await identity.register({ ...REGISTER, termsVersion: shown.data.terms.version, privacyVersion: shown.data.privacy.version });
+    assert.ok(first.ok, 'a versão exibida era a vigente');
+    assert.equal((server.last('POST', '/v1/auth/register')?.body as Record<string, unknown>)['termsVersion'], 'termos-v7');
+
+    server.legal = { terms: 'termos-v8', privacy: 'privacidade-v9' }; // o jurídico publicou enquanto a pessoa lia
+    const stale = await identity.register({ ...REGISTER, termsVersion: shown.data.terms.version, privacyVersion: shown.data.privacy.version });
+    assert.ok(!stale.ok && stale.error.code === 'consent_outdated' && stale.error.kind === 'conflict');
+    assert.equal(stale.error.current?.terms.version, 'termos-v8');
+    assert.equal(server.count('POST', '/v1/auth/register'), 2, 'o cliente NÃO reenviou sozinho com a versão nova: quem aceita tem de ver o texto');
+
+    const reshown = stale.error.current;
+    assert.ok(reshown);
+    const again = await identity.register({ ...REGISTER, termsVersion: reshown.terms.version, privacyVersion: reshown.privacy.version });
+    assert.ok(again.ok, 'depois de a tela mostrar de novo, o reenvio passa');
+  });
+
+  test('acceptConsents usa a sessão: com o access token vencido renova UMA vez e repete', async () => {
+    const identity = client();
+    assert.ok((await identity.login({ identifier: EMAIL, password: PASSWORD })).ok);
+    server.requests.length = 0;
+    server.expireAccessTokens();
+
+    const result = await identity.acceptConsents({ termsVersion: LEGAL.terms, privacyVersion: LEGAL.privacy });
+
+    assert.ok(result.ok && result.data.upToDate);
+    assert.equal(server.count('POST', '/v1/auth/refresh'), 1);
+    assert.equal(server.count('POST', '/v1/auth/consents'), 2, 'a tentativa com o token vencido e a repetição');
+  });
+
+  test('reaceite com versão que deixou de ser a vigente: 409 com a vigente, sem repetir sozinho', async () => {
+    const identity = client();
+    assert.ok((await identity.login({ identifier: EMAIL, password: PASSWORD })).ok);
+    server.legal = { terms: 'termos-v8', privacy: LEGAL.privacy };
+
+    const result = await identity.acceptConsents({ termsVersion: LEGAL.terms, privacyVersion: LEGAL.privacy });
+
+    assert.ok(!result.ok && result.error.kind === 'conflict' && result.error.code === 'consent_outdated');
+    assert.equal(result.error.current?.terms.version, 'termos-v8');
+    assert.equal(server.count('POST', '/v1/auth/consents'), 1);
+    assert.deepEqual(identity.session.getState(), { status: 'signed_in' }, 'um 409 de aceite não derruba a sessão');
+  });
+
+  test('sem sessão, acceptConsents não chega ao servidor', async () => {
+    const result = await client().acceptConsents({ termsVersion: LEGAL.terms });
+    assert.ok(!result.ok && result.error.code === 'no_session');
+    assert.equal(server.count('POST', '/v1/auth/consents'), 0);
+  });
+
+  test('me devolve a conta e o consent pelo cliente', async () => {
+    const identity = client();
+    assert.ok((await identity.login({ identifier: EMAIL, password: PASSWORD })).ok);
+    const me = await identity.me();
+    assert.ok(me.ok && me.data.publicId === ACCOUNT.publicId && me.data.consent?.upToDate === true);
   });
 });
 
@@ -376,6 +597,150 @@ describe('IdentityClient sobre http — sessão e renovação de ponta a ponta',
   });
 });
 
+describe('IdentityClient sobre http — M-4: um intermediário não derruba a sessão', () => {
+  // O que um WAF, CDN ou regra de proxy devolve em /refresh quando muda a configuração ou marca o IP.
+  const intermediaries: ReadonlyArray<[string, { status: number; body?: unknown; rawBody?: string }]> = [
+    ['403 de WAF com HTML', { status: 403, rawBody: '<html><h1>Access denied</h1></html>' }],
+    ['401 de proxy sem corpo', { status: 401, rawBody: '' }],
+    ['401 com envelope que não é do refresh', { status: 401, body: { ok: false, error: { code: 'unauthorized', message: 'x' } } }],
+    ['400 de proxy', { status: 400, rawBody: 'Bad Request' }],
+    ['403 JSON de desafio anti-bot', { status: 403, body: { ok: false, error: { code: 'bot_challenge', message: 'x' } } }],
+  ];
+  for (const [name, reply] of intermediaries) {
+    test(`${name}: ninguém é deslogado e, quando o intermediário sai do caminho, a MESMA sessão renova`, async () => {
+      let now = Date.now();
+      const storage = createMemorySessionStorage();
+      const identity = client({ storage, clock: () => now });
+      assert.ok((await identity.login({ identifier: EMAIL, password: PASSWORD })).ok);
+      const before = await storage.getItem(KEYS.session);
+      server.expireAccessTokens();
+      server.refreshOverride = reply;
+
+      const blocked = await Promise.all(Array.from({ length: 3 }, () => identity.me()));
+
+      for (const result of blocked) assert.ok(!result.ok && result.error.kind === 'unavailable' && result.error.code === undefined);
+      assert.deepEqual(identity.session.getState(), { status: 'signed_in' });
+      assert.equal(await storage.getItem(KEYS.session), before, 'a sessão guardada não foi tocada');
+      assert.equal(server.count('POST', '/v1/auth/refresh'), 1, 'um pedido só: o descanso vale');
+
+      server.refreshOverride = null;
+      now += 61_000;
+      const recovered = await identity.me();
+      assert.ok(recovered.ok, 'o refresh nunca foi rotacionado pelo intermediário: continua valendo no servidor');
+      assert.equal(server.count('POST', '/v1/auth/refresh'), 2);
+    });
+  }
+
+  test('controle positivo: o 401 invalid_refresh_token DE VERDADE ainda encerra a sessão', async () => {
+    const storage = createMemorySessionStorage();
+    const identity = client({ storage });
+    assert.ok((await identity.login({ identifier: EMAIL, password: PASSWORD })).ok);
+    server.expireAccessTokens();
+    server.refreshOverride = { status: 401, body: { ok: false, error: { code: 'invalid_refresh_token', message: 'Sessão expirada.' } } };
+
+    const result = await identity.me();
+
+    assert.ok(!result.ok && result.error.kind === 'unauthorized' && result.error.code === 'invalid_refresh_token');
+    assert.deepEqual(identity.session.getState(), { status: 'signed_out', reason: 'session_expired' });
+    assert.equal(await storage.getItem(KEYS.session), null);
+  });
+});
+
+describe('IdentityClient sobre http — B-8: pontas soltas de sessão', () => {
+  const credentials = { identifier: EMAIL, password: PASSWORD };
+  const storedRefresh = async (storage: ReturnType<typeof createMemorySessionStorage>): Promise<string> => {
+    const session = parseStoredSession(await storage.getItem(KEYS.session));
+    assert.ok(session, 'há sessão guardada');
+    return session.refreshToken;
+  };
+
+  test('login por cima de uma sessão aberta revoga a anterior NO SERVIDOR (sem sessão órfã)', async () => {
+    const storage = createMemorySessionStorage();
+    const identity = client({ storage });
+    assert.ok((await identity.login(credentials)).ok);
+    const first = await storedRefresh(storage);
+
+    assert.ok((await identity.login(credentials)).ok); // segunda sessão, por cima da primeira
+    await waitFor(() => server.count('POST', '/v1/auth/logout') === 1, 'a revogação da primeira sessão chegar ao servidor');
+
+    assert.equal((server.last('POST', '/v1/auth/logout')?.body as Record<string, unknown>)['refreshToken'], first);
+    const probe = await adapter().refresh(first);
+    assert.ok(!probe.ok && probe.error.code === 'invalid_refresh_token', 'a família da primeira sessão morreu no servidor');
+    const me = await identity.me();
+    assert.ok(me.ok, 'e a sessão nova segue viva');
+    assert.notEqual(await storedRefresh(storage), first);
+  });
+
+  test('login logo na abertura do app (antes de restore) também revoga a sessão que estava guardada', async () => {
+    const storage = createMemorySessionStorage();
+    assert.ok((await client({ storage }).login(credentials)).ok);
+    const first = await storedRefresh(storage);
+
+    const reopened = client({ storage }); // outra abertura: a sessão está no cofre, mas ninguém leu ainda
+    assert.deepEqual(reopened.session.getState(), { status: 'unknown' }, 'pré-condição: restore ainda não rodou');
+    assert.ok((await reopened.login(credentials)).ok);
+    await waitFor(() => server.count('POST', '/v1/auth/logout') === 1, 'a revogação da sessão guardada chegar ao servidor');
+
+    assert.equal((server.last('POST', '/v1/auth/logout')?.body as Record<string, unknown>)['refreshToken'], first);
+  });
+
+  test('logout sem o servidor: sai do local, e na abertura seguinte a revogação é repetida e a sessão morre no servidor', async () => {
+    const storage = createMemorySessionStorage();
+    const identity = client({ storage });
+    assert.ok((await identity.login(credentials)).ok);
+    const refreshToken = await storedRefresh(storage);
+    server.script('POST /v1/auth/logout', { status: 503, body: { ok: false, error: { code: 'unavailable', message: 'x' } } }, { once: true });
+
+    const out = await identity.logout();
+
+    assert.ok(out.ok && out.data.serverRevoked === false);
+    assert.equal(await storage.getItem(KEYS.session), null);
+    assert.ok((await storage.getItem(KEYS.pendingRevocations))?.includes(refreshToken), 'a revogação ficou guardada');
+
+    const reopened = client({ storage }); // o app abre de novo, agora com o servidor de volta
+    await reopened.session.restore();
+    await waitFor(() => server.count('POST', '/v1/auth/logout') === 2, 'a revogação ser repetida na abertura');
+
+    assert.equal((server.last('POST', '/v1/auth/logout')?.body as Record<string, unknown>)['refreshToken'], refreshToken);
+    const probe = await adapter().refresh(refreshToken);
+    assert.ok(!probe.ok && probe.error.code === 'invalid_refresh_token', 'agora o servidor também revogou');
+    await waitForAsync(async () => (await storage.getItem(KEYS.pendingRevocations)) === null, 'a fila esvaziar');
+  });
+});
+
+describe('adaptador http — B-8d: http só em desenvolvimento', () => {
+  const base = { accountType: 'passenger', appVersion: APP_VERSION } as const;
+
+  test('http: é recusado na montagem, em qualquer host, sem allowInsecureHttp', () => {
+    for (const baseUrl of ['http://api.exemplo.com', 'http://192.168.0.10:3000', 'http://localhost:3000', 'HTTP://API.EXEMPLO.COM/v1', 'http://10.0.2.2:3000/api']) {
+      assert.throws(() => createIdentityHttpAdapter({ ...base, baseUrl }), /https/, baseUrl);
+      assert.throws(() => createIdentityHttpAdapter({ ...base, baseUrl, allowInsecureHttp: false }), /https/, `${baseUrl} (false explícito)`);
+      assert.throws(
+        () => createIdentityClient({ mode: 'http', baseUrl, accountType: 'passenger', platform: 'android', appVersion: APP_VERSION }),
+        /https/,
+        `${baseUrl} (pelo cliente)`,
+      );
+    }
+  });
+
+  test('allowInsecureHttp: true libera o http (desenvolvimento) e https nunca precisa dele', () => {
+    assert.doesNotThrow(() => createIdentityHttpAdapter({ ...base, baseUrl: 'http://10.0.2.2:3000', allowInsecureHttp: true }));
+    assert.doesNotThrow(() => createIdentityClient({ mode: 'http', baseUrl: 'http://localhost:3000', accountType: 'passenger', platform: 'android', appVersion: APP_VERSION, allowInsecureHttp: true }));
+    assert.doesNotThrow(() => createIdentityHttpAdapter({ ...base, baseUrl: 'https://api.exemplo.com' }));
+    assert.doesNotThrow(() => createIdentityClient({ mode: 'http', baseUrl: 'https://api.exemplo.com/v1', accountType: 'passenger', platform: 'ios', appVersion: APP_VERSION }));
+  });
+
+  test('allowInsecureHttp não afrouxa o resto: outro esquema, query e fragmento seguem recusados', () => {
+    for (const baseUrl of ['ftp://exemplo.com', 'http://exemplo.com/?a=1', 'https://exemplo.com/#x', 'não é url']) {
+      assert.throws(() => createIdentityHttpAdapter({ ...base, baseUrl, allowInsecureHttp: true }), /baseUrl/, baseUrl);
+    }
+  });
+
+  test('o modo mock não tem baseUrl e portanto nada a recusar', () => {
+    assert.doesNotThrow(() => createIdentityClient({ mode: 'mock', accountType: 'passenger', platform: 'android', appVersion: APP_VERSION }));
+  });
+});
+
 describe('installationId', () => {
   test('é gerado UMA vez, persistido pela porta e reaproveitado por outro cliente com o mesmo cofre', async () => {
     const storage = createMemorySessionStorage();
@@ -430,7 +795,7 @@ describe('installationId', () => {
 
 describe('createIdentityClient — configuração', () => {
   test('falha alto na montagem: modo, tipo de conta, versão, plataforma e baseUrl', () => {
-    const base = { mode: 'http', baseUrl: server.url, accountType: 'passenger', platform: 'android', appVersion: APP_VERSION } as const;
+    const base = { mode: 'http', baseUrl: server.url, accountType: 'passenger', platform: 'android', appVersion: APP_VERSION, allowInsecureHttp: true } as const;
     assert.throws(() => createIdentityClient({ ...base, mode: 'qualquer' as 'http' }), /mode/);
     assert.throws(() => createIdentityClient({ ...base, accountType: 'admin' as 'driver' }), /accountType/);
     assert.throws(() => createIdentityClient({ ...base, appVersion: '1 2' }), /appVersion/);
@@ -442,7 +807,7 @@ describe('createIdentityClient — configuração', () => {
   });
 
   test('sem appVersion o cabeçalho sai como "unknown" (visível, nunca uma versão inventada)', async () => {
-    const { appVersion: _omit, ...rest } = { mode: 'http', baseUrl: server.url, accountType: 'passenger', platform: 'android', appVersion: 'x' } as const;
+    const { appVersion: _omit, ...rest } = { mode: 'http', baseUrl: server.url, accountType: 'passenger', platform: 'android', appVersion: 'x', allowInsecureHttp: true } as const;
     void _omit;
     await createIdentityClient(rest).login({ identifier: EMAIL, password: PASSWORD });
     assert.equal(server.last('POST', '/v1/auth/login')?.headers['x-app-version'], 'unknown');

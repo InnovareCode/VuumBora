@@ -10,18 +10,29 @@
  * (`invalid_code` + `attemptsLeft`, `code_locked`, `code_expired`), teto de redefinição (`reset_locked`), login
  * (`invalid_credentials`, `email_not_verified`, espera progressiva `too_many_attempts` + `retryAfterSeconds`), tokens
  * rotativos (reuso do refresh revoga a família), `logout` idempotente, `logout-all`, `me`.
- * O que NÃO reproduz: limites por IP/e-mail do servidor, e-mail de verdade, `503`. O telefone é validado só pela
- * contagem de dígitos (o servidor normaliza com regras brasileiras).
+ * Termos e Política (M-2): `legalCurrent`, as versões exibidas no cadastro (`400 consent_required` se faltam,
+ * `409 consent_outdated` + `error.current` se não são as vigentes), `consent` em `me` e o reaceite (`acceptConsents`).
+ * O catálogo (`options.legal`) é o do MOCK: o cliente nunca o consulta por baixo dos panos, a tela tem de passar as
+ * versões que renderizou. `sha256` (zeros) e `url` (`.invalid`) são fictícios: não há texto para baixar nem conferir.
+ * O que NÃO reproduz: limites por IP/e-mail do servidor, e-mail de verdade, `503`, `requires_reacceptance=false`
+ * (toda mudança de versão é material). O telefone é validado só pela contagem de dígitos (o servidor normaliza com
+ * regras brasileiras).
  *
  * Código de verificação do mock: `123456` (configurável). Nunca é aceito pelo servidor real.
  */
 import { apiErrorFromReply, type ServerReply } from './errors';
+import { LEGAL_VERSION_PATTERN } from './legal';
 import { failWith, succeed } from './result';
 import type {
   AccountSummary,
   AccountType,
+  AccountWithConsent,
   AuthenticatedSession,
+  ConsentStatus,
+  CurrentLegal,
   IdentityApi,
+  LegalDocumentName,
+  LegalDocumentView,
   RegisterOutput,
   ResendOutput,
   SessionTokens,
@@ -35,8 +46,21 @@ export interface MockIdentityOptions {
   readonly latencyMs?: number;
   /** Relógio em ms (injetável nos testes). */
   readonly clock?: () => number;
+  /**
+   * Versões vigentes dos Termos e da Política NESTE mock (padrão `mock-1` nas duas). O mock lê o objeto a cada
+   * chamada: para simular "o jurídico publicou uma versão nova", troque `terms`/`privacy` depois do cadastro e o
+   * `me` passa a listar o aceite pendente.
+   */
+  readonly legal?: MockLegalVersions;
 }
 
+/** Mutável de propósito (ver `MockIdentityOptions.legal`). */
+export interface MockLegalVersions {
+  terms: string;
+  privacy: string;
+}
+
+const LEGAL_DOCUMENTS: readonly LegalDocumentName[] = ['terms', 'privacy'];
 const ACCESS_TTL_MS = 15 * 60 * 1000;
 const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const CODE_ATTEMPTS = 5;
@@ -81,6 +105,8 @@ interface MockAccount {
   verification: CodeState | null;
   reset: CodeState | null;
   resetFailures: number;
+  /** Última versão aceita de cada documento (a do cadastro, ou a do último reaceite). */
+  accepted: { terms: string; privacy: string };
 }
 
 interface Family {
@@ -100,6 +126,11 @@ export function createMockIdentityApi(accountType: AccountType, options: MockIde
   const latencyMs = options.latencyMs ?? 0;
   const code = options.verificationCode ?? '123456';
   if (!/^[0-9]{6}$/.test(code)) throw new Error('createMockIdentityApi: verificationCode precisa ter 6 dígitos.');
+  const legal: MockLegalVersions = options.legal ?? { terms: 'mock-1', privacy: 'mock-1' };
+  for (const document of LEGAL_DOCUMENTS) {
+    if (!LEGAL_VERSION_PATTERN.test(legal[document])) throw new Error(`createMockIdentityApi: legal.${document} não é uma versão válida.`);
+  }
+  const legalPublishedAt = new Date(clock()).toISOString();
 
   const accounts = new Map<string, MockAccount>();
   const families = new Map<string, Family>();
@@ -116,6 +147,32 @@ export function createMockIdentityApi(accountType: AccountType, options: MockIde
   function summary(account: MockAccount): AccountSummary {
     return { id: account.id, publicId: account.publicId, fullName: account.fullName, accountType };
   }
+
+  function legalView(document: LegalDocumentName): LegalDocumentView {
+    const version = legal[document];
+    return {
+      version,
+      sha256: '0'.repeat(64), // fictício: o mock não tem texto
+      publishedAt: legalPublishedAt,
+      url: `https://textos.mock.invalid/${document}/${accountType}/${version}`,
+    };
+  }
+
+  function currentLegal(): CurrentLegal {
+    return { audience: accountType, terms: legalView('terms'), privacy: legalView('privacy') };
+  }
+
+  /** O que falta aceitar: os documentos cuja versão aceita não é a vigente, na ordem Termos, Política. */
+  function consentOf(account: MockAccount): ConsentStatus {
+    const pending = LEGAL_DOCUMENTS.filter((document) => account.accepted[document] !== legal[document]).map((document) => ({
+      document,
+      ...legalView(document),
+    }));
+    return { upToDate: pending.length === 0, pending };
+  }
+
+  const outdated = (): Outcome<never> =>
+    reject(409, 'consent_outdated', 'Os Termos ou a Política mudaram. Leia a versão atual e aceite de novo.', { current: currentLegal() });
 
   function findByIdentifier(identifier: string): MockAccount | undefined {
     const trimmed = identifier.trim();
@@ -216,7 +273,7 @@ export function createMockIdentityApi(accountType: AccountType, options: MockIde
   // ---- operações (síncronas; o invólucro abaixo põe latência e converte para Result) ----
 
   function register(raw: Record<string, unknown>): Outcome<RegisterOutput> {
-    const { fullName, email, password, phone, birthDate, termsAccepted, privacyAccepted } = raw;
+    const { fullName, email, password, phone, birthDate, termsAccepted, privacyAccepted, termsVersion, privacyVersion } = raw;
     if (!isString(fullName) || fullName.trim().length < 1 || fullName.trim().length > 120) return INVALID_BODY();
     if (!isString(email) || !EMAIL_PATTERN.test(email.trim()) || email.trim().length > 254) {
       return reject(400, 'invalid_email', 'E-mail inválido.');
@@ -231,11 +288,17 @@ export function createMockIdentityApi(accountType: AccountType, options: MockIde
     if (termsAccepted !== true || privacyAccepted !== true) {
       return reject(400, 'consent_required', 'É preciso aceitar os Termos de Uso e a Política de Privacidade.');
     }
+    // As versões que a tela EXIBIU: ausentes ou malformadas = o app não disse o que mostrou (como a API).
+    if (!isString(termsVersion) || !isString(privacyVersion) || !LEGAL_VERSION_PATTERN.test(termsVersion) || !LEGAL_VERSION_PATTERN.test(privacyVersion)) {
+      return reject(400, 'consent_required', 'É preciso aceitar os Termos de Uso e a Política de Privacidade.');
+    }
     const age = checkBirthDate(birthDate);
     if (!age.ok) return age;
     if (isString(phone) && phone.trim() !== '' && !/^\d{10,13}$/.test(phone.replace(/\D/g, ''))) {
       return reject(400, 'invalid_phone', 'Telefone inválido.');
     }
+    // Versão que não é a vigente: nada é criado e a resposta traz o que mostrar de novo (antes de qualquer limite).
+    if (termsVersion !== legal.terms || privacyVersion !== legal.privacy) return outdated();
 
     const normalizedEmail = email.trim().toLowerCase();
     const existing = findByIdentifier(normalizedEmail);
@@ -253,6 +316,7 @@ export function createMockIdentityApi(accountType: AccountType, options: MockIde
       verification: newCode(),
       reset: null,
       resetFailures: 0,
+      accepted: { terms: termsVersion, privacy: privacyVersion },
     };
     accounts.set(account.id, account);
     return accept({
@@ -371,18 +435,36 @@ export function createMockIdentityApi(accountType: AccountType, options: MockIde
     return accept(undefined); // idempotente
   }
 
+  /** `POST /consents`: tudo ou nada; a versão enviada tem de ser a vigente; idempotente (reaceitar a mesma não muda nada). */
+  function acceptConsents(account: MockAccount, raw: Record<string, unknown>): Outcome<ConsentStatus> {
+    const { termsVersion, privacyVersion } = raw;
+    const sent: Array<[LegalDocumentName, string]> = [];
+    for (const [document, value] of [['terms', termsVersion], ['privacy', privacyVersion]] as const) {
+      if (value === undefined) continue;
+      if (!isString(value) || !LEGAL_VERSION_PATTERN.test(value)) {
+        return reject(400, 'consent_required', 'Informe a versão dos Termos e/ou da Política que foi exibida.');
+      }
+      sent.push([document, value]);
+    }
+    if (sent.length === 0) return reject(400, 'consent_required', 'Informe a versão dos Termos e/ou da Política que foi exibida.');
+    if (sent.some(([document, version]) => version !== legal[document])) return outdated();
+    for (const [document, version] of sent) account.accepted[document] = version;
+    return accept(consentOf(account));
+  }
+
   // ---- invólucro: latência + conversão para Result ----
 
   async function respond<T>(operation: () => Outcome<T>): Promise<Result<T>> {
     if (latencyMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, latencyMs));
     const outcome = operation();
-    return outcome.ok ? succeed(outcome.data, 'mock') : failWith(apiErrorFromReply(outcome.reply));
+    return outcome.ok ? succeed(outcome.data, 'mock') : failWith(apiErrorFromReply(outcome.reply, accountType));
   }
 
   const asBody = (input: unknown): Record<string, unknown> =>
     typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
 
   return {
+    legalCurrent: () => respond(() => accept(currentLegal())),
     register: (input) => respond(() => register(asBody(input))),
     verifyEmail: (input) => respond(() => verifyEmail(asBody(input))),
     resendVerification: (input) => respond(() => resendVerification(asBody(input))),
@@ -397,9 +479,14 @@ export function createMockIdentityApi(accountType: AccountType, options: MockIde
         return auth.ok ? accept({ revokedSessions: revokeAccount(auth.data.id) }) : auth;
       }),
     me: (accessToken) =>
+      respond((): Outcome<AccountWithConsent> => {
+        const auth = authenticate(accessToken);
+        return auth.ok ? accept({ ...summary(auth.data), consent: consentOf(auth.data) }) : auth;
+      }),
+    acceptConsents: (accessToken, input) =>
       respond(() => {
         const auth = authenticate(accessToken);
-        return auth.ok ? accept(summary(auth.data)) : auth;
+        return auth.ok ? acceptConsents(auth.data, asBody(input)) : auth;
       }),
   };
 }

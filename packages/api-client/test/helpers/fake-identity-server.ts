@@ -12,6 +12,8 @@ import type { AddressInfo } from 'node:net';
 export interface RecordedRequest {
   readonly method: string;
   readonly path: string;
+  /** A querystring crua (`audience=passenger`), sem o `?`. Vazia se não houve. */
+  readonly query: string;
   readonly headers: IncomingHttpHeaders;
   readonly body: unknown;
   readonly rawBody: string;
@@ -29,6 +31,21 @@ export interface ScriptedReply {
 export const ACCOUNT = { id: '00000000-0000-4000-8000-000000000001', publicId: 'VB100001', fullName: 'Ana Souza', accountType: 'passenger' as const };
 export const EMAIL = 'ana@example.com';
 export const PASSWORD = 'senha-segura-1';
+
+/** Versões VIGENTES do servidor falso (a tela de teste as lê de `legalCurrent()`; nenhuma é constante do pacote). */
+export const LEGAL = { terms: 'termos-v3', privacy: 'privacidade-v5' } as const;
+
+export function legalCurrentBody(audience: string, versions: { terms: string; privacy: string } = LEGAL): Record<string, unknown> {
+  const view = (document: string, version: string) => ({
+    version,
+    sha256: (document === 'terms' ? 'a' : 'b').repeat(64),
+    publishedAt: '2026-11-20T12:00:00.000Z',
+    url: `https://textos.example.com/${document}/${audience}/${version}`,
+  });
+  return { audience, terms: view('terms', versions.terms), privacy: view('privacy', versions.privacy) };
+}
+
+export const CONSENT_UP_TO_DATE = { upToDate: true, pending: [] } as const;
 
 interface TokenPair {
   readonly access: string;
@@ -53,6 +70,8 @@ export class FakeIdentityServer {
   private meArrivals = 0;
   /** Se definido, TODO `POST /refresh` responde isto (ex.: 401 `invalid_refresh_token` ou 503). */
   refreshOverride: ScriptedReply | null = null;
+  /** As versões vigentes que `GET /legal/current` e o reaceite usam. Mude no meio do teste para "publicar" outra. */
+  legal: { terms: string; privacy: string } = { ...LEGAL };
 
   url = '';
 
@@ -127,8 +146,8 @@ export class FakeIdentityServer {
       body = undefined;
     }
     const method = request.method ?? 'GET';
-    const path = (request.url ?? '/').split('?')[0] ?? '/';
-    const recorded: RecordedRequest = { method, path, headers: request.headers, body, rawBody };
+    const [path = '/', query = ''] = (request.url ?? '/').split('?');
+    const recorded: RecordedRequest = { method, path, query, headers: request.headers, body, rawBody };
     this.requests.push(recorded);
 
     const send = async (reply: ScriptedReply, extraDelay = 0): Promise<void> => {
@@ -155,6 +174,15 @@ export class FakeIdentityServer {
     const fields = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
 
     switch (route) {
+      case 'POST /v1/auth/register': {
+        // Só o que importa à M-2: as versões que o app diz ter EXIBIDO. Ausentes = 400; não vigentes = 409 com a vigente.
+        const { termsVersion, privacyVersion } = fields;
+        if (typeof termsVersion !== 'string' || typeof privacyVersion !== 'string') return send(error(400, 'consent_required'));
+        if (termsVersion !== this.legal.terms || privacyVersion !== this.legal.privacy) {
+          return send(error(409, 'consent_outdated', { current: legalCurrentBody('passenger', this.legal) }));
+        }
+        return send({ status: 201, body: { ok: true, data: { account: ACCOUNT, verification: { required: true, emailSent: true, resendAfterSeconds: 60 } } } });
+      }
       case 'POST /v1/auth/login': {
         if (fields['identifier'] === 'pendente@example.com' && fields['password'] === PASSWORD) return send(error(403, 'email_not_verified'));
         if (fields['identifier'] !== EMAIL || fields['password'] !== PASSWORD) return send(error(401, 'invalid_credentials'));
@@ -182,12 +210,26 @@ export class FakeIdentityServer {
         for (const record of this.refreshState.values()) this.deadFamilies.add(record.familyId);
         return send(ok({ revokedSessions: 1 }));
       }
+      case 'GET /v1/legal/current': {
+        const audience = new URLSearchParams(query).get('audience');
+        if (audience !== 'passenger' && audience !== 'driver') return send(error(400, 'invalid_body'));
+        return send(ok(legalCurrentBody(audience, this.legal)));
+      }
+      case 'POST /v1/auth/consents': {
+        if (!this.accessIsLive(bearer)) return send(error(401, 'unauthorized'));
+        const sent = [fields['termsVersion'], fields['privacyVersion']];
+        if (sent.every((value) => value === undefined)) return send(error(400, 'consent_required'));
+        if ((fields['termsVersion'] !== undefined && fields['termsVersion'] !== this.legal.terms) || (fields['privacyVersion'] !== undefined && fields['privacyVersion'] !== this.legal.privacy)) {
+          return send(error(409, 'consent_outdated', { current: legalCurrentBody('passenger', this.legal) }));
+        }
+        return send(ok({ consent: CONSENT_UP_TO_DATE }));
+      }
       case 'GET /v1/auth/me': {
         const arrival = this.meArrivals;
         this.meArrivals += 1;
         const delay = this.meDelayMs(arrival);
         if (!this.accessIsLive(bearer)) return send(error(401, 'unauthorized'), delay);
-        return send(ok(ACCOUNT), delay);
+        return send(ok({ ...ACCOUNT, consent: CONSENT_UP_TO_DATE }), delay);
       }
       default:
         return send(error(404, 'not_found'));

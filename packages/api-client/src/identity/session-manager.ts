@@ -9,21 +9,38 @@
  *  2. Quem recebe 401 só renova se o access token que ele usou AINDA é o atual. Se outra chamada já renovou, repete
  *     com o token novo sem renovar de novo (um 401 tardio não pode causar um 2º `/refresh`).
  *  3. O novo refresh é GRAVADO no armazenamento antes de liberar as chamadas em espera.
- *  4. Recusa DEFINITIVA do refresh (401 `invalid_refresh_token`, ou 400/403) = UM logout local, sem nova tentativa; as
- *     chamadas pendentes recebem `unauthorized`. Falha TRANSITÓRIA (sem rede, 5xx, 429) NÃO desloga: a sessão fica,
- *     as pendentes recebem o erro de rede, e a próxima chamada tenta renovar de novo.
+ *  4. Recusa DEFINITIVA do refresh = UM logout local, sem nova tentativa; as chamadas pendentes recebem
+ *     `unauthorized`. Definitiva só é a recusa que o SERVIDOR DA API assinou com um `code` do contrato (401
+ *     `invalid_refresh_token`; 400 `invalid_body`): STATUS sozinho não basta, porque um proxy, WAF ou CDN também
+ *     responde 401/403/400 e isso não pode derrubar a sessão de todo mundo (M-4). Falha TRANSITÓRIA (sem rede, 5xx,
+ *     429 e qualquer recusa sem `code` reconhecido) NÃO desloga: a sessão fica e a próxima chamada tenta renovar.
  *  4b. Depois de uma falha transitória o MESMO refresh não é tentado de novo por alguns segundos: se o servidor chegou
  *     a processar a renovação e só a resposta se perdeu, repetir seria reuso (família revogada). Quem pedir nesse
  *     intervalo recebe o mesmo erro, sem rede.
- *  5. `epoch`: login e logout mudam a época. Resposta de renovação ou 401 de uma época anterior é descartada — um
- *     pedido da conta A nunca é repetido com o token da conta B, e um logout nunca é desfeito por renovação tardia.
+ *  5. `epoch`: login e logout mudam a época. O resultado de qualquer chamada (sucesso ou erro) e de qualquer renovação
+ *     de uma época anterior é descartado — nada da conta A chega à tela da conta B, um pedido da conta A nunca é
+ *     repetido com o token da B, e um logout nunca é desfeito por renovação tardia.
+ *  6. Sessão que sai do aparelho sem o servidor confirmar (logout sem rede; login por cima de uma sessão aberta) é
+ *     revogada em segundo plano e, se a revogação falhar por rede/servidor, GUARDADA numa fila e repetida na abertura
+ *     (`restore`). A API revoga a FAMÍLIA inteira por qualquer refresh dela, então o mais novo que conhecemos serve.
  *
  * Limite conhecido (plano §4, item 5): se a resposta do `/refresh` se perder DEPOIS de o servidor rotacionar, o
- * cliente fica com o refresh velho e a próxima tentativa é reuso → logout forçado. O cliente não resolve sozinho.
+ * cliente fica com o refresh velho e a próxima tentativa é reuso → logout forçado. O cliente não resolve sozinho
+ * (o descanso da regra 4b não evita: repetir depois dele ainda é reuso; só uma tolerância no servidor evitaria).
  */
 import type { ApiError, Result } from '../index';
+import { NETWORK_ERROR } from './errors';
 import { failWith, NO_SESSION, succeed } from './result';
-import { parseStoredSession, serializeSession, type SessionStoragePort, storageKeys } from './session-storage';
+import {
+  MAX_PENDING_REVOCATIONS,
+  parsePendingRevocations,
+  parseStoredSession,
+  type PendingRevocation,
+  serializePendingRevocations,
+  serializeSession,
+  type SessionStoragePort,
+  storageKeys,
+} from './session-storage';
 import type { AccountType, IdentityApi, SessionTokens } from './types';
 
 export type SignOutReason = 'none' | 'user' | 'session_expired';
@@ -39,11 +56,15 @@ export interface SessionManager {
   /** Instantâneo estável: o mesmo objeto enquanto nada muda (serve a `useSyncExternalStore`). */
   getState(): SessionState;
   subscribe(listener: (state: SessionState) => void): () => void;
-  /** Lê a sessão do armazenamento. Idempotente; `run` e `getValidAccessToken` chamam sozinhos se faltar. */
+  /**
+   * Lê a sessão do armazenamento e, em segundo plano, repete as revogações que ficaram pendentes. Idempotente;
+   * `run` e `getValidAccessToken` chamam sozinhos se faltar.
+   */
   restore(): Promise<SessionState>;
   /**
    * Executa uma chamada autenticada. Em `401` renova (voo único) e repete UMA vez. `call` recebe o access token e
-   * devolve o `Result` da porta de dados; qualquer outro erro é devolvido sem repetir.
+   * devolve o `Result` da porta de dados; qualquer outro erro é devolvido sem repetir. Se a sessão mudar (logout,
+   * troca de conta) enquanto a chamada está no ar, o resultado é descartado: `unauthorized` com `code: 'no_session'`.
    */
   run<T>(call: (accessToken: string) => Promise<Result<T>>): Promise<Result<T>>;
   /**
@@ -57,9 +78,12 @@ export interface SessionManager {
 
 /** O que só o `IdentityClient` usa (login e logout). */
 export interface SessionController extends SessionManager {
-  /** Passa a usar uma sessão nova (depois de um login). Só devolve com os tokens GRAVADOS. */
+  /**
+   * Passa a usar uma sessão nova (depois de um login). Só devolve com os tokens GRAVADOS. Se havia outra sessão
+   * aberta, ela é revogada no servidor em segundo plano (sem esperar: o login não depende disso).
+   */
   adopt(tokens: SessionTokens): Promise<void>;
-  /** Encerra: espera um refresh em voo, apaga o local e revoga no servidor (best effort). */
+  /** Encerra: espera um refresh em voo, apaga o local e revoga no servidor (best effort, com fila se falhar). */
   signOut(): Promise<Result<{ readonly serverRevoked: boolean }>>;
   /** Apaga a sessão local (ex.: depois de `logout-all`, que já revogou tudo no servidor). */
   endLocal(reason: Exclude<SignOutReason, 'none'>): Promise<void>;
@@ -81,15 +105,50 @@ const DEFAULT_MIN_VALIDITY_SECONDS = 60;
 const TRANSIENT_COOLDOWN_MS = 5_000;
 const MAX_COOLDOWN_MS = 60_000;
 
-/** Recusas em que repetir não adianta: o refresh está morto (ou malformado). O resto é transitório. */
-function isDefinitiveRefreshRejection(error: ApiError): boolean {
-  return error.kind === 'unauthorized' || error.kind === 'validation' || error.kind === 'forbidden';
+/**
+ * Os `code`s com que a API recusa um refresh para sempre, e em quais STATUS (`kind`) ela os emite. `invalid_refresh_token`
+ * é o `401` do contrato (qualquer recusa); `invalid_body` é o `400` de um refresh malformado guardado. `validation` e
+ * `forbidden` aceitam `invalid_refresh_token` por tolerância: o `code` é a assinatura do servidor, o status é só o
+ * transporte. Código que não está aqui — ou nenhum — NÃO é prova de que o refresh morreu.
+ * (`Map`, não objeto: o `code` vem do fio e `constructor`/`__proto__` casam com o padrão de código.)
+ */
+const DEFINITIVE_REFRESH_CODES: ReadonlyMap<string, ReadonlySet<ApiError['kind']>> = new Map([
+  ['invalid_refresh_token', new Set<ApiError['kind']>(['unauthorized', 'validation', 'forbidden'])],
+  ['invalid_body', new Set<ApiError['kind']>(['validation'])],
+]);
+
+function isDefinitiveRefreshRejection(error: ApiError): error is ApiError & { readonly code: string } {
+  return error.code !== undefined && DEFINITIVE_REFRESH_CODES.get(error.code)?.has(error.kind) === true;
+}
+
+/**
+ * O que quem pediu recebe quando a renovação falhou SEM ser definitiva. Uma recusa sem `code` reconhecido (401/403/400
+ * de intermediário) NÃO pode chegar à tela como `unauthorized`/`forbidden`/`validation`: a sessão continua aberta, e a
+ * tela leria "sessão acabou" ou "sem permissão". Vira `unavailable` (tente de novo), sem inventar `code`.
+ */
+function transientRefreshError(error: ApiError): ApiError {
+  switch (error.kind) {
+    case 'unauthorized':
+    case 'forbidden':
+    case 'validation':
+    case 'not_found':
+    case 'conflict':
+      return { kind: 'unavailable', retryable: true, ...(error.retryAfterSeconds !== undefined ? { retryAfterSeconds: error.retryAfterSeconds } : {}) };
+    default:
+      return error;
+  }
+}
+
+/** Falha de revogação que vale repetir depois (o servidor pode nem ter visto o pedido). O resto (400...) não melhora. */
+function isRetryableRevocationFailure(error: ApiError): boolean {
+  return error.kind === 'network' || error.kind === 'unavailable' || error.kind === 'rate_limited' || error.kind === 'unknown';
 }
 
 export function createSessionController(options: SessionControllerOptions): SessionController {
   const { api, storage, origin } = options;
   const clock = options.clock ?? Date.now;
-  const sessionKey = storageKeys(options.accountType).session;
+  const keys = storageKeys(options.accountType);
+  const sessionKey = keys.session;
 
   let state: SessionState = { status: 'unknown' };
   let tokens: SessionTokens | null = null;
@@ -97,6 +156,7 @@ export function createSessionController(options: SessionControllerOptions): Sess
   let refreshInFlight: Promise<Result<string>> | null = null;
   let lastTransientFailure: { refreshToken: string; epoch: number; until: number; error: ApiError } | null = null;
   let restorePromise: Promise<SessionState> | null = null;
+  let flushPromise: Promise<void> | null = null;
   let writeChain: Promise<void> = Promise.resolve();
   const listeners = new Set<(next: SessionState) => void>();
 
@@ -138,24 +198,91 @@ export function createSessionController(options: SessionControllerOptions): Sess
     return enqueueWrite(() => storage.removeItem(sessionKey));
   }
 
+  // ---- revogação no servidor de sessão que saiu do aparelho (regra 6) ----
+
+  async function revokeOnServer(refreshToken: string): Promise<Result<void>> {
+    try {
+      return await api.logout(refreshToken);
+    } catch {
+      return failWith(NETWORK_ERROR);
+    }
+  }
+
+  /** Leitura-modificação-gravação da fila, DENTRO da fila de escritas (duas alterações nunca se pisam). */
+  function updatePendingRevocations(mutate: (items: PendingRevocation[]) => PendingRevocation[]): Promise<void> {
+    return enqueueWrite(async () => {
+      const next = mutate(parsePendingRevocations(await storage.getItem(keys.pendingRevocations)));
+      if (next.length === 0) await storage.removeItem(keys.pendingRevocations);
+      else await storage.setItem(keys.pendingRevocations, serializePendingRevocations(next));
+    });
+  }
+
+  function queueRevocation(session: SessionTokens): Promise<void> {
+    const item: PendingRevocation = { refreshToken: session.refreshToken, expiresAt: session.refreshTokenExpiresAt };
+    return updatePendingRevocations((items) =>
+      [...items.filter((other) => other.refreshToken !== item.refreshToken && Date.parse(other.expiresAt) > clock()), item].slice(
+        -MAX_PENDING_REVOCATIONS,
+      ),
+    );
+  }
+
+  /** Revoga e, se o servidor não pôde ouvir agora, guarda para a próxima abertura. Nunca rejeita. */
+  async function revokeOrQueue(session: SessionTokens): Promise<boolean> {
+    const result = await revokeOnServer(session.refreshToken);
+    if (!result.ok && isRetryableRevocationFailure(result.error)) await queueRevocation(session);
+    return result.ok;
+  }
+
+  /** Repete, uma a uma, as revogações guardadas. Para na primeira falha de rede (as outras falhariam igual). */
+  function flushPendingRevocations(): Promise<void> {
+    flushPromise ??= (async () => {
+      let items: PendingRevocation[];
+      try {
+        items = parsePendingRevocations(await storage.getItem(keys.pendingRevocations));
+      } catch (error) {
+        reportStorageError(error);
+        return;
+      }
+      const settled = new Set<string>();
+      for (const item of items) {
+        if (Date.parse(item.expiresAt) <= clock()) {
+          settled.add(item.refreshToken); // venceu: o servidor já não o aceita, não há o que revogar
+          continue;
+        }
+        const result = await revokeOnServer(item.refreshToken);
+        if (result.ok || !isRetryableRevocationFailure(result.error)) settled.add(item.refreshToken);
+        else break;
+      }
+      if (settled.size > 0) await updatePendingRevocations((current) => current.filter((item) => !settled.has(item.refreshToken)));
+    })().finally(() => {
+      flushPromise = null;
+    });
+    return flushPromise;
+  }
+
   function restore(): Promise<SessionState> {
     restorePromise ??= (async () => {
       let raw: string | null = null;
+      let readFailed = false;
       try {
         raw = await storage.getItem(sessionKey);
       } catch (error) {
+        readFailed = true;
         reportStorageError(error);
       }
       // Um login pode ter terminado durante a leitura: o que está em memória é mais novo que o disco.
-      if (state.status !== 'unknown') return state;
-      const stored = parseStoredSession(raw);
-      if (stored) {
-        tokens = stored;
-        setState({ status: 'signed_in' });
-      } else {
-        if (raw !== null) void enqueueWrite(() => storage.removeItem(sessionKey)); // lixo/versão estranha: limpa
-        setState({ status: 'signed_out', reason: 'none' });
+      if (state.status === 'unknown') {
+        const stored = parseStoredSession(raw);
+        if (stored) {
+          tokens = stored;
+          setState({ status: 'signed_in' });
+        } else {
+          if (raw !== null) void enqueueWrite(() => storage.removeItem(sessionKey)); // lixo/versão estranha: limpa
+          setState({ status: 'signed_out', reason: 'none' });
+        }
       }
+      // Cofre que nem lê a sessão não vai ler a fila: tenta de novo na próxima abertura, sem reportar duas vezes.
+      if (!readFailed) void flushPendingRevocations();
       return state;
     })();
     return restorePromise;
@@ -166,7 +293,7 @@ export function createSessionController(options: SessionControllerOptions): Sess
     try {
       result = await api.refresh(refreshToken);
     } catch {
-      result = failWith({ kind: 'network', retryable: true });
+      result = failWith(NETWORK_ERROR);
     }
 
     // Login/logout durante o voo: este resultado pertence a uma sessão que já não existe. Descarta.
@@ -181,12 +308,14 @@ export function createSessionController(options: SessionControllerOptions): Sess
 
     if (isDefinitiveRefreshRejection(result.error)) {
       await clearLocal('session_expired'); // UM logout local (só existe UM voo)
-      return failWith({ kind: 'unauthorized', code: result.error.code ?? 'invalid_refresh_token' });
+      return failWith({ kind: 'unauthorized', code: result.error.code }); // o `code` é o do servidor, nunca inventado
     }
-    // Transitório: a sessão fica, quem pediu recebe o erro e o mesmo refresh descansa um pouco (regra 4b).
-    const waitMs = Math.min(MAX_COOLDOWN_MS, Math.max(TRANSIENT_COOLDOWN_MS, (result.error.retryAfterSeconds ?? 0) * 1000));
-    lastTransientFailure = { refreshToken, epoch: startEpoch, until: clock() + waitMs, error: result.error };
-    return failWith(result.error);
+    // Transitório (inclui recusa sem `code` reconhecido): a sessão fica, quem pediu recebe o erro e o mesmo refresh
+    // descansa um pouco (regra 4b).
+    const error = transientRefreshError(result.error);
+    const waitMs = Math.min(MAX_COOLDOWN_MS, Math.max(TRANSIENT_COOLDOWN_MS, (error.retryAfterSeconds ?? 0) * 1000));
+    lastTransientFailure = { refreshToken, epoch: startEpoch, until: clock() + waitMs, error };
+    return failWith(error);
   }
 
   function refreshShared(): Promise<Result<string>> {
@@ -215,13 +344,17 @@ export function createSessionController(options: SessionControllerOptions): Sess
     const used = { epoch, accessToken: tokens.accessToken };
 
     const first = await call(used.accessToken);
+    // Login/logout enquanto a chamada estava no ar: a resposta é de uma sessão que já não existe (da conta A, talvez,
+    // e quem espera agora é a B). Descarta o resultado inteiro, sucesso ou erro.
+    if (epoch !== used.epoch) return failWith(NO_SESSION);
     if (first.ok || first.error.kind !== 'unauthorized') return first;
 
     const renewed = await accessTokenAfterRejection(used);
     if (!renewed.ok) return failWith(renewed.error);
     // Login/logout enquanto esperávamos a gravação do refresh: o token novo é de OUTRA sessão. Não repete.
     if (epoch !== used.epoch) return failWith(NO_SESSION);
-    return call(renewed.data); // UMA repetição: um segundo 401 volta como está, sem laço
+    const second = await call(renewed.data); // UMA repetição: um segundo 401 volta como está, sem laço
+    return epoch === used.epoch ? second : failWith(NO_SESSION);
   }
 
   async function getValidAccessToken(minValiditySeconds = DEFAULT_MIN_VALIDITY_SECONDS): Promise<Result<string>> {
@@ -253,10 +386,15 @@ export function createSessionController(options: SessionControllerOptions): Sess
     },
 
     async adopt(next) {
+      const previous = tokens; // a sessão que este login substitui (o refresh mais novo que conhecemos)
       epoch += 1; // descarta renovação/401 pendentes da sessão anterior
       tokens = next;
       setState({ status: 'signed_in' });
-      await enqueueWrite(() => storage.setItem(sessionKey, serializeSession(next)));
+      const written = enqueueWrite(() => storage.setItem(sessionKey, serializeSession(next)));
+      // Sessão aberta por baixo do login: sem isto ela ficaria viva no servidor até vencer (sessão órfã). Nunca
+      // revoga a que acabou de ser adotada, e não faz o login esperar pela rede.
+      if (previous && previous.refreshToken !== next.refreshToken) void revokeOrQueue(previous);
+      await written;
     },
 
     async signOut() {
@@ -266,12 +404,7 @@ export function createSessionController(options: SessionControllerOptions): Sess
       if (!current) return succeed({ serverRevoked: false }, origin);
 
       const cleared = clearLocal('user'); // local primeiro: a pessoa já saiu, aconteça o que acontecer na rede
-      let serverRevoked = false;
-      try {
-        serverRevoked = (await api.logout(current.refreshToken)).ok;
-      } catch {
-        serverRevoked = false;
-      }
+      const serverRevoked = await revokeOrQueue(current); // sem rede: fica na fila e é repetido na próxima abertura
       await cleared;
       return succeed({ serverRevoked }, origin);
     },

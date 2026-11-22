@@ -13,8 +13,12 @@ import { succeed } from './result';
 import { createSessionController, type SessionManager } from './session-manager';
 import { createMemorySessionStorage, type SessionStoragePort, storageKeys } from './session-storage';
 import type {
+  AcceptConsentsInput,
   AccountSummary,
   AccountType,
+  AccountWithConsent,
+  ConsentStatus,
+  CurrentLegal,
   DevicePlatform,
   ForgotPasswordInput,
   IdentityApi,
@@ -45,6 +49,11 @@ export interface IdentityClientConfig extends ClientConfig {
   readonly randomId?: () => string;
   readonly fetch?: typeof fetch;
   readonly timeoutMs?: number;
+  /**
+   * Só `mode: 'http'`: aceita `baseUrl` com `http:` (texto claro). SÓ DESENVOLVIMENTO (o app passa `__DEV__`).
+   * Padrão `false`: numa build de loja a montagem recusa `http:`, em vez de mandar senha e tokens em claro.
+   */
+  readonly allowInsecureHttp?: boolean;
   /** Só `mode: 'mock'`: código, latência e relógio do mock. */
   readonly mock?: MockIdentityOptions;
   /** Relógio em ms (injetável nos testes). */
@@ -59,6 +68,15 @@ export interface IdentityClient {
   /** Estado, assinatura e `run`/`getValidAccessToken` para as portas de dados e para o WebSocket. */
   readonly session: SessionManager;
 
+  /**
+   * Os Termos e a Política VIGENTES do perfil do app (sem sessão). A tela mostra ESTES textos e, ao cadastrar, manda as
+   * versões deles em `RegisterInput.termsVersion/privacyVersion`: o aceite prova o que a pessoa viu.
+   */
+  legalCurrent(): Promise<Result<CurrentLegal>>;
+  /**
+   * Cadastro. Com versões que não são as vigentes devolve `conflict` / `reason: 'consent_outdated'` e `error.current`
+   * (a tela mostra de novo e reenvia). O cliente nunca reenvia sozinho com a versão nova.
+   */
   register(input: RegisterInput): Promise<Result<RegisterOutput>>;
   verifyEmail(input: VerifyEmailInput): Promise<Result<{ readonly verified: true }>>;
   resendVerification(input: ResendVerificationInput): Promise<Result<ResendOutput>>;
@@ -70,14 +88,23 @@ export interface IdentityClient {
   logout(): Promise<Result<{ readonly serverRevoked: boolean }>>;
   /** Revoga TODAS as sessões da conta e sai deste aparelho. */
   logoutAll(): Promise<Result<{ readonly revokedSessions: number }>>;
-  me(): Promise<Result<AccountSummary>>;
+  /** A conta e o estado do aceite (`consent`: o que falta aceitar, ou `null` se a API está sem os textos). */
+  me(): Promise<Result<AccountWithConsent>>;
+  /**
+   * Reaceite (precisa de sessão; renova o token e repete UMA vez em 401). Manda as versões que a tela de reaceite
+   * exibiu; versão que não é a vigente = `conflict` / `consent_outdated` com `error.current`. Idempotente.
+   */
+  acceptConsents(input: AcceptConsentsInput): Promise<Result<ConsentStatus>>;
 }
 
 const UNKNOWN_APP_VERSION = 'unknown';
 
 function resolvePlatform(config: IdentityClientConfig): DevicePlatform {
   if (config.platform !== undefined) return config.platform;
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') return 'web';
+  // Pelo `globalThis`, não pelos nomes `window`/`document`: o pacote não depende dos tipos de DOM (o passageiro e o
+  // motorista compilam sem a lib DOM de propósito, e o `typecheck` do pacote tem uma passada sem ela).
+  const browser = globalThis as { readonly window?: unknown; readonly document?: unknown };
+  if (browser.window !== undefined && browser.document !== undefined) return 'web';
   throw new Error('createIdentityClient: informe `platform` (android | ios | web) fora do navegador.');
 }
 
@@ -104,6 +131,7 @@ export function createIdentityClient(config: IdentityClientConfig): IdentityClie
       appVersion,
       timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       ...(config.fetch ? { fetch: config.fetch } : {}),
+      ...(config.allowInsecureHttp !== undefined ? { allowInsecureHttp: config.allowInsecureHttp } : {}),
     });
   } else {
     api = createMockIdentityApi(accountType, { ...(config.clock ? { clock: config.clock } : {}), ...config.mock });
@@ -132,6 +160,7 @@ export function createIdentityClient(config: IdentityClientConfig): IdentityClie
     mode,
     session: controller,
 
+    legalCurrent: () => api.legalCurrent(),
     register: (input) => api.register(input),
     verifyEmail: (input) => api.verifyEmail(input),
     resendVerification: (input) => api.resendVerification(input),
@@ -139,6 +168,9 @@ export function createIdentityClient(config: IdentityClientConfig): IdentityClie
     resetPassword: (input) => api.resetPassword(input),
 
     async login(input) {
+      // A sessão guardada tem de estar em memória ANTES do login: `adopt` revoga a que este login substitui, e não
+      // pode revogar o que ainda não leu (sessão órfã no servidor).
+      await controller.restore();
       const device = {
         installationId: await installationId(),
         platform,
@@ -162,5 +194,7 @@ export function createIdentityClient(config: IdentityClientConfig): IdentityClie
     },
 
     me: () => controller.run((accessToken) => api.me(accessToken)),
+
+    acceptConsents: (input) => controller.run((accessToken) => api.acceptConsents(accessToken, input)),
   };
 }

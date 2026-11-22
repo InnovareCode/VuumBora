@@ -7,6 +7,7 @@
  * "implicitamente falsa" (ARQUITETURA_E_REGRAS.md).
  */
 import type { DataOrigin } from '@vuumbora/domain';
+import type { CurrentLegal } from './identity/types';
 
 export type AdapterMode = 'mock' | 'http';
 
@@ -41,6 +42,13 @@ export interface ApiErrorExtras {
   readonly attemptsLeft?: number;
   /** Espera, em segundos, antes de tentar de novo (`too_many_attempts`, `reset_locked`). */
   readonly retryAfterSeconds?: number;
+  /**
+   * Só no `409 consent_outdated` (cadastro e reaceite): os Termos e a Política VIGENTES do perfil, no mesmo formato de
+   * `legalCurrent()`. É o que a tela mostra de novo antes de reenviar. Ausente se o corpo do 409 não trouxe uma
+   * `current` válida: nesse caso a tela chama `legalCurrent()`. O cliente NUNCA reenvia sozinho com a versão nova:
+   * quem aceita tem de ver o texto.
+   */
+  readonly current?: CurrentLegal;
 }
 
 /** Contrato de erro único para as duas apps: o `kind` de sempre + os extras do servidor. */

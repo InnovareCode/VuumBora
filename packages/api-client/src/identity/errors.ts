@@ -6,6 +6,8 @@
  * UI escolher o texto. Mensagens do servidor são fixas e em português, mas a UI não deve depender delas.
  */
 import type { ApiError, ApiErrorExtras, ApiErrorKind } from '../index';
+import { parseCurrentLegal } from './legal';
+import type { AccountType } from './types';
 
 export interface ServerReply {
   readonly status: number;
@@ -55,7 +57,12 @@ function kindForStatus(status: number, code: string | undefined, message: string
   return { kind: 'unknown', message };
 }
 
-export function apiErrorFromReply(reply: ServerReply): ApiError {
+/**
+ * `accountType`: o perfil do app. O `error.current` de um `409 consent_outdated` só é aceito se for deste perfil e
+ * tiver a forma completa; senão o erro sai sem `current` e a tela chama `legalCurrent()` (nada é inventado nem
+ * aproveitado pela metade).
+ */
+export function apiErrorFromReply(reply: ServerReply, accountType?: AccountType): ApiError {
   const envelope = isRecord(reply.body) && isRecord(reply.body['error']) ? reply.body['error'] : undefined;
   const rawCode = envelope?.['code'];
   const code = typeof rawCode === 'string' && CODE_PATTERN.test(rawCode) ? rawCode : undefined;
@@ -76,6 +83,10 @@ export function apiErrorFromReply(reply: ServerReply): ApiError {
   if (code !== undefined) extras.code = code;
   if (attemptsLeft !== undefined) extras.attemptsLeft = attemptsLeft;
   if (retryAfterSeconds !== undefined) extras.retryAfterSeconds = retryAfterSeconds;
+  if (code === 'consent_outdated') {
+    const current = parseCurrentLegal(envelope?.['current'], accountType);
+    if (current) extras.current = current;
+  }
 
   return { ...kindForStatus(reply.status, code, message), ...extras };
 }
