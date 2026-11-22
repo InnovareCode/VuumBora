@@ -122,7 +122,7 @@ ou para onde `QUALIDADE_TELA_BASELINE_DIR` apontar) — só rode depois de algu�
 | G-02, G-03, G-04, G-05, G-06 | assinatura premium, cor nos tokens, contagem de amarelo, tipografia | `lib/probes/estilo.mjs` | **parcial** — inventaria toda caixa; só G-03 (cor fora do conjunto) e G-04 (contagem de amarelo) viram achado automático. Ver "O que não foi validado": não conta amarelo vindo de gradiente |
 | G-09, G-11 (indício), G-12, G-13 (indício), G-21 | viewport, CTA visível sem rolar, sobreposição, alvo de toque | `lib/probes/geometria.mjs` | funcional |
 | G-10 | truncamento de texto | `lib/probes/texto.mjs` | funcional (sem lista de exceção — nenhuma tela desta rodada precisa) |
-| G-20 | contraste de texto | `lib/probes/contraste.mjs` | funcional sobre fundo sólido; fundo com imagem/gradiente fica "não medido" (ver limitações) |
+| G-20 | contraste de texto | `lib/probes/contraste.mjs` | funcional sobre fundo sólido (compõe alpha de camadas translúcidas empilhadas, ver nota 4 abaixo); fundo com imagem/gradiente fica "não medido" (ver limitações) |
 | G-22 (ordem de tabulação + anel visível) | Tab percorre os interativos, anel de foco visível no Chromium e no WebKit | `lib/probes/foco.mjs` | **adaptação do `ring6.mjs`/`ring.mjs` que a Íris deixou na passada 6** — mede o recorte focado × desfocado e exige contraste ≥ 3:1 em ≥ 60% de cada um dos 4 lados (não só `outline-style !== 'none'`), mais o controle de mouse (pressionar com o mouse não pode acender o mesmo anel). Hoje só roda no Chromium pela matriz principal — ver limitações sobre o WebKit |
 | G-22 (Enter e Espaço ativam) | ativação por teclado, refinada para `role="link"` | `lib/probes/ativacao-links.mjs` | **adaptação do `q4.mjs`** da Íris: Enter ativa; Espaço, Alt+Enter e segurar Enter (auto-repeat) não; controle — o clique de mouse tem que ativar, senão o link está morto e o resto não prova nada |
 | G-07b | comparação lado a lado com o alvo de 22/11 | `lib/side-by-side.mjs`, comando `lado-a-lado` | monta a imagem e o gabarito da tabela de 8 linhas; **quem julga "confere/diverge" é humano** (Íris/Apolo), a ferramenta não decide layout |
@@ -166,6 +166,29 @@ ou para onde `QUALIDADE_TELA_BASELINE_DIR` apontar) — só rode depois de algu�
    amostrar o pixel renderizado atrás do texto (um recorte da captura, não CSS
    computado), que é factível com a mesma infraestrutura de `anel-utils.mjs` mas
    não foi construído.
+   **Correção relacionada (22/11/2026, achado da Lyra):** `fundoEfetivo` parava no
+   PRIMEIRO ancestral com `backgroundColor` de alpha > 0 e usava o RGB dele puro —
+   falso positivo de REPROVAÇÃO em qualquer elemento "tingido" do design system
+   (`InlineAlert`, `StatusBadge`: pintam `rgba(cor, 0.1)` por cima do fundo real da
+   página). O "i" do `InlineAlert` info no M02 dava 1,92:1 (RGB cru da camada
+   translúcida) quando o pixel real, medido pela Lyra com screenshot+pngjs, é
+   ~7:1. Corrigido: `fundoEfetivo` agora compõe os alphas subindo a árvore
+   (Porter-Duff "over") até achar uma camada OPACA ou esgotar os ancestrais (nesse
+   caso assume branco, o canvas padrão do navegador).
+   **Verificado (números reais, não estimados):** o mesmo "i" do M02 agora dá
+   **7,41:1** (fundo composto calculado em `rgb(16,5, 23,5, 35,8)` — bate em
+   direção e ordem de grandeza com o pixel real da Lyra). Rodei a bateria completa
+   de novo (`sondas`, 40 combinações, pasta de saída própria — `.saida-vulcano-
+   teste/`, sem tocar na linha de base nem na `.saida` de ninguém, portas 9301/9302):
+   `contrasteReprovado` somado caiu de **8 para 0** — as 8 reprovações antigas eram
+   TODAS o mesmo falso positivo do "i" do `InlineAlert` do M02 (uma por combinação
+   de tamanho×estado, 8 no total); nenhuma das 5 telas desta rodada tem um caso de
+   contraste baixo DE VERDADE. Para provar que a correção não "cegou" a sonda, montei
+   um controle negativo à parte (fora da suíte, script ad-hoc): injetei um texto
+   `rgb(40,40,40)` sobre fundo opaco `rgb(30,30,30)` numa página real — a sonda
+   continuou reprovando (**1,13:1**, abaixo do limiar 4,5:1). O comparador de
+   contraste detecta contraste ruim de verdade; só parou de confundir "cor diluída"
+   com "cor ruim".
 5. **O anel de foco (G-22) só rodou no Chromium na matriz principal.** O WebKit
    que a máquina tem instalado (`webkit-2370`) não casa a revisão exata que
    nenhuma cópia do Playwright em cache do npx conhece — `lib/browsers.mjs` força
