@@ -1,11 +1,11 @@
 /** Camada de lógica de negócio — a rota nunca fala com o banco ou com bcrypt direto. */
 import { randomBytes, createHash } from 'node:crypto';
-import bcrypt from 'bcryptjs';
 import type { Pool } from 'pg';
 import type { AdminUser, AdminUserRecord } from '../domain/admin.js';
 import { roleRequiresTwoFactor, type TwoFactorConfig } from '../domain/two-factor.js';
 import { findAdminByEmail, findAdminRecordById } from '../repositories/admin-repository.js';
 import { accountKey, clearPairFailures, reserveFailureSlot } from '../repositories/admin-login-failure-repository.js';
+import { ADMIN_DUMMY_PASSWORD_HASH } from '../lib/admin-dummy-hash.js';
 import { reserveAdminBcrypt, withBcryptReservation, type BcryptReservation } from '../lib/bcrypt-pool.js';
 import { ipBucket, ipBucket48 } from '../lib/ip-bucket.js';
 import { DEFAULT_DELAY_SCHEDULE, type DelaySchedule } from '../lib/progressive-delay.js';
@@ -18,18 +18,8 @@ import {
   touchAdminSession,
 } from '../repositories/admin-session-repository.js';
 
-const BCRYPT_COST = 12;
 const SESSION_TOKEN_BYTES = 32;
 const CSRF_TOKEN_BYTES = 32;
-
-/**
- * Hash válido, mas de uma senha aleatória que nunca autentica ninguém —
- * gerado uma vez no boot (síncrono, UMA vez, antes de aceitar requisição). Serve só para o `bcrypt.compare` rodar com o
- * MESMO custo quando o e-mail não existe, para a resposta de login não
- * ficar mensuravelmente mais rápida nesse caso (timing attack de
- * enumeração de e-mail).
- */
-const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), BCRYPT_COST);
 
 export function hashToken(rawToken: string): string {
   return createHash('sha256').update(rawToken).digest('hex');
@@ -116,7 +106,7 @@ export type PasswordCheck =
 /**
  * Compara a senha sob a espera progressiva do par (e-mail + IP). A tentativa é RESERVADA antes do
  * bcrypt (concorrência) e devolvida se a senha estiver certa. Sempre roda
- * `bcrypt.compare` (hash real OU `DUMMY_PASSWORD_HASH`) — e-mail inexistente,
+ * `bcrypt.compare` (hash real OU `ADMIN_DUMMY_PASSWORD_HASH`) — e-mail inexistente,
  * senha errada e admin desativado não se distinguem por resposta nem por
  * tempo, e e-mail inexistente também conta no limite (sem oráculo de existência).
  * Falha de conta que existe vai para `admin_audit_log`; a de e-mail inexistente
@@ -144,7 +134,7 @@ async function verifyPasswordWithReservation(
   const slot = await reserveFailureSlot(pool, { ...pair, adminId: input.record?.id ?? null }, schedule);
   if (slot.kind === 'locked') return { kind: 'locked', retryAfterSeconds: slot.retryAfterSeconds };
 
-  const matches = await reservation.compare(input.password, input.record?.passwordHash ?? DUMMY_PASSWORD_HASH);
+  const matches = await reservation.compare(input.password, input.record?.passwordHash ?? ADMIN_DUMMY_PASSWORD_HASH);
   if (input.record && input.record.deactivatedAt === null && matches) {
     await clearPairFailures(pool, pair);
     return { kind: 'ok' };

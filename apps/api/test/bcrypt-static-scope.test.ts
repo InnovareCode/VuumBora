@@ -8,11 +8,20 @@
  * `src/**\/*.ts` e exige que só DOIS arquivos importem `bcryptjs` —
  *   - `lib/bcrypt-worker.ts`: a thread de trabalho do pool (roda fora da principal, de propósito — comentário no topo
  *     do arquivo);
- *   - `services/admin-auth-service.ts`: só o `DUMMY_PASSWORD_HASH`, gerado UMA vez no boot (síncrono, antes de
- *     aceitar requisição) para a defesa de tempo do login do admin — nunca em caminho de requisição.
+ *   - `lib/admin-dummy-hash.ts`: só o `ADMIN_DUMMY_PASSWORD_HASH`, gerado UMA vez no load do módulo (síncrono, antes
+ *     de aceitar requisição) para a defesa de tempo do login do admin — nunca em caminho de requisição.
  * Qualquer OUTRO arquivo que importe `bcryptjs` tirou uma comparação do pool: a thread principal volta a travar por
  * ~0,5 s (custo 12) a cada chamada, e a suíte toda (que usa custo 4) não vê nada — por isso a rede tem de ser
  * estática, não só a rajada.
+ *
+ * Achado Q7 da passada 7 da Íris (`docs/veredito-iris-s1-passada-7.md`): o mutante M8 (login do admin comparando a
+ * senha fora da pista, na thread principal) SOBREVIVIA a esta rede porque `services/admin-auth-service.ts` já
+ * importava `bcryptjs` por um motivo legítimo (o hash descartável) — um `bcrypt.compareSync` extra ali não
+ * acrescentava import novo. O hash descartável foi isolado em `lib/admin-dummy-hash.ts` por isso: o serviço de
+ * login do admin não tem mais nenhum motivo para importar `bcryptjs`, então QUALQUER import novo da biblioteca ali
+ * é em si o bypass, e esta rede o pega (prova em cópia descartável, não em teste permanente: aplicar o M8 —
+ * trocar `reservation.compare(...)` por `bcrypt.compareSync(...)` direto em `admin-auth-service.ts` — faz este
+ * teste falhar na hora; revertido, a suíte volta a passar).
  */
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -22,7 +31,7 @@ import { test } from 'node:test';
 
 const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
 const BCRYPTJS_IMPORT = /from\s+['"]bcryptjs['"]/;
-const ALLOWED = new Set(['lib/bcrypt-worker.ts', 'services/admin-auth-service.ts']);
+const ALLOWED = new Set(['lib/bcrypt-worker.ts', 'lib/admin-dummy-hash.ts']);
 
 function allTsFiles(dir: string): string[] {
   const out: string[] = [];
