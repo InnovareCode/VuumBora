@@ -70,7 +70,15 @@ export const AppShell = memo(function AppShell({
         />
       ) : null}
       {scroll ? (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        // `handled`: com o teclado aberto, o 1º toque num botão/link ATIVA o botão (padrão `never` só fecharia o
+        // teclado e exigiria um 2º toque — em formulário isso parece botão quebrado). `automaticallyAdjustKeyboardInsets`
+        // (iOS) sobe o conteúdo acima do teclado; no Android quem faz isso é o `adjustResize` da janela.
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+        >
           {content}
         </ScrollView>
       ) : (

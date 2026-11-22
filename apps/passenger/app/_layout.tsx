@@ -15,7 +15,8 @@ import { stackScreenOptions } from '../src/navigation/stackScreenOptions';
 
 /**
  * Layout raiz (Expo Router). Três grupos de rota:
- *   (auth)/  — rotas públicas (boas-vindas, login, cadastro): só existem SEM sessão.
+ *   (auth)/  — rotas públicas (boas-vindas, login, cadastro, código, esqueci/redefinir senha, termos e
+ *              privacidade): só existem SEM sessão.
  *   (app)/   — rotas do produto (home, corrida, histórico, perfil): só existem COM sessão.
  *   catalogo, mapbox-check — telas de desenvolvimento, fora dos grupos e FORA DO BUILD DE
  *              PRODUÇÃO (ver `metro.config.js`, variável VUUMBORA_BUILD_PROFILE).
@@ -28,7 +29,8 @@ import { stackScreenOptions } from '../src/navigation/stackScreenOptions';
  * com sessão, `/login` e `/cadastro` mandam para a Home.
  *
  * SafeAreaProvider entra aqui porque `AppShell` (@vuumbora/ui) usa SafeAreaView
- * por baixo — sem o provider as insets ficam zeradas.
+ * por baixo — sem o provider as insets ficam zeradas. A sessão é a do cliente de identidade
+ * (`src/identity/identityClient.ts`), não mais um estado de demonstração.
  *
  * Fonte da marca (Plus Jakarta Sans, 4 TTF estáticos — docs/tipografia.md): carrega
  * ANTES de qualquer tela aparecer. Sem isso, o primeiro frame sai na fonte do
@@ -53,6 +55,33 @@ function RootNavigator() {
   );
 }
 
+/**
+ * Só monta a navegação quando a fonte da marca E a sessão estão resolvidas. A sessão sai de `loading` quando o
+ * cliente de identidade termina de ler o cofre (memória hoje, SecureStore na A3). Antes disso a splash nativa
+ * continua na tela: montar o `Stack` cedo faria a guarda decidir com a sessão ainda desconhecida e piscar a P01.
+ */
+function RootGate({ fontsLoaded }: { readonly fontsLoaded: boolean }) {
+  const { status } = useSession();
+  const ready = fontsLoaded && status !== 'loading';
+
+  useEffect(() => {
+    if (ready) {
+      SplashScreen.hideAsync();
+    }
+  }, [ready]);
+
+  if (!ready) {
+    return null;
+  }
+
+  return (
+    <SafeAreaProvider>
+      <StatusBar style="light" />
+      <RootNavigator />
+    </SafeAreaProvider>
+  );
+}
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     PlusJakartaSans_400Regular,
@@ -61,22 +90,10 @@ export default function RootLayout() {
     PlusJakartaSans_700Bold,
   });
 
-  useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
-
-  if (!fontsLoaded) {
-    return null;
-  }
-
+  // O provider fica FORA do portão da fonte: a leitura do cofre começa em paralelo ao carregamento da fonte.
   return (
-    <SafeAreaProvider>
-      <StatusBar style="light" />
-      <SessionProvider>
-        <RootNavigator />
-      </SessionProvider>
-    </SafeAreaProvider>
+    <SessionProvider>
+      <RootGate fontsLoaded={fontsLoaded} />
+    </SessionProvider>
   );
 }

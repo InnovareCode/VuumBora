@@ -8,9 +8,10 @@
  * Borda de controle é sempre `theme.role.borderControl` (regra do DS: 3:1 garantido
  * nos quatro fundos; `border`/`borderEmphasis` são só decorativos).
  */
-import { memo, useState, type ReactNode } from 'react';
+import { memo, useState, type ComponentRef, type ReactNode, type Ref } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   StyleSheet,
   Text,
   TextInput as RNTextInput,
@@ -20,6 +21,9 @@ import {
 } from 'react-native';
 import { theme } from '@vuumbora/tokens';
 import { glyphStyle, textStyle } from './typography';
+
+/** O que `inputRef` entrega (`.focus()`, `.blur()`...): a instância do campo nativo. */
+export type TextInputHandle = ComponentRef<typeof RNTextInput>;
 
 export interface InputCoreProps {
   readonly label: string;
@@ -43,7 +47,25 @@ export interface InputCoreProps {
   /** Avisa o pai quando o campo ganha/perde foco (ex.: destacar qual campo está ativo numa busca com vários campos). */
   readonly onFocus?: () => void;
   readonly onBlur?: () => void;
+  /**
+   * Fluxo de teclado em formulário: `returnKeyType="next"` + `onSubmitEditing` que foca o próximo campo (via
+   * `inputRef`), ou envia o formulário no último. `inputRef` aponta para o `<TextInput>` nativo (não para o wrapper).
+   */
+  readonly inputRef?: Ref<TextInputHandle>;
+  readonly returnKeyType?: RNTextInputProps['returnKeyType'];
+  readonly onSubmitEditing?: () => void;
+  /** Dica de preenchimento automático do iOS (`oneTimeCode`, `emailAddress`...). No Android/web vale `autoComplete`. */
+  readonly textContentType?: RNTextInputProps['textContentType'];
+  /** `false` em e-mail, código e data: corretor ortográfico/autocorreção estragam o que a pessoa digitou. */
+  readonly autoCorrect?: boolean;
 }
+
+/**
+ * No web o <input> ganha o anel de foco padrão do navegador (retângulo branco DENTRO do campo). O indicador de foco
+ * do design system é a borda de 2pt do `field` (`ctaBackground`), que já cobre o campo inteiro — dois anéis, um dentro
+ * do outro, é ruído. O foco continua visível (pela borda do campo); só o anel interno do navegador sai.
+ */
+const WEB_NO_INNER_OUTLINE = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null;
 
 export const InputCore = memo(function InputCore({
   label,
@@ -66,6 +88,11 @@ export const InputCore = memo(function InputCore({
   rightAccessory,
   onFocus,
   onBlur,
+  inputRef,
+  returnKeyType,
+  onSubmitEditing,
+  textContentType,
+  autoCorrect,
 }: InputCoreProps) {
   const [focused, setFocused] = useState(false);
   const editable = !disabled && !loading;
@@ -93,6 +120,7 @@ export const InputCore = memo(function InputCore({
       >
         {leftAccessory ? <View style={styles.leftAccessory}>{leftAccessory}</View> : null}
         <RNTextInput
+          ref={inputRef}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -103,6 +131,11 @@ export const InputCore = memo(function InputCore({
           autoCapitalize={autoCapitalize}
           autoComplete={autoComplete}
           maxLength={maxLength}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+          textContentType={textContentType}
+          autoCorrect={autoCorrect}
+          spellCheck={autoCorrect}
           onFocus={() => {
             setFocused(true);
             onFocus?.();
@@ -111,9 +144,10 @@ export const InputCore = memo(function InputCore({
             setFocused(false);
             onBlur?.();
           }}
-          style={[styles.input, { color: disabled ? theme.role.textMuted : theme.role.textPrimary }]}
+          style={[styles.input, WEB_NO_INNER_OUTLINE, { color: disabled ? theme.role.textMuted : theme.role.textPrimary }]}
           accessibilityLabel={accessibilityLabel ?? label}
           accessibilityState={{ disabled: !editable }}
+          aria-invalid={error}
           aria-busy={loading}
           testID={testID}
         />
@@ -151,6 +185,9 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    // Estica o campo nativo até a altura do `field` (52pt): sem isto o <TextInput> media 37pt e o toque nas faixas de
+    // cima/baixo do campo não focava nada (alvo real abaixo dos 44pt do design system — medido no navegador).
+    alignSelf: 'stretch',
     ...textStyle('regular', 'body'),
     paddingVertical: theme.spacing['2'],
   },

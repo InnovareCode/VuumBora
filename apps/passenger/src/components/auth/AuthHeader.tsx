@@ -32,7 +32,9 @@ export const AuthHeader = memo(function AuthHeader({ title, subtitle, onBack }: 
       <View style={styles.logoRow}>
         <BrandLogo variant="lockup" size="sm" />
       </View>
-      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.title} accessibilityRole="header">
+        {title}
+      </Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
     </View>
   );

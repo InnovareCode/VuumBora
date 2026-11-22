@@ -13,6 +13,11 @@
  * Regras: estilos só via `theme` (nenhum HEX/dimensão literal); todo componente interativo tem
  * props tipadas, estados loading/disabled/error, rótulo de acessibilidade e teste de interação.
  *
+ * Identidade (B1, 21/11/2026 — usados pelo passageiro e prontos para o motorista, B2): CodeInput (código de
+ * 6 dígitos), DateInput (DD/MM/AAAA + `brazilianDateToIso`), ConsentCheckbox (aceite com acesso ao texto),
+ * LinkButton (link com alvo de 44pt), InlineAlert (aviso com tom, glifo e ações) e `useSecondsUntil`/`formatWait`
+ * (contagem regressiva por instante). Ainda NÃO estão em apps/passenger/app/catalogo.tsx.
+ *
  * Estado atual: catálogo base implementado (ver apps/passenger/app/catalogo.tsx). Avatar,
  * MockBadge, BottomTabBar e StarRating entraram depois da Etapa A inicial — ainda
  * faltam no catálogo visual (apps/passenger/app/catalogo.tsx).
@@ -52,6 +57,7 @@ export type { DangerButtonProps } from './DangerButton';
 
 export { TextInput } from './TextInput';
 export type { TextInputProps } from './TextInput';
+export type { TextInputHandle } from './InputCore';
 
 export { PasswordInput } from './PasswordInput';
 export type { PasswordInputProps } from './PasswordInput';
@@ -61,6 +67,23 @@ export type { PhoneInputProps } from './PhoneInput';
 
 export { SearchInput } from './SearchInput';
 export type { SearchInputProps } from './SearchInput';
+
+export { CodeInput } from './CodeInput';
+export type { CodeInputProps } from './CodeInput';
+
+export { DateInput, maskBrazilianDate, brazilianDateToIso } from './DateInput';
+export type { DateInputProps } from './DateInput';
+
+export { ConsentCheckbox } from './ConsentCheckbox';
+export type { ConsentCheckboxProps } from './ConsentCheckbox';
+
+export { LinkButton } from './LinkButton';
+export type { LinkButtonProps } from './LinkButton';
+
+export { InlineAlert } from './InlineAlert';
+export type { InlineAlertProps, InlineAlertTone } from './InlineAlert';
+
+export { useSecondsUntil, formatWait } from './countdown';
 
 export { InfoCard } from './InfoCard';
 export type { InfoCardProps } from './InfoCard';

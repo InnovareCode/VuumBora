@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import {
@@ -22,17 +23,22 @@ import { useRideRequestStore } from '../../src/store/useRideRequestStore';
  * P13 — Perfil do passageiro (VuumBora_Claude_Design_System/referencias/premium/
  * passageiro/P13-perfil.webp). Nenhuma das seções abaixo tem tela própria ainda —
  * o toque revela `UnavailableNoticeBanner` (dentro de `ListMenuRow`) em vez de navegar
- * para rota vazia. "Sair da conta" encerra a sessão de DEMONSTRAÇÃO (`useSession`): a guarda
- * de `app/_layout.tsx` desmonta `(app)` e volta para a P01. Limpa também a jornada de corrida
- * em memória, para a próxima sessão não herdar destino/avaliação da anterior.
+ * para rota vazia. "Sair da conta" chama o logout do cliente de identidade (`useSession().signOut`): o
+ * aparelho sai SEMPRE (mesmo sem rede) e o servidor é avisado se der; a guarda de `app/_layout.tsx`
+ * desmonta `(app)` e volta para a P01. Limpa também a jornada de corrida em memória, para a próxima
+ * sessão não herdar destino/avaliação da anterior. Nome e telefone abaixo ainda são exemplo (C1 liga
+ * `GET /v1/auth/me`).
  */
 export default function ProfileScreen() {
-  const { signOut } = useSession();
+  const { signOut, mode } = useSession();
   const startNewRide = useRideRequestStore((state) => state.startNewRide);
+  const [signingOut, setSigningOut] = useState(false);
 
-  function handleSignOut() {
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
     startNewRide();
-    signOut();
+    await signOut(); // a tela é desmontada pela guarda ao sair; não há o que reativar depois
   }
 
   return (
@@ -115,13 +121,16 @@ export default function ProfileScreen() {
         <DangerButton
           label="Sair da conta"
           icon={<LogOut size={18} color={theme.role.textPrimary} strokeWidth={2} />}
-          onPress={handleSignOut}
-          accessibilityLabel="Sair da conta, encerramento de sessão simulado"
+          onPress={() => void handleSignOut()}
+          loading={signingOut}
+          accessibilityLabel="Sair da conta"
           testID="profile-sign-out-button"
         />
-        <View style={styles.signOutNotice}>
-          <MockBadge label="sessão simulada, sem autenticação real" />
-        </View>
+        {mode === 'mock' ? (
+          <View style={styles.signOutNotice}>
+            <MockBadge label="sessão simulada, sem autenticação real" />
+          </View>
+        ) : null}
       </View>
     </AppShell>
   );

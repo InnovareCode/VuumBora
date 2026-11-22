@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import {
   AppShell,
   BrandLogo,
+  InlineAlert,
   OnboardingBackground,
   PrimaryButton,
   SecondaryButton,
@@ -13,6 +14,7 @@ import {
   textStyle,
 } from '@vuumbora/ui';
 import { LegalNotice } from '../../src/components/auth/LegalNotice';
+import { useSession } from '../../src/session/SessionProvider';
 
 const SCRIM_COLORS = gradientColors(theme.gradient.photoScrim);
 const SCRIM_LOCATIONS = gradientLocations(theme.gradient.photoScrim);
@@ -20,8 +22,9 @@ const SCRIM_LOCATIONS = gradientLocations(theme.gradient.photoScrim);
 /**
  * P01 — Boas-vindas (VuumBora_Claude_Design_System/referencias/premium/passageiro/
  * P01-boas-vindas.webp). Primeira tela de entrada do passageiro: marca, promessa
- * curta, Entrar/Cadastrar e o aviso de termos. Sem autenticação real — os botões só
- * navegam para as telas de login/cadastro.
+ * curta, Entrar/Cadastrar e o aviso de termos (com os dois documentos a um toque). Os
+ * botões levam às telas de login/cadastro; sessão expirada ou saída sem confirmação do
+ * servidor aparecem aqui como aviso (a guarda de `app/_layout.tsx` traz a pessoa para cá).
  *
  * Fundo noturno com scrim (direção de arte §7.1/§9 item 9, maquete
  * `tools/art-assets/onboarding-premium.html`): `OnboardingBackground` cobre a tela
@@ -31,6 +34,7 @@ const SCRIM_LOCATIONS = gradientLocations(theme.gradient.photoScrim);
  */
 export default function WelcomeScreen() {
   const { height } = useWindowDimensions();
+  const { signedOutNotice } = useSession();
   // Direção de arte §6: logo menor em telas baixas (<640pt de altura) — abre espaço
   // pro bloco de texto/CTA do rodapé não precisar rolar em 320×568.
   const compact = height < 640;
@@ -52,6 +56,21 @@ export default function WelcomeScreen() {
               Bem-vindo ao <Text style={styles.headlineAccent}>VuumBora!</Text>
             </Text>
             <Text style={styles.promise}>Sua mobilidade urbana com mais praticidade, segurança e economia.</Text>
+            {signedOutNotice === 'session_expired' ? (
+              <InlineAlert
+                tone="warning"
+                title="Sua sessão expirou"
+                message="Por segurança, entre de novo para continuar."
+                testID="welcome-session-expired"
+              />
+            ) : null}
+            {signedOutNotice === 'server_unconfirmed' ? (
+              <InlineAlert
+                tone="info"
+                message="Você saiu deste aparelho. Sem conexão, não conseguimos encerrar a sessão também no servidor."
+                testID="welcome-sign-out-unconfirmed"
+              />
+            ) : null}
             <View style={styles.actions}>
               <PrimaryButton
                 label="Entrar"

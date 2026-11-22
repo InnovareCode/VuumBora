@@ -1,52 +1,108 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { StyleSheet, Text, View } from 'react-native';
 import { Lock, User } from 'lucide-react-native';
-import { AppShell, PasswordInput, PrimaryButton, TextInput, theme, textStyle } from '@vuumbora/ui';
+import {
+  AppShell,
+  InlineAlert,
+  LinkButton,
+  PasswordInput,
+  PrimaryButton,
+  TextInput,
+  formatWait,
+  theme,
+  textStyle,
+  type TextInputHandle,
+} from '@vuumbora/ui';
+import { AuthErrorAlert } from '../../src/components/auth/AuthErrorAlert';
 import { AuthHeader } from '../../src/components/auth/AuthHeader';
-import { UnavailableNoticeBanner } from '../../src/components/auth/UnavailableNoticeBanner';
+import { describeAuthError, type AuthErrorAction, type AuthErrorView } from '../../src/identity/authErrors';
+import { useAuthFlowStore } from '../../src/identity/authFlowStore';
+import { identity } from '../../src/identity/identityClient';
+import { safeCall } from '../../src/identity/safeCall';
+import { useRetryLock } from '../../src/identity/useRetryLock';
+import { goBackOr } from '../../src/navigation/goBack';
 import { loginSchema, type LoginFormValues } from '../../src/schemas/authSchemas';
-import { simulateAuthRequest } from '../../src/lib/simulateAuthRequest';
-import { useSession } from '../../src/session/SessionProvider';
 import { fieldErrorProps } from '../../src/lib/fieldErrorProps';
 
+const NOTICE_TEXT = {
+  email_confirmed: 'E-mail confirmado. Agora entre com a sua senha.',
+  password_changed: 'Senha alterada. Entre com a nova senha. As sessões em outros aparelhos foram encerradas.',
+} as const;
+
+/** A espera do servidor é por par identificador+IP: a chave é o que foi digitado, sem caixa nem espaços. */
+function lockKeyOf(identifier: string): string {
+  return identifier.trim().toLowerCase();
+}
+
 /**
- * Login — sem referência própria (derivada de P02-criar-conta.webp). Nenhuma
- * autenticação real existe: ao validar, simula a chamada e abre a sessão de
- * demonstração (`useSession().signInWithMock`) — a Home mostra o selo de simulado.
+ * Login — e-mail OU ID público + senha (celular não entra: o contrato não aceita). Sessão do cliente de identidade;
+ * ao abrir, a guarda de `app/_layout.tsx` troca `(auth)` por `(app)` sozinha — esta tela não navega no sucesso.
+ *
+ * Estados de erro (todos via `describeAuthError`): `invalid_credentials` (mensagem única, sem dizer qual campo),
+ * `email_not_verified` (leva à tela do código), `too_many_attempts` (contagem de `retryAfterSeconds`, botão em espera,
+ * nunca "conta bloqueada"), rede e serviço indisponível.
  */
 export default function LoginScreen() {
-  const { signInWithMock } = useSession();
+  const loginHint = useAuthFlowStore((state) => state.loginHint);
+  const loginNotice = useAuthFlowStore((state) => state.loginNotice);
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | undefined>(undefined);
-  const [recoveryNoticeVisible, setRecoveryNoticeVisible] = useState(false);
+  const [failure, setFailure] = useState<{ readonly view: AuthErrorView; readonly attempt: number } | null>(null);
+  const lock = useRetryLock();
+  const passwordRef = useRef<TextInputHandle>(null);
 
-  const { control, handleSubmit } = useForm<LoginFormValues>({
+  const { control, handleSubmit, setValue } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { identifier: '', password: '' },
+    defaultValues: { identifier: loginHint ?? '', password: '' },
     mode: 'onBlur',
   });
+  const identifier = useWatch({ control, name: 'identifier' });
+  const waitSeconds = lock.secondsFor(lockKeyOf(identifier));
+  const locked = waitSeconds > 0;
+
+  // Voltou da confirmação do e-mail / troca de senha: a tela já estava montada embaixo, então o campo é preenchido aqui.
+  useEffect(() => {
+    if (loginHint !== null) setValue('identifier', loginHint);
+  }, [loginHint, setValue]);
 
   async function onSubmit(values: LoginFormValues) {
-    setSubmitError(undefined);
+    if (submitting || locked) return;
+    const typed = values.identifier.trim();
+    useAuthFlowStore.getState().consumeLoginNotice();
+    setFailure(null);
     setSubmitting(true);
-    try {
-      await simulateAuthRequest(values);
-      // A guarda de `app/_layout.tsx` troca (auth) por (app) quando a sessão abre.
-      signInWithMock();
-    } catch {
-      setSubmitError('Não foi possível entrar agora. Tente novamente.');
-    } finally {
-      setSubmitting(false);
+
+    const result = await safeCall(() => identity.login({ identifier: typed, password: values.password }));
+    if (result.ok) return; // a sessão abriu: a guarda desmonta esta tela. Não mexe mais em estado dela.
+    setSubmitting(false);
+
+    const view = describeAuthError('login', result.error);
+    if (view.key === 'email_not_verified') {
+      // Senha certa, e-mail pendente: segue para o código (o estado de tela do `email_not_verified` mora lá).
+      useAuthFlowStore.getState().startVerification({ identifier: typed, origin: 'login', emailSent: true, resendAfterSeconds: 0 });
+      router.push('/codigo');
+      return;
     }
+    if (view.key === 'too_many_attempts' && view.retryAfterSeconds !== undefined) {
+      lock.lockFor(view.retryAfterSeconds, lockKeyOf(typed));
+    }
+    setFailure((previous) => ({ view, attempt: (previous?.attempt ?? 0) + 1 }));
   }
+
+  function handleAction(action: AuthErrorAction) {
+    if (action === 'go_forgot') router.push('/esqueci-senha');
+  }
+
+  const submit = handleSubmit(onSubmit);
 
   return (
     <AppShell scroll testID="login-screen">
       <View style={styles.content}>
-        <AuthHeader title="Entrar" subtitle="Acesse sua conta para continuar." onBack={() => router.back()} />
+        <AuthHeader title="Entrar" subtitle="Acesse sua conta para continuar." onBack={() => goBackOr('/boas-vindas')} />
+
+        {loginNotice !== null ? <InlineAlert tone="success" message={NOTICE_TEXT[loginNotice]} testID="login-notice" /> : null}
 
         <View style={styles.form}>
           <Controller
@@ -54,16 +110,21 @@ export default function LoginScreen() {
             name="identifier"
             render={({ field, fieldState }) => (
               <TextInput
-                label="E-mail ou celular"
-                placeholder="seu@email.com ou celular"
+                label="E-mail ou ID público"
+                placeholder="seu@email.com ou seu ID"
                 value={field.value}
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
                 disabled={submitting}
                 {...fieldErrorProps(fieldState.error)}
+                keyboardType="email-address"
                 autoCapitalize="none"
+                autoComplete="username"
+                textContentType="username"
+                autoCorrect={false}
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
                 leftAccessory={<User size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
-                accessibilityLabel="E-mail ou celular"
                 testID="login-identifier-input"
               />
             )}
@@ -80,53 +141,47 @@ export default function LoginScreen() {
                 onBlur={field.onBlur}
                 disabled={submitting}
                 {...fieldErrorProps(fieldState.error)}
+                autoComplete="current-password"
+                textContentType="password"
+                returnKeyType="go"
+                inputRef={passwordRef}
+                onSubmitEditing={() => void submit()}
                 leftAccessory={<Lock size={18} color={theme.role.textMuted} strokeWidth={1.75} />}
-                accessibilityLabel="Senha"
                 testID="login-password-input"
               />
             )}
           />
 
-          <Text
-            style={styles.recoveryLink}
-            onPress={() => setRecoveryNoticeVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Recuperar acesso — ainda não disponível"
-            testID="login-recovery-link"
-          >
-            Recuperar acesso
-          </Text>
-          {recoveryNoticeVisible ? (
-            <UnavailableNoticeBanner
-              message="Recuperação de senha ainda não está disponível — não existe backend de autenticação nesta versão."
-              testID="login-recovery-notice"
-            />
-          ) : null}
+          <LinkButton
+            label="Esqueci minha senha"
+            onPress={() => router.push('/esqueci-senha')}
+            align="flex-end"
+            testID="login-forgot-link"
+          />
         </View>
 
         <View style={styles.actions}>
+          {failure !== null ? (
+            <AuthErrorAlert
+              key={failure.attempt}
+              view={failure.view}
+              waitSeconds={waitSeconds}
+              onAction={handleAction}
+              testID="login-alert"
+            />
+          ) : null}
           <PrimaryButton
-            label="Entrar"
-            onPress={() => {
-              void handleSubmit(onSubmit)();
-            }}
+            label={locked ? `Aguarde ${formatWait(waitSeconds)}` : 'Entrar'}
+            onPress={() => void submit()}
             loading={submitting}
-            {...(submitError !== undefined ? { error: true, errorMessage: submitError } : { error: false })}
-            accessibilityLabel="Entrar"
+            disabled={locked}
+            accessibilityLabel={locked ? `Entrar, disponível em ${formatWait(waitSeconds)}` : 'Entrar'}
             testID="login-submit-button"
           />
-          <Text style={styles.footerText}>
-            Não tem conta?{' '}
-            <Text
-              style={styles.footerLink}
-              onPress={() => router.push('/cadastro')}
-              accessibilityRole="button"
-              accessibilityLabel="Cadastrar"
-              testID="login-go-to-cadastro-link"
-            >
-              Cadastrar
-            </Text>
-          </Text>
+          <View style={styles.footerRow}>
+            <Text style={styles.footerText}>Não tem conta?</Text>
+            <LinkButton label="Cadastre-se" onPress={() => router.push('/cadastro')} testID="login-go-to-cadastro-link" />
+          </View>
         </View>
       </View>
     </AppShell>
@@ -136,12 +191,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   content: { gap: theme.spacing['6'] },
   form: { gap: theme.spacing['4'] },
-  recoveryLink: {
-    color: theme.role.ctaBackground,
-    ...textStyle('semibold', 'small'),
-    textAlign: 'right',
-  },
-  actions: { gap: theme.spacing['4'] },
-  footerText: { color: theme.role.textSecondary, ...textStyle('regular', 'small'), textAlign: 'center' },
-  footerLink: { color: theme.role.ctaBackground, ...textStyle('semibold', 'small') },
+  actions: { gap: theme.spacing['3'] },
+  footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' },
+  footerText: { color: theme.role.textSecondary, ...textStyle('regular', 'small') },
 });
