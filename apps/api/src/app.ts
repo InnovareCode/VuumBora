@@ -7,6 +7,7 @@ import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import { pool } from './db.js';
 import { env } from './env.js';
 import type { MailPort } from './lib/mail-port.js';
+import { BCRYPT_BUSY_RETRY_AFTER_SECONDS, BcryptBusyError, closeBcryptPools } from './lib/bcrypt-pool.js';
 import { rateLimitKey } from './lib/ip-bucket.js';
 import { twoFactorConfig } from './lib/two-factor-config.js';
 import { describeErrorForLog } from './lib/safe-error.js';
@@ -94,6 +95,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.setErrorHandler((err: FastifyError, request, reply) => {
     const statusCode = err.statusCode ?? 500;
 
+    // Pista de bcrypt cheia (A-1, rodada 3) que escapou do catch da rota (ex.: login do admin): 503 estruturado, não 500.
+    if (err instanceof BcryptBusyError) {
+      request.log.warn({ event: 'bcrypt_busy', lane: err.lane });
+      reply.header('Retry-After', String(BCRYPT_BUSY_RETRY_AFTER_SECONDS));
+      reply.code(503).send({ ok: false, error: { code: 'server_busy', message: 'Muitas solicitações no momento. Tente novamente em alguns segundos.', retryAfterSeconds: BCRYPT_BUSY_RETRY_AFTER_SECONDS } });
+      return;
+    }
+
     if (statusCode === 429) {
       reply.code(429).send({
         ok: false,
@@ -111,6 +120,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     app.log.error({ event: 'unhandled_error', ...describeErrorForLog(err) });
     reply.code(500).send({ ok: false, error: { code: 'unknown', message: 'Erro interno.' } });
   });
+
+  // As threads do bcrypt (lib/bcrypt-pool.ts) terminam junto com o servidor, depois das operações em curso.
+  app.addHook('onClose', async () => closeBcryptPools());
 
   await app.register(helmet);
 

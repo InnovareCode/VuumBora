@@ -43,6 +43,9 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
 
   const mail = options.mail ?? unavailableMailPort;
   const requireAccount = makeRequireAccount(config);
+  // Esquenta o hash descartável (login de conta desconhecida) fora da thread principal: o primeiro login com e-mail
+  // inexistente não pode custar mais que os seguintes (o tempo denunciaria). Falha aqui é ignorada: tenta no primeiro uso.
+  identity.getDummyHash(config.bcryptCost).catch(() => undefined);
   // Um balde por IPv4 e por /64 IPv6 (I-5d): sem isto o atacante troca os últimos 64 bits a cada requisição.
   const ipLimit = { config: { rateLimit: { max: config.ipRateLimitMax, timeWindow: config.ipRateLimitWindowMs, keyGenerator: rateLimitKey } } };
 

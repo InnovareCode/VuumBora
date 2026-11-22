@@ -59,6 +59,14 @@ const schema = z.object({
    * códigos do dia: passado o teto, nem o código certo vale até as falhas saírem da janela.
    */
   AUTH_RESET_MAX_FAILURES_PER_DAY: z.coerce.number().int().min(1).max(100).default(10),
+  /**
+   * Conferência de código (verificar e-mail, redefinir senha): tentativas por PAR (tipo + identificador + IP) na janela,
+   * contadas ANTES do bcrypt (A-1, rodada 3). Acima do que um dono de conta digita (5 por código), abaixo do que
+   * ocupa a CPU: o par é o mesmo "par" do login. Quem troca o identificador a cada tentativa não é freado por
+   * aqui, e sim pelo teto global de concorrência do bcrypt (`lib/bcrypt-pool.ts`).
+   */
+  AUTH_CODE_CHECK_MAX_PER_PAIR: positiveInt(10),
+  AUTH_CODE_CHECK_WINDOW_MINUTES: positiveInt(15),
   /** Limite por IP (em memória, além dos limites no banco). */
   AUTH_IP_RATE_LIMIT_MAX: positiveInt(30),
   AUTH_IP_RATE_LIMIT_WINDOW_MINUTES: positiveInt(15),
@@ -85,6 +93,8 @@ export interface AuthConfig {
   /** `null` = versões não configuradas (ou fora do formato): cadastro indisponível. */
   readonly consentVersions: ConsentVersions | null;
   readonly resetMaxFailuresPerDay: number;
+  readonly codeCheckMaxPerPair: number;
+  readonly codeCheckWindowMinutes: number;
   readonly ipRateLimitMax: number;
   readonly ipRateLimitWindowMs: number;
 }
@@ -171,6 +181,8 @@ export function loadAuthConfig(source: NodeJS.ProcessEnv = process.env): AuthCon
     emailGlobalMaxPerHour: v.AUTH_EMAIL_GLOBAL_MAX_PER_HOUR,
     consentVersions: parseConsentVersions(v.AUTH_TERMS_VERSION, v.AUTH_PRIVACY_VERSION),
     resetMaxFailuresPerDay: v.AUTH_RESET_MAX_FAILURES_PER_DAY,
+    codeCheckMaxPerPair: v.AUTH_CODE_CHECK_MAX_PER_PAIR,
+    codeCheckWindowMinutes: v.AUTH_CODE_CHECK_WINDOW_MINUTES,
     ipRateLimitMax: v.AUTH_IP_RATE_LIMIT_MAX,
     ipRateLimitWindowMs: v.AUTH_IP_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000,
   };

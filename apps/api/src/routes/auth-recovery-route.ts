@@ -39,7 +39,7 @@ function replyToCodeCheck(request: FastifyRequest, reply: FastifyReply, result: 
       return;
     case 'blocked':
       request.log.warn({ event: `${event}_blocked` });
-      tooManyAttempts(reply, config.codeRequestWindowMinutes * 60);
+      tooManyAttempts(reply, result.retryAfterSeconds);
       return;
     default:
       request.log.info({ event: `${event}_code_expired` });

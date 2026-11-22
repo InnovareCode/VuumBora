@@ -152,13 +152,15 @@ export async function saveEmailSettings(pool: Pool, admin: AdminUser, input: Sav
     action: 'email_settings.updated',
     targetType: 'email_settings',
     targetId: '1',
-    // Nunca a senha: só se mudou.
-    before: { host: before.host, port: before.port, user: before.user, from: before.from, passwordSaved: before.hasPassword },
+    // Nunca a senha (só se mudou) e NUNCA o usuário (B-1, rodada 3): a trilha é imutável (0012), e há relays em que o
+    // "usuário" é o próprio token. Gravamos só se há usuário e se ele mudou; o valor não tem como ser limpo depois.
+    before: { host: before.host, port: before.port, from: before.from, userConfigured: before.user !== null, passwordSaved: before.hasPassword },
     after: {
       host: after.host,
       port: after.port,
-      user: after.user,
       from: after.from,
+      userConfigured: after.user !== null,
+      userChanged: before.user !== after.user,
       passwordSaved: after.hasPassword,
       passwordChange,
       changedFields,

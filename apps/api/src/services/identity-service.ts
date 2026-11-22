@@ -10,11 +10,11 @@
  *  - conta sem e-mail verificado: senha certa => `email_not_verified`, nunca sessão;
  *  - renovação só por `rotate_refresh_token()`; qualquer desfecho != 'rotated' é recusa.
  */
-import bcrypt from 'bcryptjs';
 import type { Pool } from 'pg';
 import type { AccountSummary, AccountType, DeviceInput } from '../domain/auth.js';
 import { normalizeIdentifier } from '../domain/auth.js';
 import type { AuthConfig } from '../lib/auth-config.js';
+import { appBcrypt, assertAppBcryptCapacity } from '../lib/bcrypt-pool.js';
 import { generateEmailCode, hashEmailCode } from '../lib/email-code.js';
 import { canonicalEmailForLimit } from '../lib/email-normalize.js';
 import { emailGlobalKey } from '../lib/email-budget.js';
@@ -132,6 +132,7 @@ function registerKeys(config: AuthConfig, accountType: AccountType, email: strin
 export async function registerAccount(pool: Pool, config: AuthConfig, deps: MailDeps, input: RegisterInput, ctx: RequestContext): Promise<RegisterResult> {
   const versions = config.consentVersions;
   if (!versions) return { kind: 'consent_unavailable' };
+  assertAppBcryptCapacity();
   const allowed = await reserveAttempts(pool, {
     scope: 'register',
     keys: registerKeys(config, input.accountType, input.email, ctx),
@@ -140,7 +141,7 @@ export async function registerAccount(pool: Pool, config: AuthConfig, deps: Mail
   });
   if (!allowed) return { kind: 'blocked' };
 
-  const passwordHash = await bcrypt.hash(input.password, config.bcryptCost);
+  const passwordHash = await appBcrypt().hash(input.password, config.bcryptCost);
   // `public_id` é aleatório de 40 bits: colisão é improvável, mas o UNIQUE a barra e aqui se repete.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     let registered: { account: AccountSummary; reclaimed: boolean; code: string };
@@ -197,9 +198,19 @@ export async function registerAccount(pool: Pool, config: AuthConfig, deps: Mail
 }
 
 let dummyHash: Promise<string> | null = null;
-/** Hash descartável para gastar o mesmo tempo de bcrypt quando a conta não existe. */
+/**
+ * Hash descartável para gastar o mesmo tempo de bcrypt quando a conta não existe. Guardado como promessa, mas uma
+ * promessa que FALHOU (pista cheia na hora do primeiro uso) não pode ficar guardada: todo login e toda verificação
+ * herdariam a recusa para sempre. Por isso a falha limpa a variável.
+ */
 export function getDummyHash(cost: number): Promise<string> {
-  dummyHash ??= bcrypt.hash(newOpaqueToken(), cost);
+  if (!dummyHash) {
+    const pending = appBcrypt().hash(newOpaqueToken(), cost);
+    dummyHash = pending;
+    pending.catch(() => {
+      if (dummyHash === pending) dummyHash = null;
+    });
+  }
   return dummyHash;
 }
 
@@ -209,6 +220,9 @@ export async function login(
   input: { accountType: AccountType; identifier: string; password: string; device?: DeviceInput | undefined },
   ctx: RequestContext,
 ): Promise<LoginResult> {
+  // Pista cheia: recusa ANTES de reservar a tentativa. O bcrypt não vai rodar, então a falha não pode ser contada
+  // contra o titular que só caiu num momento de rajada.
+  assertAppBcryptCapacity();
   const identifier = normalizeIdentifier(input.identifier);
   // Par tipo + identificador + IP (escopo pelo TIPO: errar a senha do passageiro não atrasa o motorista de mesmo
   // e-mail). A espera progressiva é do PAR: quem erra paga no próprio par, e a vítima (outro IP) entra sem espera.
@@ -228,7 +242,7 @@ export async function login(
 
   const candidate = await findLoginCandidate(pool, input.accountType, identifier);
   // Compara SEMPRE, mesmo sem conta: o tempo de resposta não revela se o e-mail existe.
-  const passwordOk = await bcrypt.compare(input.password, candidate?.passwordHash ?? (await getDummyHash(config.bcryptCost)));
+  const passwordOk = await appBcrypt().compare(input.password, candidate?.passwordHash ?? (await getDummyHash(config.bcryptCost)));
 
   if (!candidate || !passwordOk || candidate.status !== 'active') {
     await insertAccessLog(pool, { event: 'login_failure', accountId: candidate?.account.id ?? null, deviceId: null, ...ctx });

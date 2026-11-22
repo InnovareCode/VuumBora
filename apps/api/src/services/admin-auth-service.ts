@@ -6,6 +6,7 @@ import type { AdminUser, AdminUserRecord } from '../domain/admin.js';
 import { roleRequiresTwoFactor, type TwoFactorConfig } from '../domain/two-factor.js';
 import { findAdminByEmail, findAdminRecordById } from '../repositories/admin-repository.js';
 import { accountKey, clearPairFailures, reserveFailureSlot } from '../repositories/admin-login-failure-repository.js';
+import { adminBcrypt, assertAdminBcryptCapacity } from '../lib/bcrypt-pool.js';
 import { ipBucket } from '../lib/ip-bucket.js';
 import { DEFAULT_DELAY_SCHEDULE, type DelaySchedule } from '../lib/progressive-delay.js';
 import { insertAuditLog } from '../repositories/admin-audit-repository.js';
@@ -23,7 +24,7 @@ const CSRF_TOKEN_BYTES = 32;
 
 /**
  * Hash válido, mas de uma senha aleatória que nunca autentica ninguém —
- * gerado uma vez no boot. Serve só para o `bcrypt.compare` rodar com o
+ * gerado uma vez no boot (síncrono, UMA vez, antes de aceitar requisição). Serve só para o `bcrypt.compare` rodar com o
  * MESMO custo quando o e-mail não existe, para a resposta de login não
  * ficar mensuravelmente mais rápida nesse caso (timing attack de
  * enumeração de e-mail).
@@ -126,11 +127,14 @@ export async function verifyPasswordWithGuard(
   input: { readonly email: string; readonly record: AdminUserRecord | null; readonly password: string; readonly ipAddress: string | null; readonly purpose: 'login' | 'reauth' },
   schedule: DelaySchedule = DEFAULT_LOGIN_DELAY,
 ): Promise<PasswordCheck> {
+  // Pista do admin cheia: recusa ANTES de reservar a falha do par (o bcrypt não rodaria, e a espera progressiva do
+  // dono não pode crescer por causa de uma recusa que não foi culpa dele).
+  assertAdminBcryptCapacity();
   const pair = { emailHash: accountKey(input.email), ipBucket: input.ipAddress ? ipBucket(input.ipAddress) : null };
   const slot = await reserveFailureSlot(pool, { ...pair, adminId: input.record?.id ?? null }, schedule);
   if (slot.kind === 'locked') return { kind: 'locked', retryAfterSeconds: slot.retryAfterSeconds };
 
-  const matches = await bcrypt.compare(input.password, input.record?.passwordHash ?? DUMMY_PASSWORD_HASH);
+  const matches = await adminBcrypt().compare(input.password, input.record?.passwordHash ?? DUMMY_PASSWORD_HASH);
   if (input.record && input.record.deactivatedAt === null && matches) {
     await clearPairFailures(pool, pair);
     return { kind: 'ok' };

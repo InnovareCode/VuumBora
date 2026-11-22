@@ -257,6 +257,41 @@ describe('ler e salvar', () => {
     assert.ok(!JSON.stringify(audit.rows).includes(SECRET));
   });
 
+  // B-1 (revisão S1 rodada 3): `admin_audit_log` é imutável (0012) e há relays em que o "usuário" é o próprio token.
+  test('B-1: o usuário do SMTP NUNCA vai em claro para a trilha imutável — só "há usuário" e "mudou"', async () => {
+    const s = await session();
+    // Marca ÚNICA por execução: a trilha é append-only, então uma execução antiga (ou um teste de mutação) que gravou
+    // um usuário não pode fazer esta passar a falhar, nem esconder um vazamento novo.
+    const tag = Math.random().toString(36).slice(2, 10);
+    const USER_A = `token-relay-${tag}-aaaa@exemplo.com.br`;
+    const USER_B = `token-relay-${tag}-bbbb`;
+    assert.equal((await save(s, { ...FULL, user: USER_A, password: SECRET })).status, 200); // 1) define o usuário
+    assert.equal((await save(s, { ...FULL, user: USER_A, host: 'outro.exemplo.com.br' })).status, 200); // 2) mesmo usuário, outro campo
+    assert.equal((await save(s, { ...FULL, user: USER_B, host: 'outro.exemplo.com.br' })).status, 200); // 3) troca o usuário
+    assert.equal((await save(s, { ...FULL, user: null, host: 'outro.exemplo.com.br' })).status, 200); // 4) apaga o usuário
+    assert.equal((await removePassword(s)).status, 200);
+
+    const updated = (await pool.query("SELECT before, after FROM admin_audit_log WHERE admin_id = $1 AND action = 'email_settings.updated' ORDER BY created_at, id", [s.admin.id])).rows;
+    assert.equal(updated.length, 4);
+    assert.deepEqual(updated.map((r) => r.after.userChanged), [true, false, true, true], 'só diz SE mudou');
+    assert.deepEqual(updated.map((r) => r.before.userConfigured), [false, true, true, true]);
+    assert.deepEqual(updated.map((r) => r.after.userConfigured), [true, true, true, false]);
+    assert.deepEqual(updated.map((r) => r.after.changedFields.includes('user')), [true, false, true, true], 'o NOME do campo continua na lista');
+    for (const row of updated) {
+      assert.ok(!('user' in row.before) && !('user' in row.after), 'nenhuma chave `user` na trilha');
+    }
+
+    // A trilha INTEIRA (não só as linhas deste admin): nenhum pedaço do usuário em claro, em nenhuma ação.
+    for (const needle of [USER_A, USER_B, `${tag}-aaaa`, `${tag}-bbbb`, SECRET]) {
+      const leaked = await pool.query('SELECT action FROM admin_audit_log WHERE to_jsonb(admin_audit_log)::text LIKE $1', [`%${needle}%`]);
+      assert.equal(leaked.rowCount, 0, `"${needle}" apareceu na trilha imutável (${leaked.rows.map((r) => r.action).join(', ')})`);
+    }
+    assert.deepEqual(await pool.query("SELECT DISTINCT action FROM admin_audit_log WHERE admin_id = $1 AND target_type = 'email_settings' ORDER BY action", [s.admin.id]).then((r) => r.rows.map((x) => x.action)), [
+      'email_settings.password_removed',
+      'email_settings.updated',
+    ]);
+  });
+
   test('validação: host com esquema, porta fora da lista, remetente com quebra de linha, campo extra', async () => {
     const s = await session();
     for (const bad of [{ host: 'http://x.com' }, { host: 'a b.com' }, { host: 'x.com/rota' }, { port: 22 }, { port: 'abc' }, { from: 'a@b.com\r\nBcc: x@y.com' }, { from: 'nao-e-email' }, { admin: true }, { password: 'x', clearPassword: true }]) {
