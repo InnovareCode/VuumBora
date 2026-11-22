@@ -131,7 +131,7 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
-            grep -E "^\s*✖" api-test.log | sort -u | head -9 | while IFS= read -r line; do echo "::error::${line}"; done
+            sed 's/\x1b\[[0-9;]*m//g' api-test.log | grep -E "✖|not ok" | sort -u | head -9 | while IFS= read -r line; do echo "::error::${line}"; done
             echo "::error::testes do apps/api falharam (exit ${status}); os nomes estao nas anotacoes acima"
           fi
           exit "$status"
