@@ -7,6 +7,7 @@ import { CalendarDays, Lock, Mail, Phone, User } from 'lucide-react-native';
 import {
   AppShell,
   DateInput,
+  FooterActions,
   InlineAlert,
   LinkButton,
   PasswordInput,
@@ -187,7 +188,51 @@ export default function CadastroScreen() {
   const showSummary = submitCount > 0 && invalidLabels.length > 0 && failure === null;
 
   return (
-    <AppShell scroll glow testID="cadastro-screen">
+    <AppShell
+      scroll
+      glow
+      testID="cadastro-screen"
+      // Ficha P02b, §12: o CTA não pode depender de rolar o formulário inteiro em 320×568 — vai para o
+      // FooterActions (C-04), igual ao M02 do motorista, e fica sempre alcançável.
+      footer={
+        <FooterActions testID="cadastro-footer">
+          {failure !== null ? (
+            <AuthErrorAlert
+              key={failure.attempt}
+              view={failure.view}
+              waitSeconds={waitSeconds}
+              onAction={handleAction}
+              alertRef={alertRef}
+              testID="cadastro-alert"
+            />
+          ) : null}
+          {showSummary ? (
+            <InlineAlert
+              key={submitCount}
+              tone="danger"
+              message={`Revise os campos destacados: ${invalidLabels.join(', ')}.`}
+              testID="cadastro-summary"
+            />
+          ) : null}
+          <PrimaryButton
+            label={locked ? `Aguarde ${formatWait(waitSeconds)}` : 'Criar conta'}
+            onPress={() => void submit()}
+            loading={submitting}
+            // Sem os textos na tela não há o que aceitar: o envio só vale com `pronto` (carregando e erro desligam).
+            disabled={locked || legal.status !== 'ready'}
+            accessibilityLabel={locked ? `Criar conta, disponível em ${formatWait(waitSeconds)}` : 'Criar conta'}
+            testID="cadastro-submit-button"
+          />
+
+          {SOCIAL_SIGN_IN_ENABLED ? <SocialSignInSection /> : null}
+
+          <View style={styles.footerRow}>
+            <Text style={styles.footerText}>Já tem uma conta?</Text>
+            <LinkButton label="Entrar" onPress={() => router.push('/login')} testID="cadastro-go-to-login-link" />
+          </View>
+        </FooterActions>
+      }
+    >
       <View style={styles.content}>
         <AuthHeader
           title="Criar conta"
@@ -309,43 +354,6 @@ export default function CadastroScreen() {
         </View>
 
         <LegalConsentFields control={control} legal={legal} disabled={submitting} />
-
-        <View style={styles.actions}>
-          {failure !== null ? (
-            <AuthErrorAlert
-              key={failure.attempt}
-              view={failure.view}
-              waitSeconds={waitSeconds}
-              onAction={handleAction}
-              alertRef={alertRef}
-              testID="cadastro-alert"
-            />
-          ) : null}
-          {showSummary ? (
-            <InlineAlert
-              key={submitCount}
-              tone="danger"
-              message={`Revise os campos destacados: ${invalidLabels.join(', ')}.`}
-              testID="cadastro-summary"
-            />
-          ) : null}
-          <PrimaryButton
-            label={locked ? `Aguarde ${formatWait(waitSeconds)}` : 'Criar conta'}
-            onPress={() => void submit()}
-            loading={submitting}
-            // Sem os textos na tela não há o que aceitar: o envio só vale com `pronto` (carregando e erro desligam).
-            disabled={locked || legal.status !== 'ready'}
-            accessibilityLabel={locked ? `Criar conta, disponível em ${formatWait(waitSeconds)}` : 'Criar conta'}
-            testID="cadastro-submit-button"
-          />
-
-          {SOCIAL_SIGN_IN_ENABLED ? <SocialSignInSection /> : null}
-
-          <View style={styles.footerRow}>
-            <Text style={styles.footerText}>Já tem uma conta?</Text>
-            <LinkButton label="Entrar" onPress={() => router.push('/login')} testID="cadastro-go-to-login-link" />
-          </View>
-        </View>
       </View>
     </AppShell>
   );
@@ -354,7 +362,6 @@ export default function CadastroScreen() {
 const styles = StyleSheet.create({
   content: { gap: theme.spacing['6'] },
   form: { gap: theme.spacing['4'] },
-  actions: { gap: theme.spacing['3'] },
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' },
   footerText: { color: theme.role.textSecondary, ...textStyle('regular', 'small') },
 });
