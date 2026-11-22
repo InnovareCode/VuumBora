@@ -2,14 +2,18 @@ import type { Place } from '@vuumbora/domain';
 
 /**
  * Endereços de DEMONSTRAÇÃO (especificacoes/PASSAGEIRO.md: "mockups são propostas, não
- * recursos implementados"). Nenhum ponto aqui vem de geocodificação real — só fixa o
- * suficiente para a P04 (destino) ter conteúdo plausível para filtrar/escolher.
- * Sem contrato de `PlacesPort` ainda implementado (pendência da Vega) — por isso a busca
- * roda 100% local, sem chamar nenhum adaptador.
+ * recursos implementados"). Nenhum ponto aqui vem de geocodificação real.
+ *
+ * A busca por texto da P04 passou a usar `placesClient` (`src/places/placesClient.ts`, porta
+ * `PlacesPort` de `@vuumbora/api-client/passenger`) — o que sobra aqui é só o que a porta NÃO
+ * cobre: a localização atual (ponto de partida padrão, também usado pela store) e os "lugares
+ * salvos" (ainda sem fonte própria — API do usuário, pendência futura).
  */
 
+// Rótulo "Sua localização atual" é a copy da ficha P04 (`docs/fichas-de-tela/P04-origem-e-destino.md`
+// §7) — era "Local atual" antes desta fatia; conferido que não aparece em mais nenhuma tela.
 export const MOCK_CURRENT_LOCATION: Place = {
-  label: 'Local atual',
+  label: 'Sua localização atual',
   address: 'Ponta Negra, Natal - RN',
   point: { latitude: -5.879, longitude: -35.177, accuracyM: 12 },
 };
@@ -27,23 +31,3 @@ export const MOCK_SAVED_PLACES: readonly Place[] = [
     point: { latitude: -5.834, longitude: -35.211 },
   },
 ];
-
-/** Resultado de autocomplete — filtrado localmente por texto, nunca por geocodificação real. */
-export const MOCK_DESTINATION_SUGGESTIONS: readonly Place[] = [
-  ...MOCK_SAVED_PLACES,
-  { label: 'Aeroporto Internacional de Natal', address: 'São Gonçalo do Amarante - RN', point: { latitude: -5.768, longitude: -35.376 } },
-  { label: 'Terminal Rodoviário de Natal', address: 'Av. Capitão Mor Gouveia, 1237 — Cidade da Esperança, Natal - RN', point: { latitude: -5.800, longitude: -35.233 } },
-  { label: 'Praia de Ponta Negra', address: 'Ponta Negra, Natal - RN', point: { latitude: -5.887, longitude: -35.171 } },
-  { label: 'Centro de Convenções de Natal', address: 'Av. Prudente de Morais, 5680 — Candelária, Natal - RN', point: { latitude: -5.832, longitude: -35.206 } },
-  { label: 'Hospital Walfredo Gurgel', address: 'Av. Sen. Salgado Filho, s/n — Tirol, Natal - RN', point: { latitude: -5.802, longitude: -35.209 } },
-  { label: 'Fortaleza dos Reis Magos', address: 'Praia do Forte, Natal - RN', point: { latitude: -5.762, longitude: -35.195 } },
-];
-
-/** Busca local simples (contém, sem acento-sensibilidade) — substitui `PlacesPort.search` até existir adaptador. */
-export function searchMockPlaces(query: string): readonly Place[] {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) return [];
-  return MOCK_DESTINATION_SUGGESTIONS.filter(
-    (place) => place.label.toLowerCase().includes(normalized) || place.address.toLowerCase().includes(normalized)
-  );
-}

@@ -22,3 +22,6 @@ export type {
 
 export { createMockPassengerRidePort } from './mock-adapter';
 export type { MockPassengerRide, MockPassengerRideControl, MockPassengerRideOptions } from './mock-adapter';
+
+export { createMockPlacesPort } from './places-mock-adapter';
+export type { MockPlacesOptions } from './places-mock-adapter';
