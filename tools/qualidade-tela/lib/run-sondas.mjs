@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { getChromium } from './browsers.mjs';
 import { iniciarServidorDev } from './dev-server.mjs';
+import { garantirSessaoEDestino } from './auth-bootstrap.mjs';
 import { rodarSondas } from './probes/index.mjs';
 
 export async function rodarSondasNaMatriz({ telas, tamanhos, saidaDir }) {
@@ -39,6 +40,11 @@ export async function rodarSondasNaMatriz({ telas, tamanhos, saidaDir }) {
           // ver o comentário em capture.mjs: sem isto, a sonda roda numa página em branco.
           await page.waitForFunction(() => document.body.innerText.trim().length > 10, { timeout: 30000 });
           await page.waitForTimeout(700); // ver o comentário em capture.mjs (latência da identidade mock)
+
+          // ver o comentário equivalente em capture.mjs: bootstrap de sessão mock para
+          // telas atrás de `(app)` (P03, P04, M05...); não faz nada em telas públicas.
+          await garantirSessaoEDestino(page, { app: tela.app, rotaDestino: tela.rota });
+
           if (estado === 'sem-rede') {
             await context.setOffline(true);
             await page.waitForTimeout(50);

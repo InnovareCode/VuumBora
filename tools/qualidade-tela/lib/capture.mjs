@@ -13,6 +13,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { getChromium, describeBrowserSetup } from './browsers.mjs';
 import { iniciarServidorDev } from './dev-server.mjs';
+import { garantirSessaoEDestino } from './auth-bootstrap.mjs';
 import { nomeArquivo } from '../screens.config.mjs';
 
 /**
@@ -66,6 +67,11 @@ export async function capturarMatriz({ telas, tamanhos, saidaDir, mutarEstilo = 
           // 350ms, `identityClient.ts`) resolver o "Carregando os Termos..." do cadastro —
           // sem isto, a captura "padrao" do P02b/M02 pega o estado de carregamento por acidente.
           await page.waitForTimeout(700);
+
+          // Telas atrás de `(app)` (P03, P04, M05...) caíram na tela de entrada: cria
+          // conta mock, loga e navega pelo cliente até `tela.rota` (ver auth-bootstrap.mjs).
+          // Não faz nada para telas públicas (P01, P02a, P02b, M01, M02).
+          await garantirSessaoEDestino(page, { app: tela.app, rotaDestino: tela.rota });
 
           if (estado === 'sem-rede') {
             await context.setOffline(true);

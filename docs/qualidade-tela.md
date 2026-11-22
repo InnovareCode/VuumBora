@@ -34,6 +34,34 @@ node cli.mjs tudo                     # capturar + sondas + lado-a-lado + compar
 Todo comando aceita `--telas P01,M01` para rodar só um subconjunto (ver os IDs em
 `screens.config.mjs`). `node cli.mjs ajuda` lista as opções de cada um.
 
+## Telas atrás da guarda `(app)` (P03, P04, M05...) — bootstrap de sessão (22/11/2026)
+
+`capturar` e `sondas` navegam direto para `tela.rota` com `page.goto`. Para uma tela
+pública (P01, P02a, P02b, M01, M02) isso basta. Para uma tela do grupo `(app)`
+(protegida por `Stack.Protected` em `app/_layout.tsx` de cada app) sem sessão, o
+app redireciona sozinho para a tela de entrada (`/boas-vindas` no passageiro,
+`/entrar` no motorista) — sem tratar isso, a captura sairia da tela de login, não da
+tela pedida (achado original da Lyra, `.claude/agent-memory/lyra/
+project_m05_onda2_painel_motorista.md`).
+
+`lib/auth-bootstrap.mjs` resolve isso: depois do `goto` e da espera de conteúdo
+normal, `garantirSessaoEDestino(page, { app, rotaDestino })` confere se a página caiu
+na tela de entrada do app sem ter sido isso que foi pedido; se sim, cria uma conta de
+prova e loga pelo gancho `window.__vuumboraIdentity` (só existe em `__DEV__` web —
+`register` → `verifyEmail({ code: '123456' })` → `login`, com `termsVersion`/
+`privacyVersion: 'mock-1'`, a versão vigente do mock) e navega pelo CLIENTE até a
+rota pedida (`history.pushState` + `popstate`, o mesmo mecanismo que o próprio
+expo-router usa para navegação interna). **Nunca `page.goto` depois do login**: a
+sessão mock vive só em memória (`createDeviceSessionStorage` no web não usa
+`localStorage`) e qualquer navegação de documento a zera. Para uma tela pública a
+função não faz nada (`false`) — o `pathname` já bate com a rota pedida e o bootstrap
+nem dispara.
+
+Verificado de ponta a ponta (22/11/2026): `node cli.mjs capturar --telas P03,P04,M05`
+e `node cli.mjs sondas --telas P03,P04,M05` rodaram sem erro nas 4 larguras (20
+combinações cada) e os PNGs abertos a olho mostram a Home do passageiro, a tela de
+destino e o painel do motorista com conteúdo real — nunca a tela de login.
+
 ### Por que Metro ao vivo, e não mais um `expo export` servido estaticamente (22/11/2026)
 
 A versão anterior desta ferramenta gerava `apps/<app>/dist` com
@@ -267,6 +295,7 @@ tools/qualidade-tela/
     browsers.mjs             casa a revisão do Chromium/WebKit instalada com um Playwright em cache
     paths.mjs                caminhos (apps, linha de base, saída)
     dev-server.mjs            sobe/derruba "expo start --web" ao vivo por app (ver "Por que Metro ao vivo")
+    auth-bootstrap.mjs        bootstrap de sessão mock p/ telas atrás de `(app)` (ver seção acima)
     tokens.mjs                 lê vuumbora.tokens.json -> conjunto de cores aprovadas
     capture.mjs                 gera a matriz de capturas
     compare.mjs                   compara contra a linha de base (decodifica PNG com pngjs, diff pixel a pixel)
