@@ -234,6 +234,17 @@ describe('o que a API precisa continua funcionando COM o papel restrito', () => 
     assert.ok([200, 401].includes(outAll.status), 'logout-all (a sessão já foi encerrada acima)');
   });
 
+  test('exclusão de conta (delete_account, SECURITY INVOKER) funciona COM o papel restrito: a API só tem UPDATE, nunca DELETE', async () => {
+    const api = makeClient(h);
+    const session = await api.registerAndLogin(`exclui-${randomUUID().slice(0, 8)}@teste.vuumbora.dev`);
+    const deleted = await api.call('POST', '/v1/auth/delete-account', { bearer: session.accessToken, body: { password: PASSWORD } });
+    assert.equal(deleted.status, 200, JSON.stringify(deleted.body));
+    assert.deepEqual(deleted.body.data, { accountDeleted: true });
+    assert.equal((await api.call('GET', '/v1/auth/me', { bearer: session.accessToken })).status, 401, 'a sessão caiu junto');
+    const row = await owner.query<{ status: string; email: string }>('SELECT status, email FROM accounts WHERE email = $1', [session.email]);
+    assert.equal(row.rowCount, 0, 'o e-mail de verdade não mora mais em accounts (foi anonimizado)');
+  });
+
   test('recadastro sobre conta não verificada funciona COM o papel restrito (função SECURITY DEFINER da 0020), e a função não toca conta verificada', async () => {
     const api = makeClient(h);
     const email = `substitui-${randomUUID().slice(0, 8)}@teste.vuumbora.dev`;

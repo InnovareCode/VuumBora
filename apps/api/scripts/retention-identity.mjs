@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
  * Retenção da identidade dos apps: apaga tentativas de login, trilha de acesso,
- * sessões vencidas, códigos de e-mail antigos e contas NUNCA verificadas há mais de
- * 7 dias (achado M-5 e I-4, LGPD).
+ * sessões vencidas, códigos de e-mail antigos, contas NUNCA verificadas há mais de
+ * 7 dias (achado M-5 e I-4, LGPD) e, agora, candidatura de motorista e lista de
+ * espera há mais tempo que o prazo configurado (item 14 das pendências jurídicas:
+ * `docs/juridico/pendencias-para-o-advogado.md`).
  *
  * RODE COM A CREDENCIAL DONA DO BANCO, não a da API: `access_log` é
  * append-only para o papel `vuumbora_api` (migração 0012). Por isso lê
@@ -12,8 +14,9 @@
  *
  * Uso (cron diário do Easypanel, dentro do contêiner do backend):
  *   node scripts/retention-identity.mjs
- *   node scripts/retention-identity.mjs --login-attempts-days=2 --access-log-days=90 \
- *        --session-families-days=7 --email-codes-days=7 --unverified-accounts-days=7
+ *   node scripts/retention-identity.mjs --login-attempts-days=2 --access-log-days=180 \
+ *        --session-families-days=7 --email-codes-days=7 --unverified-accounts-days=7 \
+ *        --driver-applications-days=180 --waitlist-signups-days=180
  *
  * Requer `dist/` construído (a lógica vive em src/lib/identity-retention.ts).
  * Não imprime dado pessoal: só a contagem de linhas apagadas por tabela.
@@ -61,6 +64,8 @@ async function main() {
     sessionFamiliesDays: intFlag(argv, 'session-families-days', d.sessionFamiliesDays),
     emailCodesDays: intFlag(argv, 'email-codes-days', d.emailCodesDays),
     unverifiedAccountsDays: intFlag(argv, 'unverified-accounts-days', d.unverifiedAccountsDays),
+    driverApplicationsDays: intFlag(argv, 'driver-applications-days', d.driverApplicationsDays),
+    waitlistSignupsDays: intFlag(argv, 'waitlist-signups-days', d.waitlistSignupsDays),
   };
 
   const pool = new Pool({ connectionString: databaseUrl, max: 1 });

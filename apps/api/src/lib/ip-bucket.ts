@@ -12,6 +12,26 @@
  * Há também o balde GROSSO (`ipBucket48`, o /48 do IPv6) para o que protege recurso caro e escasso: a justiça da fila do
  * bcrypt e os limites por rota (revisão S1 rodada 3b, M-1). O limite global e os contadores do banco seguem no /64.
  */
+import { createHmac, randomBytes } from 'node:crypto';
+
+/**
+ * Chave do HMAC usado SÓ para o IP dos registros do servidor (pino/Fastify) fora de `/v1/auth` — candidatura, lista de
+ * espera, painel, saúde (item 16 das pendências jurídicas). Aleatória, gerada uma vez no boot: não precisa ser estável
+ * entre reinícios (o log não serve a limite nem a correlação de longo prazo, só a investigação dentro de uma subida do
+ * processo) e assim nenhuma variável de ambiente nova fica obrigatória. Nunca é a mesma chave do pepper da identidade
+ * dos apps (`AUTH_PEPPER`): aquele precisa ser ESTÁVEL (o limite por IP e a trilha de acesso comparam HMACs entre
+ * requisições diferentes) e só existe quando a identidade está configurada; este vale sempre, mesmo sem `AUTH_PEPPER`.
+ */
+const LOG_IP_HASH_KEY = randomBytes(32);
+
+/**
+ * IP para LOG (nunca para limite nem para busca): HMAC-SHA256 truncado a 16 hex. Curto de propósito — aqui só serve
+ * para um humano reconhecer "é o mesmo IP de novo" numa investigação, não para provar nada; truncar não abre brecha
+ * nova (a chave de 32 bytes nunca sai do processo, e o truncamento não é usado em nenhuma comparação de segurança).
+ */
+export function hashIpForLog(ip: string): string {
+  return createHmac('sha256', LOG_IP_HASH_KEY).update(ip).digest('hex').slice(0, 16);
+}
 
 function hex16(group: number): string {
   return group.toString(16).padStart(4, '0');

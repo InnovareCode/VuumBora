@@ -56,6 +56,11 @@ export const refreshSchema = z.object({
   refreshToken: z.string().min(20).max(200),
 });
 
+/** Exclusão de conta (Bearer): reautenticação por senha, sem regra de força (só confere a já existente). */
+export const deleteAccountSchema = z.object({
+  password: z.string().min(1).max(256),
+});
+
 /**
  * Verificar o e-mail exige a SENHA escolhida no cadastro além do código (revisão S1 rodada 2, I-4b): quem sobrescreveu um
  * cadastro pendente com a senha DELE não faz a vítima, que só digita o código recebido, verificar uma conta que não é dela.

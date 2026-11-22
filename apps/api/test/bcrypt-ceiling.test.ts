@@ -16,7 +16,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { after, before, describe, test } from 'node:test';
 import type { Pool } from 'pg';
 import { loadAuthConfig } from '../src/lib/auth-config.js';
-import { adminBcrypt, appBcrypt } from '../src/lib/bcrypt-pool.js';
+import { adminBcrypt, appBcrypt, BcryptPool } from '../src/lib/bcrypt-pool.js';
 import { loadLegalConfig } from '../src/lib/legal-config.js';
 import { resetPassword, verifyEmail } from '../src/services/account-recovery-service.js';
 import { verifyPasswordWithGuard } from '../src/services/admin-auth-service.js';
@@ -35,8 +35,40 @@ const HEALTHZ_MEDIAN_LIMIT_MS = 50;
 const HEALTHZ_WORST_LIMIT_MS = 1000;
 /** Ciclo normal da sonda = chamada (poucos ms) + pausa de 15 ms. Só o que passa de 50 ms por ciclo entra na conta da parada total. */
 const HEALTHZ_CYCLE_FLOOR_MS = 50;
-const HEALTHZ_STALL_BUDGET_MS = 1000;
+/**
+ * Orçamento da parada total do laço, em RAZÃO de uma comparação de custo 12 medida no PRÓPRIO processo (Q2 da passada
+ * 5 da Íris, `docs/veredito-iris-s1-passada-5.md`), não em ms absolutos. Antes: 1000 ms fixos — um orçamento de ~2
+ * comparações NESTA máquina (480 ms cada), mas numa máquina 2x ou 4x mais rápida (ex.: o runner do CI, ~2,9x mais
+ * rápido no total medido) o mesmo defeito (M1b: bcrypt síncrono na principal mantendo as vagas ocupadas) soma menos
+ * que 1000 ms e o limite fixo deixava passar. A razão (`STALL_BUDGET_COMPARISONS` comparações) acompanha a máquina:
+ * mais rápida, orçamento menor; mais lenta, maior — sempre o mesmo múltiplo do defeito original. O piso absoluto
+ * (`STALL_BUDGET_FLOOR_MS`) só existe para não cair abaixo do ruído comum de disputa de CPU (outliers de 0,2 a 0,3 s,
+ * Q6, causa não explicada) numa máquina hipoteticamente muitíssimo rápida.
+ */
+const STALL_BUDGET_COMPARISONS = 2;
+const STALL_BUDGET_FLOOR_MS = 300;
 const ADMIN_LOGIN_LIMIT_MS = 1000;
+
+/**
+ * UMA comparação de custo 12, medida agora, numa pista PRÓPRIA (não a `appBcrypt()` que o teste vai saturar) e com a
+ * máquina ociosa: o menor de 3 (o menor sofre menos com ruído do runner — mesmo padrão de `bcrypt-pool.test.ts`).
+ */
+async function measureSingleCompareMs(): Promise<number> {
+  const lane = new BcryptPool('calib-ceiling', 1, 0);
+  try {
+    const hash = await lane.hash('calibracao-do-orcamento', 12);
+    await lane.compare('calibracao-do-orcamento', hash); // aquece a thread
+    const singles: number[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const t0 = performance.now();
+      await lane.compare('calibracao-do-orcamento', hash);
+      singles.push(performance.now() - t0);
+    }
+    return Math.min(...singles);
+  } finally {
+    await lane.close();
+  }
+}
 
 let h: Harness;
 let fillersAtBoot: Array<Promise<unknown>> = [];
@@ -79,6 +111,9 @@ describe('A-1: teto global do bcrypt', () => {
 
   test('rajada de 30 verify-email de IPs distintos: o bcrypt nunca passa do teto, o excesso é 503 imediato e o /healthz e o login do admin seguem rápidos', async () => {
     await pool.query('TRUNCATE login_attempts');
+    const single = await measureSingleCompareMs();
+    assert.ok(single > 50, `custo 12 tem que ser trabalho de verdade (uma comparação levou ${single.toFixed(0)} ms): o custo configurado se perdeu?`);
+    const stallBudgetMs = Math.max(STALL_BUDGET_FLOOR_MS, STALL_BUDGET_COMPARISONS * single);
     const admin = await createAdmin('suporte'); // papel sem 2FA obrigatório
     const adminLogin = () => send(h.t.app, 'POST', '/auth/login', { body: { email: admin.email, password: ADMIN_PASSWORD }, headers: { 'x-forwarded-for': '10.66.0.1' } });
     assert.equal((await adminLogin()).status, 200, 'aquecimento: a pista do admin sobe a thread dela');
@@ -142,11 +177,13 @@ describe('A-1: teto global do bcrypt', () => {
     //  - pelo menos 10 sondas dentro da rajada (a sonda só reinicia quando a anterior responde);
     //  - mediana < 50 ms: o laço NÃO está ocupado de forma sustentada (uma parada isolada não mexe na mediana);
     //  - máximo < 1000 ms: nenhuma parada de segundos;
-    //  - parada TOTAL < 1000 ms: a soma, por ciclo da sonda, do que passou de 50 ms. É esta a que pega o bcrypt SÍNCRONO na
+    //  - parada TOTAL < `stallBudgetMs` (Q2 da passada 5: RAZÃO, não ms fixos — ver o comentário de `STALL_BUDGET_COMPARISONS`
+    //    no topo do arquivo): a soma, por ciclo da sonda, do que passou de 50 ms. É esta a que pega o bcrypt SÍNCRONO na
     //    principal com teto (cada comparação para o laço por ~0,5 s, mas as paradas vêm em blocos de ~1 s e a latência máxima
-    //    da chamada fica no limite), sem reprovar a parada única de 0,2 s do ruído. Medido em cópia: esse mutante soma 2,8 a 2,9 s;
-    //    as execuções limpas, 0 a 60 ms (máquina livre, presa a 2 CPUs e com carga 2x); uma parada simulada de 250 ms soma ~220 ms
-    //    e 4 delas (~0,9 s) ainda passam.
+    //    da chamada fica no limite), sem reprovar a parada única de 0,2 s do ruído. Medido em cópia NESTA máquina (single ~480
+    //    ms, orçamento ~960 ms): esse mutante soma 2,8 a 2,9 s; as execuções limpas, 0 a 60 ms (máquina livre, presa a 2 CPUs e
+    //    com carga 2x); uma parada simulada de 250 ms soma ~220 ms e 4 delas (~0,9 s) ainda passam. Numa máquina mais rápida o
+    //    orçamento encolhe na mesma proporção, então a margem sobre o defeito original (não sobre o ruído) se mantém.
     assert.ok(probes.length >= 10, `só ${probes.length} sondas do /healthz couberam na rajada de ${burstMs.toFixed(0)} ms (o laço de eventos parou)`);
     const sortedMs = probes.map((p) => p.ms).sort((a, b) => a - b);
     const worst = sortedMs[sortedMs.length - 1]!;
@@ -154,7 +191,7 @@ describe('A-1: teto global do bcrypt', () => {
     const stalledMs = cycles.reduce((sum, cycle) => sum + Math.max(0, cycle - HEALTHZ_CYCLE_FLOOR_MS), 0);
     assert.ok(median < HEALTHZ_MEDIAN_LIMIT_MS, `/healthz teve mediana de ${median.toFixed(0)} ms durante a rajada (limite ${HEALTHZ_MEDIAN_LIMIT_MS} ms): o laço está ocupado de forma sustentada`);
     assert.ok(worst < HEALTHZ_WORST_LIMIT_MS, `/healthz demorou ${worst.toFixed(0)} ms durante a rajada (limite ${HEALTHZ_WORST_LIMIT_MS} ms)`);
-    assert.ok(stalledMs < HEALTHZ_STALL_BUDGET_MS, `o laço de eventos ficou parado ${stalledMs.toFixed(0)} ms no total durante a rajada (limite ${HEALTHZ_STALL_BUDGET_MS} ms, contando só o que passa de ${HEALTHZ_CYCLE_FLOOR_MS} ms por ciclo da sonda)`);
+    assert.ok(stalledMs < stallBudgetMs, `o laço de eventos ficou parado ${stalledMs.toFixed(0)} ms no total durante a rajada (limite ${stallBudgetMs.toFixed(0)} ms = ${STALL_BUDGET_COMPARISONS} x uma comparação de ${single.toFixed(0)} ms, contando só o que passa de ${HEALTHZ_CYCLE_FLOOR_MS} ms por ciclo da sonda)`);
     assert.ok(probes.every((p) => p.status === 200), '/healthz sempre 200');
     // (4) O login do admin tem pista própria: entra durante a rajada pública, sem fila nem recusa.
     // Mesma lição do N1: um único login medido contra 400 ms só tinha margem de 4x sobre o pior caso medido (96 ms com 2 CPUs e

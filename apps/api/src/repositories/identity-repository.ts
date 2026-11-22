@@ -8,7 +8,8 @@ export type Queryable = Pick<Pool, 'query'> | Pick<PoolClient, 'query'>;
 export type AccessEvent =
   | 'login_success' | 'login_failure' | 'login_blocked' | 'token_refresh'
   | 'token_reuse_detected' | 'logout' | 'logout_all' | 'password_changed'
-  | 'register' | 'email_code_sent' | 'email_verified' | 'password_reset_requested' | 'password_reset_completed';
+  | 'register' | 'email_code_sent' | 'email_verified' | 'password_reset_requested' | 'password_reset_completed'
+  | 'account_deleted';
 
 export class EmailTakenError extends Error {}
 /** O banco recusou a data de nascimento (rede de segurança da 0019). A mensagem nunca carrega a data. */
@@ -221,6 +222,20 @@ export async function revokeFamilyByRefreshHash(db: Queryable, tokenHash: string
   );
   const row = result.rows[0];
   return row ? { familyId: row.id, accountId: row.account_id, deviceId: row.device_id } : null;
+}
+
+/**
+ * Exclusão de conta (item 3 das pendências jurídicas): chama `delete_account()` (migração 0022), que faz tudo numa
+ * transação só — anonimiza a conta, troca o hash da credencial pelo descartável, revoga sessões e aparelhos, fecha
+ * códigos vivos. `ok` e `already_deleted` são tratados pelo chamador como o MESMO sucesso (idempotente: a conta já
+ * não existe mais com dado pessoal, que é o que importa); `not_found` só ocorre se o id não existir (não deveria,
+ * vindo de uma sessão válida).
+ */
+export type DeleteAccountOutcome = 'ok' | 'already_deleted' | 'not_found';
+
+export async function deleteAccountRow(db: Queryable, accountId: string, scrubPasswordHash: string): Promise<DeleteAccountOutcome> {
+  const result = await db.query<{ delete_account: DeleteAccountOutcome }>(`SELECT delete_account($1, $2) AS delete_account`, [accountId, scrubPasswordHash]);
+  return result.rows[0]!.delete_account;
 }
 
 export async function revokeAllFamilies(db: Queryable, accountId: string): Promise<number> {

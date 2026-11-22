@@ -24,9 +24,9 @@ import { LOGIN_FAILURE_MEMORY_HOURS } from '../lib/progressive-delay.js';
 import { hmacHex, newOpaqueToken, sha256Hex, signAccessToken } from '../lib/token-crypto.js';
 import { issueEmailCode } from '../repositories/email-code-repository.js';
 import {
-  BirthDateRejectedError, createSession, EmailTakenError, findAccountById, findLoginCandidate, getRefreshTokenExpiry, insertAccessLog, insertOrReclaimAccount,
-  PublicIdCollisionError, recordLoginSuccess, reserveAttempts, reserveDelayedAttempt, revokeAllFamilies, revokeFamilyByRefreshHash,
-  rotateRefreshToken, upsertDevice, type AttemptKey, type Queryable,
+  BirthDateRejectedError, createSession, deleteAccountRow, EmailTakenError, findAccountById, findLoginCandidate, findPasswordHash, getRefreshTokenExpiry,
+  insertAccessLog, insertOrReclaimAccount, PublicIdCollisionError, recordLoginSuccess, reserveAttempts, reserveDelayedAttempt, revokeAllFamilies,
+  revokeFamilyByRefreshHash, rotateRefreshToken, upsertDevice, type AttemptKey, type Queryable,
 } from '../repositories/identity-repository.js';
 import { ConsentOutdatedError, insertConsents } from '../repositories/legal-repository.js';
 import { deliverCode, type MailDeps } from './code-delivery.js';
@@ -366,4 +366,54 @@ export async function logoutAll(pool: Pool, accountId: string, ctx: RequestConte
 
 export async function getAccount(pool: Pool, accountId: string): Promise<AccountSummary | null> {
   return findAccountById(pool, accountId);
+}
+
+export type DeleteAccountResult =
+  | { kind: 'ok' }
+  | { kind: 'wrong_password' }
+  | { kind: 'blocked'; retryAfterSeconds: number }
+  | { kind: 'account_missing' };
+
+/**
+ * Exclusão de conta (item 3 das pendências jurídicas): reautentica por senha e, só se ela confere, anonimiza a
+ * conta (`delete_account()`, migração 0022). Mesma defesa do login contra adivinhação de senha: espera progressiva
+ * por par (aqui, a própria conta + IP: não há "identificador" alheio a provar, a chave já é o `accountId`),
+ * reserva de lugar no bcrypt ANTES do banco (B-1) e comparação SEMPRE com um hash real ou o descartável. O hash
+ * descartável também é o que SOBRESCREVE a credencial apagada:
+ * nenhuma senha nova é gerada só para isso, e ele nunca autentica (a conta vira `status = 'deleted'` na mesma
+ * transação, e o login já recusa qualquer conta que não seja `active`).
+ */
+export async function deleteAccount(pool: Pool, config: AuthConfig, accountId: string, password: string, ctx: RequestContext): Promise<DeleteAccountResult> {
+  const dummyHash = await getDummyHash(config.bcryptCost);
+  return withBcryptReservation(reserveAppBcrypt(ctx.bcryptOrigin ?? null), (bcrypt) => deleteAccountWithReservation(pool, config, accountId, password, ctx, bcrypt, dummyHash));
+}
+
+async function deleteAccountWithReservation(
+  pool: Pool, config: AuthConfig, accountId: string, password: string, ctx: RequestContext, bcrypt: BcryptReservation, dummyHash: string,
+): Promise<DeleteAccountResult> {
+  const pairHash = hmacHex(config.pepper, `delete_account:${accountId}|ip:${ctx.ipHash ?? '-'}`);
+  const gate = await reserveDelayedAttempt(pool, {
+    scope: 'login',
+    identifierHash: pairHash,
+    ipHash: ctx.ipHash,
+    schedule: config.loginDelay,
+    memoryHours: LOGIN_FAILURE_MEMORY_HOURS,
+  });
+  if (!gate.allowed) {
+    await insertAccessLog(pool, { event: 'login_blocked', accountId, deviceId: null, ...ctx });
+    return { kind: 'blocked', retryAfterSeconds: gate.retryAfterSeconds };
+  }
+
+  const storedHash = await findPasswordHash(pool, accountId);
+  const passwordOk = await bcrypt.compare(password, storedHash ?? dummyHash);
+  if (!storedHash || !passwordOk) {
+    await insertAccessLog(pool, { event: 'login_failure', accountId, deviceId: null, ...ctx });
+    return { kind: 'wrong_password' };
+  }
+  await recordLoginSuccess(pool, [pairHash], ctx.ipHash);
+
+  const outcome = await deleteAccountRow(pool, accountId, dummyHash);
+  if (outcome === 'not_found') return { kind: 'account_missing' };
+  await insertAccessLog(pool, { event: 'account_deleted', accountId, deviceId: null, ...ctx });
+  return { kind: 'ok' };
 }

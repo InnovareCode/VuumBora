@@ -10,9 +10,9 @@ Sem `AUTH_PEPPER`/`AUTH_JWT_SECRET` válidos (≥32 caracteres, entropia de gera
 rotas respondem `503 auth_unavailable`. Corpo inválido: `400 invalid_body` (ou `invalid_email`, `invalid_password`,
 `invalid_phone`). Qualquer 4xx de transporte (corpo grande demais, `Content-Type` inesperado, JSON ilegível) também volta como `400 invalid_body`.
 Limites por IP em memória, em duas classes (`429` do rate limit, corpo `rate_limited`): **credenciais e códigos** (`register`, `login`,
-`verify-email`, `resend-verification`, `forgot-password`, `reset-password`): padrão 100 pedidos por rota em 15 min por endereço IPv4 ou /64 IPv6, e teto de
-1000 por /48 IPv6; **sessão** (`refresh`, `logout`, `logout-all`, `consents`): sem cota por rota, só o limite global (100 por minuto por endereço ou /64, e teto
-de 3000 por minuto por /48). Tudo configurável por variável de ambiente (`apps/api/.env.example`).
+`verify-email`, `resend-verification`, `forgot-password`, `reset-password`, **`delete-account`** — gasta bcrypt, mesma classe): padrão 100 pedidos por
+rota em 15 min por endereço IPv4 ou /64 IPv6, e teto de 1000 por /48 IPv6; **sessão** (`refresh`, `logout`, `logout-all`, `consents`): sem cota por rota,
+só o limite global (100 por minuto por endereço ou /64, e teto de 3000 por minuto por /48). Tudo configurável por variável de ambiente (`apps/api/.env.example`).
 Pista do bcrypt cheia (sem vaga e sem lugar na fila): `503 server_busy` + `Retry-After: 3` e `error.retryAfterSeconds: 3`, em
 login, `register`, `verify-email` e `reset-password` (e no login do admin). A recusa acontece antes de gravar qualquer coisa
 (`src/routes/auth-http.ts:40-44`, `src/lib/bcrypt-pool.ts:62`). O app deve mostrar "tente de novo em instantes", não queda.
@@ -162,29 +162,74 @@ Troca a senha e **revoga todas as sessões** (refresh e access tokens caem na ho
 ## Demais rotas (sem mudança de contrato, exceto o que está dito)
 
 - `POST /refresh` `{ refreshToken }` → `{ accessToken, ..., refreshToken, ... }`; qualquer recusa é `401 invalid_refresh_token`.
-  Conta que perdeu o e-mail verificado também é recusada. Corpo malformado (`refreshToken` ausente, curto ou longo demais) é
-  `400 invalid_refresh_body`, código PRÓPRIO: o app o trata como o 401 (sessão encerrada), e só ele. O `invalid_body` genérico
-  (um 4xx de transporte) **não** encerra sessão nenhuma (B5, rodada 3c).
+  Conta que perdeu o e-mail verificado também é recusada. Corpo malformado (`refreshToken` ausente, curto ou longo demais)
+  É `400 invalid_refresh_body`, código PRÓPRIO: o app o trata como o 401 (sessão encerrada), e só ele — **mas só quando o
+  corpo chegou como OBJETO JSON válido** e a falha é mesmo no formato do `refreshToken` (Q2, passada 6 da Íris). O
+  `invalid_body` genérico (um 4xx de transporte: corpo grande, tipo de conteúdo errado, JSON ilegível — **e também**
+  `text/plain` e requisição sem corpo nem `Content-Type`, que nunca chegam a ser um objeto) **não** encerra sessão
+  nenhuma (B5, rodada 3c).
 - `POST /logout` `{ refreshToken }` (idempotente); `POST /logout-all` (Bearer) → `{ revokedSessions }`.
+- `POST /delete-account` (Bearer) `{ "password" }` → **exclusão de conta** (item 3 das pendências jurídicas,
+  `docs/juridico/pendencias-para-o-advogado.md`). Ver seção própria abaixo.
 - `GET /me` (Bearer) → `{ id, publicId, fullName, accountType }` (**`roles` foi removido**). Com a B3 ganha `consent` (ver o fim do documento).
 - Breaking vs. versão anterior: `role` → `accountType` (em register, login e na resposta); `register` não devolve mais tokens
   nem aceita `device`; `login` exige `accountType`.
+
+## POST `/v1/auth/delete-account` (exclusão de conta, item 3 das pendências jurídicas)
+
+`{ "password" }` (Bearer) → `200 { "accountDeleted": true }`. Reautentica por senha (gasta bcrypt — mesma classe de
+limite por IP do login/cadastro, `limits.credentials()`) e, só se ela confere, **anonimiza** a conta na mesma
+transação (`delete_account()`, migração 0022):
+
+- `accounts`: `email`, `full_name` e `phone` viram texto genérico (o e-mail some da unicidade `(account_type, email)`
+  — fica livre para um recadastro), `birth_date` vira `NULL`, `status = 'deleted'`, `deleted_at = now()`.
+  `account_type` e `public_id` continuam imutáveis (gatilho da 0010).
+- `account_credentials`: o hash da senha é **sobrescrito** por um hash descartável (o mesmo de
+  `identity-service.ts::getDummyHash`, usado para disfarçar e-mail inexistente no login) — nunca `DELETE` (a API não
+  tem esse privilégio, 0017), mas a senha antiga nunca mais autentica nada, e `status = 'deleted'` já bloqueia o login
+  de qualquer forma.
+- `devices`: `device_label` vira `NULL`, todo aparelho é revogado (`revoked_at`).
+- `refresh_token_families`: **todas** as sessões da conta são revogadas (`revoke_reason = 'account_deleted'`), não só
+  a sessão usada na própria chamada.
+- `account_email_codes`: qualquer código ainda vivo é fechado (`close_reason = 'account_deleted'`).
+- **Nunca tocados** (é o que a lei obriga manter): `account_consents` (prova do aceite, LGPD art. 8º §2º) e
+  `access_log` (auditoria — ganha a linha `account_deleted`).
+
+Erros: `400 invalid_body` (sem senha); `401 wrong_password` (senha errada — a conta e as sessões continuam vivas);
+`401 unauthorized` (sem Bearer ou sessão inválida); `429 too_many_attempts` com `Retry-After` e
+`error.retryAfterSeconds` — **mesma espera progressiva do login (I-6)**, por um par PRÓPRIO (`accountId` + IP, não o
+`identifier` do login: não há "e-mail de outra pessoa" a proteger aqui), então errar a senha na exclusão não atrasa o
+login da mesma conta, e vice-versa; `503 server_busy` + `Retry-After: 3` — pista do bcrypt cheia (ver a nota do topo).
+Idempotente a nível de banco (`delete_account()` devolve `already_deleted` numa 2ª chamada), mas pela HTTP isso quase
+nunca se manifesta: a 1ª chamada já revoga a sessão usada, então uma 2ª com o MESMO token cai em `401 unauthorized`
+antes de chegar à função. **Nunca** bloqueada por aceite pendente (`requireCurrentConsent`): excluir a conta é o
+oposto de um compromisso novo.
 
 ## Operação
 
 - **Login do admin** (`POST /v1/admin/auth/login`, fora deste contrato): também responde `503 server_busy` + `Retry-After: 3` quando a
   pista do bcrypt está cheia (o erro escapa da rota e cai no handler global, `src/app.ts:106-111`). A tabela de erros do admin está em
   `docs/contrato-admin-2fa.md`, seção 4.
+- **IP no log do servidor fora de `/v1/auth`** (item 16 das pendências jurídicas): candidatura, lista de espera, painel e
+  `/healthz` nunca logam o IP em claro — vai um hash curto (`lib/ip-bucket.ts::hashIpForLog`, chave aleatória do processo,
+  sem relação com `AUTH_PEPPER`), só para reconhecer "é o mesmo IP" numa investigação. Dentro de `/v1/auth` o log não traz
+  IP nenhum (nem em claro, nem hash) — a trilha estável (HMAC com `AUTH_PEPPER`) mora só no banco (`access_log`/`login_attempts`).
+  A configuração do nginx/Easypanel do site é outra frente (Vulcano), fora deste contrato.
 - **E-mail:** `buildApp({ mail })` recebe um `MailPort` (`src/lib/mail-port.ts`). Em produção usa
   `createSmtpMailer` (`src/services/mailer.ts`, SMTP do painel/ambiente, lido a cada envio). Falha de envio nunca vira erro
   HTTP: no cadastro aparece como `emailSent:false`; nas rotas "iguais" é só log (`auth_mail_send_failed`, com nome/código do erro).
 - **Retenção (M-5):** `npm run identity:retention -w @vuumbora/api` (cron diário do Easypanel, dentro do contêiner, com
   **`MIGRATION_DATABASE_URL`** = credencial dona; `access_log` é append-only para o papel da API). Apaga `login_attempts` > 2 dias,
-  `access_log` > 90 dias, famílias de sessão vencidas/revogadas há > 7 dias, códigos de e-mail fechados/vencidos há > 7 dias.
+  `access_log` > **180 dias** (6 meses — item 12 das pendências jurídicas, Marco Civil art. 15; era 90), famílias de sessão
+  vencidas/revogadas há > 7 dias, códigos de e-mail fechados/vencidos há > 7 dias.
   Também apaga **contas NUNCA verificadas e paradas há > 7 dias** (I-4: nome, e-mail e telefone de quem não provou ser dono do e-mail;
   leva junto a credencial, os códigos e o aceite, por cascata) — "paradas" = sem cadastro, recadastro nem pedido de código nesse prazo.
-  Flags: `--login-attempts-days --access-log-days --session-families-days --email-codes-days --unverified-accounts-days`. Requer `dist/` (build).
-  `admin_audit_log` não é coberto (trigger de inviolabilidade; procedimento próprio).
+  **Candidatura de motorista e lista de espera** (item 14) entram na mesma rotina: `driver_applications` e
+  `waitlist_signups` com mais de **180 dias de criação** (prazo PROVISÓRIO — a pergunta ao advogado sobre o prazo certo
+  ainda não tem resposta; revisar quando vier). Flags: `--login-attempts-days --access-log-days --session-families-days
+  --email-codes-days --unverified-accounts-days --driver-applications-days --waitlist-signups-days`. Requer `dist/` (build).
+  `admin_audit_log` não é coberto (trigger de inviolabilidade; procedimento próprio). Exclusão de conta por pedido do
+  titular é `POST /v1/auth/delete-account` (acima), não esta rotina — a rotina só cobre contas NUNCA verificadas.
 - **Variáveis** (todas opcionais, ver `apps/api/.env.example`): `AUTH_LOGIN_DELAY_BASE_SECONDS` (1) e `AUTH_LOGIN_DELAY_MAX_SECONDS` (900) —
   substituem `AUTH_LOGIN_MAX_FAILURES`, `AUTH_LOGIN_IDENTIFIER_CEILING` e `AUTH_LOGIN_WINDOW_MINUTES`, que não existem mais; `AUTH_REGISTER_*`,
   `AUTH_CODE_REQUEST_*`, `AUTH_EMAIL_CODE_*`, `AUTH_EMAIL_GLOBAL_MAX_PER_HOUR` (100), `AUTH_RESET_MAX_FAILURES_PER_DAY` (10).
