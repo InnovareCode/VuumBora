@@ -70,8 +70,9 @@ const identity = createIdentityClient({
   ser repetido com o token de outra.
   - Recusa **definitiva** do refresh = **um** logout local; todas as pendentes recebem `unauthorized` com o `code` que o
     servidor mandou e o estado vira `signed_out/session_expired`. Definitiva é só a recusa **assinada pela API**: `401
-    invalid_refresh_token` (ou o mesmo `code` em 400/403) e `400 invalid_body` (refresh malformado guardado). **Status
-    sozinho não basta** (M-4): um proxy, WAF ou CDN também responde 401/403/400, e isso não pode deslogar todo mundo.
+    invalid_refresh_token` (ou o mesmo `code` em 400/403) e `400 invalid_refresh_body` (refresh malformado guardado). **Status
+    sozinho não basta** (M-4): um proxy, WAF ou CDN também responde 401/403/400/413/415, e isso não pode deslogar todo mundo.
+    O `400 invalid_body` **genérico** da API (qualquer 4xx de transporte) **não** é definitivo (B5).
   - Falha **transitória** (sem rede, 5xx, 429 **e qualquer recusa sem `code` reconhecido**) **não desloga**: a sessão fica
     e o mesmo refresh descansa 5 s (até 60 s se o servidor mandar `retryAfterSeconds`) antes de nova tentativa — repetir
     logo depois de uma falha ambígua seria reuso. Quem pediu recebe `kind: 'unavailable'` (tente de novo), nunca

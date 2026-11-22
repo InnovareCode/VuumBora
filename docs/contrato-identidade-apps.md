@@ -8,7 +8,11 @@ Envelope: sucesso `{ "ok": true, "data": ... }`; erro `{ "ok": false, "error": {
 Toda resposta de `/v1/auth/*` sai com `Cache-Control: no-store`. Mensagens são fixas (nunca ecoam a entrada).
 Sem `AUTH_PEPPER`/`AUTH_JWT_SECRET` válidos (≥32 caracteres, entropia de gerador, **diferentes entre si**) todas as
 rotas respondem `503 auth_unavailable`. Corpo inválido: `400 invalid_body` (ou `invalid_email`, `invalid_password`,
-`invalid_phone`). Limite por IP em memória (padrão 30/15 min): `429` do rate limit.
+`invalid_phone`). Qualquer 4xx de transporte (corpo grande demais, `Content-Type` inesperado, JSON ilegível) também volta como `400 invalid_body`.
+Limites por IP em memória, em duas classes (`429` do rate limit, corpo `rate_limited`): **credenciais e códigos** (`register`, `login`,
+`verify-email`, `resend-verification`, `forgot-password`, `reset-password`): padrão 100 pedidos por rota em 15 min por endereço IPv4 ou /64 IPv6, e teto de
+1000 por /48 IPv6; **sessão** (`refresh`, `logout`, `logout-all`, `consents`): sem cota por rota, só o limite global (100 por minuto por endereço ou /64, e teto
+de 3000 por minuto por /48). Tudo configurável por variável de ambiente (`apps/api/.env.example`).
 Pista do bcrypt cheia (sem vaga e sem lugar na fila): `503 server_busy` + `Retry-After: 3` e `error.retryAfterSeconds: 3`, em
 login, `register`, `verify-email` e `reset-password` (e no login do admin). A recusa acontece antes de gravar qualquer coisa
 (`src/routes/auth-http.ts:40-44`, `src/lib/bcrypt-pool.ts:62`). O app deve mostrar "tente de novo em instantes", não queda.
@@ -158,7 +162,9 @@ Troca a senha e **revoga todas as sessões** (refresh e access tokens caem na ho
 ## Demais rotas (sem mudança de contrato, exceto o que está dito)
 
 - `POST /refresh` `{ refreshToken }` → `{ accessToken, ..., refreshToken, ... }`; qualquer recusa é `401 invalid_refresh_token`.
-  Conta que perdeu o e-mail verificado também é recusada.
+  Conta que perdeu o e-mail verificado também é recusada. Corpo malformado (`refreshToken` ausente, curto ou longo demais) é
+  `400 invalid_refresh_body`, código PRÓPRIO: o app o trata como o 401 (sessão encerrada), e só ele. O `invalid_body` genérico
+  (um 4xx de transporte) **não** encerra sessão nenhuma (B5, rodada 3c).
 - `POST /logout` `{ refreshToken }` (idempotente); `POST /logout-all` (Bearer) → `{ revokedSessions }`.
 - `GET /me` (Bearer) → `{ id, publicId, fullName, accountType }` (**`roles` foi removido**). Com a B3 ganha `consent` (ver o fim do documento).
 - Breaking vs. versão anterior: `role` → `accountType` (em register, login e na resposta); `register` não devolve mais tokens

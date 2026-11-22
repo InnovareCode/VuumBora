@@ -895,3 +895,38 @@ React Native, para Android e iOS.** Uma só base de código para as duas lojas.
   critério do S4 (corridas de campo com dois Android e um iPhone) e o teste de
   localização em segundo plano passam a ser obrigatórios nas duas, não só no
   Android.
+
+## Limites por IP da identidade dos apps — decisão do Atlas, revisável pelo dono (22/11/2026)
+
+Nos celulares, muita gente divide o mesmo endereço de rede da operadora. O limite por IP das rotas `/v1/auth/*` precisa servir a
+essa realidade sem abrir mão do freio contra abuso. Os números abaixo são **pontos de partida**, todos configuráveis por variável
+de ambiente (`apps/api/.env.example`); o dono pode mandar subir ou descer qualquer um.
+
+| Classe de rota | Cota | Padrão | Variável |
+|---|---|---|---|
+| **Credenciais e códigos** (cadastro, login, verificar e-mail, redefinir senha, reenvio, esqueci a senha) | por rota, por endereço IPv4 ou por /64 IPv6, em 15 min | **100** (era 30) | `AUTH_IP_RATE_LIMIT_MAX`, `AUTH_IP_RATE_LIMIT_WINDOW_MINUTES` |
+| (mesma classe) | teto por rota para um bloco /48 IPv6 inteiro, na mesma janela | **1000** (novo) | `AUTH_IP_RATE_LIMIT_BLOCK_MAX` |
+| **Sessão** (renovar sessão, sair, sair de todos, reaceite) | sem cota por rota: vale o limite global, por minuto, por endereço ou /64 | **100** (o global que já existia) | `GLOBAL_RATE_LIMIT_MAX` |
+| (mesma classe) | teto por minuto para um bloco /48 IPv6 inteiro | **3000** (novo) | `AUTH_SESSION_BLOCK_RATE_LIMIT_MAX` |
+
+**Por quê:**
+- **Sessão sem cota por rota.** Renovar a sessão, sair e reaceitar não gastam bcrypt (o custo de CPU que o limite por IP existe para
+  proteger), e o token de renovação é aleatório de 256 bits. O que sobra a proteger é o volume, e o limite global (mais o teto do
+  bloco) já cobre.
+- **100 por rota nas credenciais.** Cada pessoa gasta de 1 a 3 pedidos por rota ao entrar ou se cadastrar; 100 cobre algumas dezenas
+  de pessoas entrando ao mesmo tempo atrás do mesmo endereço, com folga para erro de digitação. A defesa de CPU e de conta continua
+  nas outras camadas, que **não mudaram**: espera progressiva por par (identificador + IP), 10 conferências de código por par, a
+  fila do bcrypt com justiça por origem, os limites por e-mail e por IP gravados no banco e o teto global de e-mails por hora.
+- **/64 como chave, /48 como teto.** Em IPv6 cada celular recebe um /64 próprio, que passa a ter a sua cota. O teto do /48 (mais
+  alto) continua impedindo que um bloco gratuito de IPv6 (65 536 /64) renda 65 536 cotas a uma máquina só. O pedido que a cota do /64
+  já recusou não conta no teto do bloco.
+
+**O que o dono precisa saber:**
+- Cada endereço pode tentar mais vezes por janela do que antes (100 em vez de 30 por rota de credencial). É o preço de não barrar
+  gente honesta atrás de um endereço compartilhado.
+- **Continuam valendo, e continuam mais apertados, os limites gravados no banco:** 30 cadastros por hora e 20 pedidos de código
+  (reenvio e esqueci a senha) por hora por endereço (`AUTH_REGISTER_MAX_PER_IP`, `AUTH_CODE_REQUEST_MAX_PER_IP`). Em cadastro e em
+  pedido de código é **esse** limite que manda; ele é o freio contra e-mail em massa que o dono escolheu no lugar de CAPTCHA
+  (21/11/2026). Se o volume de lançamento atrás de um mesmo endereço passar disso, a decisão de subi-los é do dono.
+- Como calibrar: cada resposta limitada deixa no log uma linha `{"event":"rate_limited","route":"/v1/auth/login"}`. Conte por rota
+  depois de o `TRUST_PROXY` estar provado em produção (sem ele todos os clientes parecem um endereço só).

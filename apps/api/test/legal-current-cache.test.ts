@@ -2,6 +2,8 @@
  * Revisão S1 rodada 3b, B-3: `GET /v1/legal/current` é público e consultava o banco a CADA pedido (o pool tem 5 conexões, divididas
  * com login e cadastro). Agora há cache em memória por perfil, com o TTL de `LEGAL_CACHE_MAX_AGE_SECONDS`.
  *
+ * Rodada 3c (B-7): `unavailable` (sem versão publicada) fica guardado por um prazo CURTO (cache negativo); erro de banco, nunca.
+ *
  * Duas camadas: a classe `CurrentLegalCache` com relógio falso (o prazo vence sem dormir) e a rota real contando as leituras ao
  * catálogo. Este arquivo usa o prazo PADRÃO (60 s); `legal-consent-api.test.ts` desliga o cache de propósito (troca o catálogo
  * a cada teste e relê a vigente na hora).
@@ -11,7 +13,7 @@ import './helpers/setup.js';
 import assert from 'node:assert/strict';
 import { after, afterEach, before, describe, test } from 'node:test';
 import type { CurrentLegal } from '../src/domain/legal.js';
-import { CurrentLegalCache } from '../src/lib/current-legal-cache.js';
+import { CurrentLegalCache, DEFAULT_NEGATIVE_TTL_MS } from '../src/lib/current-legal-cache.js';
 import type { CurrentLegalResult } from '../src/services/legal-service.js';
 import { pool, prepareDatabase, shutdown } from './helpers/harness.js';
 import { makeClient, PASSWORD, REGISTER_EXTRAS, startIdentityApp, type Harness } from './helpers/identity-kit.js';
@@ -24,10 +26,10 @@ const okResult = (audience: 'passenger' | 'driver', version = 'v1'): CurrentLega
 };
 
 describe('CurrentLegalCache (relógio falso)', () => {
-  function rig(ttlMs: number) {
+  function rig(ttlMs: number, negativeTtlMs?: number) {
     let now = 1_000_000;
     let loads = 0;
-    const cache = new CurrentLegalCache(ttlMs, () => now);
+    const cache = new CurrentLegalCache(ttlMs, () => now, negativeTtlMs);
     return {
       cache,
       advance: (ms: number) => { now += ms; },
@@ -74,17 +76,50 @@ describe('CurrentLegalCache (relógio falso)', () => {
     assert.equal(t.loads(), 2);
   });
 
-  test('"indisponível" e erro NUNCA ficam guardados: a próxima requisição tenta de novo', async () => {
+  test('erro de banco NUNCA fica guardado: a próxima requisição tenta de novo', async () => {
+    const t = rig(60_000);
+    await assert.rejects(t.cache.get('driver', t.load(new Error('banco caiu'))), /banco caiu/);
+    assert.equal((await t.cache.get('driver', t.load(okResult('driver')))).kind, 'ok', 'o erro não ficou guardado');
+    assert.equal(t.loads(), 2);
+  });
+
+  test('B-7: "indisponível" (sem versão publicada) fica guardado por um prazo CURTO: dentro dele não consulta; vencido, consulta e vê a publicação', async () => {
     const t = rig(60_000);
     const unavailable: CurrentLegalResult = { kind: 'unavailable', reason: 'not_published' };
-    assert.equal(await t.cache.get('passenger', t.load(unavailable)), unavailable);
-    assert.equal((await t.cache.get('passenger', t.load(okResult('passenger')))).kind, 'ok', 'a indisponibilidade não ficou guardada');
+    for (let i = 0; i < 25; i += 1) assert.equal(await t.cache.get('passenger', t.load(unavailable)), unavailable);
+    assert.equal(t.loads(), 1, '25 pedidos, UMA leitura do catálogo');
+    t.advance(DEFAULT_NEGATIVE_TTL_MS - 1);
+    await t.cache.get('passenger', t.load(okResult('passenger')));
+    assert.equal(t.loads(), 1, 'ainda dentro do prazo curto');
+    t.advance(1);
+    assert.equal((await t.cache.get('passenger', t.load(okResult('passenger')))).kind, 'ok', 'venceu: o operador publicou e o pedido seguinte já vê');
     assert.equal(t.loads(), 2);
+    assert.ok(DEFAULT_NEGATIVE_TTL_MS >= 1_000 && DEFAULT_NEGATIVE_TTL_MS <= 5_000, 'prazo negativo de 1 a 5 s');
+  });
 
-    const other = rig(60_000);
-    await assert.rejects(other.cache.get('driver', other.load(new Error('banco caiu'))), /banco caiu/);
-    assert.equal((await other.cache.get('driver', other.load(okResult('driver')))).kind, 'ok', 'o erro não ficou guardado');
-    assert.equal(other.loads(), 2);
+  test('o prazo do "indisponível" é só o curto: o "ok" segue valendo o TTL inteiro e o prazo negativo nunca passa do TTL', async () => {
+    const t = rig(60_000, 3_000);
+    await t.cache.get('passenger', t.load(okResult('passenger')));
+    await t.cache.get('driver', t.load({ kind: 'unavailable', reason: 'not_published' }));
+    t.advance(3_000);
+    await t.cache.get('passenger', t.load(okResult('passenger')));
+    assert.equal(t.loads(), 2, 'o ok do passageiro continua guardado aos 3 s');
+    await t.cache.get('driver', t.load(okResult('driver')));
+    assert.equal(t.loads(), 3, 'o indisponível do motorista venceu aos 3 s');
+
+    const short = rig(2_000, 3_000); // TTL menor que o prazo negativo: vale o TTL
+    await short.cache.get('driver', short.load({ kind: 'unavailable', reason: 'not_configured' }));
+    short.advance(2_000);
+    await short.cache.get('driver', short.load(okResult('driver')));
+    assert.equal(short.loads(), 2, 'o negativo nunca vive mais que o TTL');
+  });
+
+  test('TTL 0 desliga o cache INTEIRO, o negativo também (o teste do aceite troca o catálogo a cada caso)', async () => {
+    const t = rig(0);
+    const unavailable: CurrentLegalResult = { kind: 'unavailable', reason: 'not_published' };
+    await t.cache.get('passenger', t.load(unavailable));
+    await t.cache.get('passenger', t.load(unavailable));
+    assert.equal(t.loads(), 2);
   });
 
   test('pedidos simultâneos de uma entrada vazia ou vencida compartilham UMA consulta', async () => {
@@ -204,7 +239,7 @@ describe('GET /v1/legal/current com cache (rota real, banco real)', () => {
     }
   });
 
-  test('erro de banco e "sem versão publicada" NÃO ficam guardados: o primeiro 200 depois da falha vem na hora', async () => {
+  test('erro de banco NÃO fica guardado: o primeiro 200 depois da falha vem na hora', async () => {
     await startApp();
     const watch = watchLegalReads({ failFirst: 1 });
     try {
@@ -216,13 +251,29 @@ describe('GET /v1/legal/current com cache (rota real, banco real)', () => {
     } finally {
       watch.stop();
     }
+  });
 
+  test('B-7: sem versão publicada, uma enxurrada NÃO relê o catálogo a cada pedido (cache negativo curto); o cabeçalho segue no-store', async () => {
+    await startApp();
     await resetLegalCatalog(pool);
-    const empty = await current('driver');
-    assert.equal(empty.status, 503);
-    assert.equal(empty.body.error.code, 'consent_unavailable');
-    await resetToBaseline(pool);
-    assert.equal((await current('driver')).status, 200, 'o "indisponível" não ficou guardado');
+    const watch = watchLegalReads();
+    try {
+      const started = performance.now();
+      const replies = [];
+      for (let i = 0; i < 30; i += 1) replies.push(await current('driver'));
+      replies.push(...(await Promise.all(Array.from({ length: 30 }, () => current('driver')))));
+      const elapsedMs = performance.now() - started;
+      for (const reply of replies) {
+        assert.equal(reply.status, 503);
+        assert.equal(reply.body.error.code, 'consent_unavailable');
+        assert.equal(reply.headers['cache-control'], 'no-store', 'o indisponível nunca vai para o cache do cliente');
+      }
+      // Relação medida neste processo (nada de piso absoluto): no máximo uma leitura por prazo negativo decorrido, mais a primeira.
+      const allowed = Math.floor(elapsedMs / DEFAULT_NEGATIVE_TTL_MS) + 1;
+      assert.ok(watch.reads() >= 1 && watch.reads() <= allowed, `60 pedidos em ${elapsedMs.toFixed(0)} ms fizeram ${watch.reads()} leituras; o prazo curto permite ${allowed}`);
+    } finally {
+      watch.stop();
+    }
   });
 
   test('a defasagem é limitada ao prazo e SÓ o GET usa o cache: o cadastro lê o banco na hora e aceita a versão nova', async () => {

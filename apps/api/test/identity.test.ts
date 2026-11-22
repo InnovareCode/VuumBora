@@ -401,7 +401,9 @@ describe('renovação (rotate_refresh_token)', () => {
   });
 
   test('refresh só em corpo válido; a rota não aceita o token de acesso no lugar', async () => {
-    assert.equal((await call('POST', '/v1/auth/refresh', { body: {} })).status, 400);
+    const malformed = await call('POST', '/v1/auth/refresh', { body: {} });
+    assert.equal(malformed.status, 400);
+    assert.equal(malformed.body.error.code, 'invalid_refresh_body', 'código PRÓPRIO (B5): o invalid_body genérico é de 4xx de transporte');
     const created = await registerAndLogin();
     assert.ok([400, 401].includes((await call('POST', '/v1/auth/refresh', { body: { refreshToken: created.accessToken } })).status));
   });

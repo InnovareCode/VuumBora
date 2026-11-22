@@ -104,13 +104,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
     // Pista de bcrypt cheia (A-1, rodada 3) que escapou do catch da rota (ex.: login do admin): 503 estruturado, não 500.
     if (err instanceof BcryptBusyError) {
-      request.log.warn({ event: 'bcrypt_busy', lane: err.lane });
+      // `reason` (origin | capacity | closing) diz POR QUE recusou, sem a chave de origem: um TRUST_PROXY errado, por exemplo, aparece como
+      // `origin` em massa (todos os clientes viram um balde só).
+      request.log.warn({ event: 'bcrypt_busy', lane: err.lane, reason: err.reason });
       reply.header('Retry-After', String(BCRYPT_BUSY_RETRY_AFTER_SECONDS));
       reply.code(503).send({ ok: false, error: { code: 'server_busy', message: 'Muitas solicitações no momento. Tente novamente em alguns segundos.', retryAfterSeconds: BCRYPT_BUSY_RETRY_AFTER_SECONDS } });
       return;
     }
 
     if (statusCode === 429) {
+      // Quantos 429 cada rota deu é o que calibra os limites por IP (docs/decisoes-do-dono.md). O padrão de rota (`/v1/auth/login`), nunca a URL
+      // com a querystring nem o IP: nenhum dado do cliente vai para o log. O 'request completed' do Fastify não traz a rota.
+      request.log.info({ event: 'rate_limited', route: request.routeOptions?.url ?? 'desconhecida' });
       reply.code(429).send({
         ok: false,
         error: { code: 'rate_limited', message: 'Muitas requisições. Tente novamente em alguns minutos.' },
@@ -150,11 +155,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // cobre qualquer outro erro lançado antes da rota (ex.: corpo malformado).
   await app.register(rateLimit, {
     global: true,
-    max: 100,
+    max: env.GLOBAL_RATE_LIMIT_MAX,
     timeWindow: '1 minute',
     // Este limite GLOBAL usa o balde: IPv4 = o endereço, IPv6 = o /64. Sem isso, um único /64 dá 2^64 "IPs" (revisão S1
-    // rodada 2, I-5d). Os limites POR ROTA (cadastro, login, admin, formulários) declaram a própria chave, o /48 no IPv6
-    // (`routeRateLimitKey`, rodada 3b M-1): o global fica no /64 para não somar, num /48 de provedor, todos os assinantes.
+    // rodada 2, I-5d). Os limites POR ROTA do admin e dos formulários públicos declaram a própria chave, o /48 no IPv6
+    // (`routeRateLimitKey`, rodada 3b M-1): o global fica no /64 para não somar, num /48 de provedor, todos os assinantes. A identidade
+    // dos apps (`/v1/auth/*`) usa o /64 por rota e um teto por /48 (`lib/ip-rate-limits.ts`); as rotas de sessão dela só têm o global.
     keyGenerator: rateLimitKey,
     errorResponseBuilder: () => {
       const err = new Error('rate limited') as FastifyError;
@@ -191,7 +197,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       credentials: false,
     });
 
-    registerHealthRoute(instance);
+    registerHealthRoute(instance, { ttlMs: env.HEALTHZ_CACHE_SECONDS * 1000 });
     registerWaitlistRoute(instance);
     registerDriverApplicationRoute(instance);
     // Documentos legais (M-3): uma leitura da configuração serve ao catálogo público e ao aceite da identidade.

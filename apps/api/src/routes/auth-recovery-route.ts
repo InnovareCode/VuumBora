@@ -7,12 +7,11 @@ import type { FastifyInstance } from 'fastify';
 import { pool } from '../db.js';
 import { forgotPasswordSchema, resendVerificationSchema, resetPasswordSchema, verifyEmailSchema } from '../domain/auth.js';
 import type { AuthConfig } from '../lib/auth-config.js';
+import type { IpLimitRouteOptions } from '../lib/ip-rate-limits.js';
 import type { MailPort } from '../lib/mail-port.js';
 import * as recovery from '../services/account-recovery-service.js';
 import { contextOf, fail, invalidBody, mailFailureLogger, tooManyAttempts, unavailable } from './auth-http.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-
-type RateLimit = { config: { rateLimit: { max: number; timeWindow: number; keyGenerator?: (request: { ip: string }) => string } } };
 
 /** Cota máxima de espera informada ao cliente quando o teto cumulativo trava a redefinição (a janela real é de 24 h, rolante). */
 const RESET_LOCK_RETRY_AFTER_SECONDS = 24 * 60 * 60;
@@ -47,8 +46,9 @@ function replyToCodeCheck(request: FastifyRequest, reply: FastifyReply, result: 
   }
 }
 
-export function registerAuthRecoveryRoutes(app: FastifyInstance, config: AuthConfig, mail: MailPort, ipLimit: RateLimit): void {
-  app.post('/v1/auth/verify-email', ipLimit, async (request, reply) => {
+/** `ipLimit` é a fábrica da classe "credenciais e códigos" (lib/ip-rate-limits.ts): cada rota recebe contadores próprios. */
+export function registerAuthRecoveryRoutes(app: FastifyInstance, config: AuthConfig, mail: MailPort, ipLimit: () => IpLimitRouteOptions): void {
+  app.post('/v1/auth/verify-email', ipLimit(), async (request, reply) => {
     const parsed = verifyEmailSchema.safeParse(request.body);
     if (!parsed.success) return invalidBody(request, reply, 'auth_verify_email_rejected');
     try {
@@ -60,7 +60,7 @@ export function registerAuthRecoveryRoutes(app: FastifyInstance, config: AuthCon
     }
   });
 
-  app.post('/v1/auth/resend-verification', ipLimit, async (request, reply) => {
+  app.post('/v1/auth/resend-verification', ipLimit(), async (request, reply) => {
     const parsed = resendVerificationSchema.safeParse(request.body);
     if (!parsed.success) return invalidBody(request, reply, 'auth_resend_rejected');
     try {
@@ -76,7 +76,7 @@ export function registerAuthRecoveryRoutes(app: FastifyInstance, config: AuthCon
     }
   });
 
-  app.post('/v1/auth/forgot-password', ipLimit, async (request, reply) => {
+  app.post('/v1/auth/forgot-password', ipLimit(), async (request, reply) => {
     const parsed = forgotPasswordSchema.safeParse(request.body);
     if (!parsed.success) return invalidBody(request, reply, 'auth_forgot_rejected');
     try {
@@ -92,7 +92,7 @@ export function registerAuthRecoveryRoutes(app: FastifyInstance, config: AuthCon
     }
   });
 
-  app.post('/v1/auth/reset-password', ipLimit, async (request, reply) => {
+  app.post('/v1/auth/reset-password', ipLimit(), async (request, reply) => {
     const parsed = resetPasswordSchema.safeParse(request.body);
     if (!parsed.success) {
       const field = parsed.error.issues[0]?.path[0];

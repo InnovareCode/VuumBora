@@ -8,20 +8,20 @@ import type { FastifyInstance, preHandlerAsyncHookHandler } from 'fastify';
 import { pool } from '../db.js';
 import { consentsBodySchema } from '../domain/legal.js';
 import type { AuthConfig } from '../lib/auth-config.js';
+import type { IpLimitRouteOptions } from '../lib/ip-rate-limits.js';
 import type { LegalConfig } from '../lib/legal-config.js';
 import { acceptConsents } from '../services/legal-service.js';
 import { consentOutdated, consentUnavailable, contextOf, fail, invalidBody, unavailable } from './auth-http.js';
-
-type RateLimit = { config: { rateLimit: { max: number; timeWindow: number; keyGenerator?: (request: { ip: string }) => string } } };
 
 export function registerAuthConsentRoutes(
   app: FastifyInstance,
   config: AuthConfig,
   legal: LegalConfig | null,
-  ipLimit: RateLimit,
+  /** Fábrica da classe "sessão" (lib/ip-rate-limits.ts): o reaceite não gasta bcrypt e tem Bearer; vale o limite global. */
+  ipLimit: () => IpLimitRouteOptions,
   requireAccount: preHandlerAsyncHookHandler,
 ): void {
-  app.post('/v1/auth/consents', { ...ipLimit, preHandler: requireAccount }, async (request, reply) => {
+  app.post('/v1/auth/consents', { ...ipLimit(), preHandler: requireAccount }, async (request, reply) => {
     const parsed = consentsBodySchema.safeParse(request.body);
     if (!parsed.success) {
       // Problema numa das versões (ausente nas duas, tipo errado, formato inválido) = o app não disse o que exibiu.

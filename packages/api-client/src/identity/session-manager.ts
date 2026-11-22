@@ -11,8 +11,9 @@
  *  3. O novo refresh é GRAVADO no armazenamento antes de liberar as chamadas em espera.
  *  4. Recusa DEFINITIVA do refresh = UM logout local, sem nova tentativa; as chamadas pendentes recebem
  *     `unauthorized`. Definitiva só é a recusa que o SERVIDOR DA API assinou com um `code` do contrato (401
- *     `invalid_refresh_token`; 400 `invalid_body`): STATUS sozinho não basta, porque um proxy, WAF ou CDN também
- *     responde 401/403/400 e isso não pode derrubar a sessão de todo mundo (M-4). Falha TRANSITÓRIA (sem rede, 5xx,
+ *     `invalid_refresh_token`; 400 `invalid_refresh_body`): STATUS sozinho não basta, porque um proxy, WAF ou CDN também
+ *     responde 401/403/400/413/415 e isso não pode derrubar a sessão de todo mundo (M-4). O `invalid_body` GENÉRICO da API
+ *     (qualquer 4xx de transporte: corpo grande, tipo de conteúdo) NÃO é definitivo (B5). Falha TRANSITÓRIA (sem rede, 5xx,
  *     429 e qualquer recusa sem `code` reconhecido) NÃO desloga: a sessão fica e a próxima chamada tenta renovar.
  *  4b. Depois de uma falha transitória o MESMO refresh não é tentado de novo por alguns segundos: se o servidor chegou
  *     a processar a renovação e só a resposta se perdeu, repetir seria reuso (família revogada). Quem pedir nesse
@@ -107,14 +108,15 @@ const MAX_COOLDOWN_MS = 60_000;
 
 /**
  * Os `code`s com que a API recusa um refresh para sempre, e em quais STATUS (`kind`) ela os emite. `invalid_refresh_token`
- * é o `401` do contrato (qualquer recusa); `invalid_body` é o `400` de um refresh malformado guardado. `validation` e
+ * é o `401` do contrato (qualquer recusa); `invalid_refresh_body` é o `400` de um refresh malformado guardado, com código PRÓPRIO:
+ * o `invalid_body` genérico serve a qualquer 4xx de transporte (413, 415, corpo ilegível) e não prova que a sessão acabou. `validation` e
  * `forbidden` aceitam `invalid_refresh_token` por tolerância: o `code` é a assinatura do servidor, o status é só o
  * transporte. Código que não está aqui — ou nenhum — NÃO é prova de que o refresh morreu.
  * (`Map`, não objeto: o `code` vem do fio e `constructor`/`__proto__` casam com o padrão de código.)
  */
 const DEFINITIVE_REFRESH_CODES: ReadonlyMap<string, ReadonlySet<ApiError['kind']>> = new Map([
   ['invalid_refresh_token', new Set<ApiError['kind']>(['unauthorized', 'validation', 'forbidden'])],
-  ['invalid_body', new Set<ApiError['kind']>(['validation'])],
+  ['invalid_refresh_body', new Set<ApiError['kind']>(['validation'])],
 ]);
 
 function isDefinitiveRefreshRejection(error: ApiError): error is ApiError & { readonly code: string } {

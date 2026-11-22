@@ -631,6 +631,41 @@ describe('IdentityClient sobre http — M-4: um intermediário não derruba a se
     });
   }
 
+  // B5: o que a API mesma devolve para um 4xx de transporte (413 de corpo grande, 415 de tipo de conteúdo) é um 400 com `invalid_body`.
+  test('B5: o 400 invalid_body GENÉRICO da API (413/415 de transporte) não desloga ninguém; o refresh descansa e a MESMA sessão volta', async () => {
+    let now = Date.now();
+    const storage = createMemorySessionStorage();
+    const identity = client({ storage, clock: () => now });
+    assert.ok((await identity.login({ identifier: EMAIL, password: PASSWORD })).ok);
+    const before = await storage.getItem(KEYS.session);
+    server.expireAccessTokens();
+    server.refreshOverride = { status: 400, body: { ok: false, error: { code: 'invalid_body', message: 'Corpo da requisição inválido.' } } };
+
+    const blocked = await identity.me();
+
+    assert.ok(!blocked.ok && blocked.error.kind === 'unavailable' && blocked.error.code === undefined);
+    assert.deepEqual(identity.session.getState(), { status: 'signed_in' });
+    assert.equal(await storage.getItem(KEYS.session), before, 'a sessão guardada não foi tocada');
+
+    server.refreshOverride = null;
+    now += 61_000;
+    assert.ok((await identity.me()).ok, 'o refresh nunca foi rotacionado: continua valendo');
+  });
+
+  test('B5, controle positivo: o 400 invalid_refresh_body (refresh malformado guardado) encerra a sessão', async () => {
+    const storage = createMemorySessionStorage();
+    const identity = client({ storage });
+    assert.ok((await identity.login({ identifier: EMAIL, password: PASSWORD })).ok);
+    server.expireAccessTokens();
+    server.refreshOverride = { status: 400, body: { ok: false, error: { code: 'invalid_refresh_body', message: 'Corpo da requisição inválido.' } } };
+
+    const result = await identity.me();
+
+    assert.ok(!result.ok && result.error.kind === 'unauthorized' && result.error.code === 'invalid_refresh_body');
+    assert.deepEqual(identity.session.getState(), { status: 'signed_out', reason: 'session_expired' });
+    assert.equal(await storage.getItem(KEYS.session), null);
+  });
+
   test('controle positivo: o 401 invalid_refresh_token DE VERDADE ainda encerra a sessão', async () => {
     const storage = createMemorySessionStorage();
     const identity = client({ storage });

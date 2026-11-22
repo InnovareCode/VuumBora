@@ -3,7 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { userAgentFamily } from '../domain/auth.js';
 import type { CurrentLegal } from '../domain/legal.js';
 import type { AuthConfig } from '../lib/auth-config.js';
-import { BCRYPT_BUSY_RETRY_AFTER_SECONDS, BcryptBusyError } from '../lib/bcrypt-pool.js';
+import { BCRYPT_BUSY_RETRY_AFTER_SECONDS, BcryptBusyError, type BcryptBusyReason } from '../lib/bcrypt-pool.js';
 import type { MailDeps } from '../services/code-delivery.js';
 import { describeErrorForLog } from '../lib/safe-error.js';
 import { ipBucket, ipBucket48 } from '../lib/ip-bucket.js';
@@ -37,14 +37,16 @@ export function contextOf(request: FastifyRequest, config: AuthConfig): RequestC
  * 503 de pista cheia: o servidor está bem, só não há vaga de bcrypt agora (A-1, rodada 3). Código próprio (`server_busy`)
  * e `Retry-After`: o app mostra "tente de novo em instantes" em vez de tratar como queda. Nada foi comparado nem gasto.
  */
-export function serverBusy(request: FastifyRequest, reply: FastifyReply, lane: string): void {
-  request.log.warn({ event: 'bcrypt_busy', lane });
+export function serverBusy(request: FastifyRequest, reply: FastifyReply, lane: string, reason: BcryptBusyReason): void {
+  // `reason` (origin | capacity | closing) é o que separa "pista cheia" de "um balde só está segurando tudo" (ex.: TRUST_PROXY errado).
+  // Nunca a chave de origem (o HMAC do balde) nem o IP.
+  request.log.warn({ event: 'bcrypt_busy', lane, reason });
   reply.header('Retry-After', String(BCRYPT_BUSY_RETRY_AFTER_SECONDS));
   fail(reply, 503, 'server_busy', 'Muitas solicitações no momento. Tente novamente em alguns segundos.', { retryAfterSeconds: BCRYPT_BUSY_RETRY_AFTER_SECONDS });
 }
 
 export function unavailable(request: FastifyRequest, reply: FastifyReply, err: unknown, event: string): void {
-  if (err instanceof BcryptBusyError) return serverBusy(request, reply, err.lane);
+  if (err instanceof BcryptBusyError) return serverBusy(request, reply, err.lane, err.reason);
   request.log.error({ event, ...describeErrorForLog(err) });
   fail(reply, 503, 'unavailable', 'Serviço temporariamente indisponível. Tente novamente em alguns minutos.');
 }

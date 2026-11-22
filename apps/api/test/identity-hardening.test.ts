@@ -379,15 +379,17 @@ describe('I-5d: limite por /64 no IPv6 (e por /48 nos limites de rota, M-1 da ro
     });
   });
 
-  test('o limite por IP do @fastify/rate-limit de rota usa o /48 (M-1): girar o /64 dentro do mesmo /48 não abre cota nova', async () => {
-    await withApp({ AUTH_IP_RATE_LIMIT_MAX: '3' }, async (_harness, client) => {
-      const refresh = (ip: string) => client.call('POST', '/v1/auth/refresh', { ip, body: { refreshToken: 'x'.repeat(40) } });
+  // Rodada 3c (A1): a cota por rota da identidade passou a ser por endereço/64, com um TETO por /48 (lib/ip-rate-limits.ts). O refresh saiu
+  // da cota por rota. A prova completa (global, teto, vizinhos) está em ip-rate-limits.test.ts; aqui fica o que a rodada 3b (M-1) afirmava.
+  test('o teto por /48 das rotas de credencial (M-1): girar o /64 dentro do mesmo /48 não abre cota nova', async () => {
+    await withApp({ AUTH_IP_RATE_LIMIT_MAX: '1000', AUTH_IP_RATE_LIMIT_BLOCK_MAX: '3' }, async (_harness, client) => {
+      const loginFrom = (ip: string) => client.call('POST', '/v1/auth/login', { ip, body: { accountType: 'passenger', identifier: 'ninguem@teste.vuumbora.dev', password: 'Senha-qualquer-1', device: { installationId: 'instalacao-0001', platform: 'android' } } });
       const statuses: number[] = [];
       // /64 DIFERENTES (bbbb:1, bbbb:2, bbbb:3...), todos dentro do /48 2001:db8:bbbb::/48.
-      for (const ip of ['2001:db8:bbbb:1::1', '2001:db8:bbbb:2::2', '2001:db8:bbbb:3:5::3', '2001:db8:bbbb:4:6::4', '2001:db8:bbbb:ffff:7::5']) statuses.push((await refresh(ip)).status);
-      assert.deepEqual(statuses, [401, 401, 401, 429, 429], 'cinco /64 do mesmo /48 dividem UMA cota de 3');
-      assert.equal((await refresh('2001:db8:bbbc:1::1')).status, 401, 'outro /48 tem a própria cota');
-      assert.equal((await refresh('203.0.113.50')).status, 401, 'IPv4 segue por endereço');
+      for (const ip of ['2001:db8:bbbb:1::1', '2001:db8:bbbb:2::2', '2001:db8:bbbb:3:5::3', '2001:db8:bbbb:4:6::4', '2001:db8:bbbb:ffff:7::5']) statuses.push((await loginFrom(ip)).status);
+      assert.deepEqual(statuses, [401, 401, 401, 429, 429], 'cinco /64 do mesmo /48 dividem UM teto de 3');
+      assert.equal((await loginFrom('2001:db8:bbbc:1::1')).status, 401, 'outro /48 tem o próprio teto');
+      assert.equal((await loginFrom('203.0.113.50')).status, 401, 'IPv4 segue por endereço');
     });
   });
 

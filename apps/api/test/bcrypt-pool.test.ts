@@ -437,3 +437,68 @@ describe('vigia de prazo por operação e prazo no close (B-4)', () => {
     assert.throws(() => pool.reserve(), BcryptBusyError);
   });
 });
+
+describe('motivo da recusa (B-8, rodada 3c)', () => {
+  const busy = (reason: string) => (err: unknown) => err instanceof BcryptBusyError && err.reason === reason && err.code === 'BCRYPT_BUSY';
+
+  test('origin: o balde já segura o máximo de lugares de espera, com a pista ainda LIVRE', async () => {
+    await withPool(new BcryptPool('motivo-origem', 2, 8), async (pool) => {
+      const held = [pool.reserve('balde-x'), pool.reserve('balde-x')];
+      assert.throws(() => pool.reserve('balde-x'), busy('origin'));
+      assert.equal(pool.saturated, false, 'a pista tinha lugar: quem recusou foi o balde');
+      await assert.rejects(pool.hash('senha-qualquer', 4, 'balde-x'), busy('origin'));
+      for (const reservation of held) reservation.release();
+    });
+  });
+
+  test('capacity: sem vaga e sem lugar na fila (a recusa vale para qualquer origem, inclusive sem origem)', async () => {
+    await withPool(new BcryptPool('motivo-capacidade', 1, 1), async (pool) => {
+      const held = [pool.reserve(), pool.reserve()];
+      assert.throws(() => pool.reserve(), busy('capacity'));
+      assert.throws(() => pool.reserve('outro-balde'), busy('capacity'));
+      await assert.rejects(pool.compare('x', 'y', 'outro-balde'), busy('capacity'));
+      for (const reservation of held) reservation.release();
+    });
+  });
+
+  test('origin ganha de capacity quando as duas valem: um balde só segurando tudo (ex.: TRUST_PROXY errado) aparece como origin', async () => {
+    await withPool(new BcryptPool('motivo-ambos', 1, 1, { maxPerOrigin: 2 }), async (pool) => {
+      const held = [pool.reserve('balde-unico'), pool.reserve('balde-unico')];
+      assert.equal(pool.saturated, true, 'a pista também está cheia');
+      assert.throws(() => pool.reserve('balde-unico'), busy('origin'));
+      assert.throws(() => pool.reserve('outro'), busy('capacity'));
+      for (const reservation of held) reservation.release();
+    });
+  });
+
+  test('closing: reserva nova, operação na fila e reserva gasta depois do close', async () => {
+    const pool = new BcryptPool('motivo-fechando', 1, 3);
+    const running = pool.hash('em-curso', 9);
+    const waiting = pool.hash('na-fila', 9);
+    const reserved = pool.reserve();
+    const closing = pool.close();
+    await assert.rejects(waiting, busy('closing'));
+    await assert.rejects(reserved.hash('gasta-depois-do-close', 4), busy('closing'));
+    assert.throws(() => pool.reserve(), busy('closing'));
+    await running;
+    await closing;
+  });
+
+  test('o erro NUNCA carrega a chave de origem nem a senha (só pista e motivo)', async () => {
+    await withPool(new BcryptPool('motivo-sigilo', 1, 1), async (pool) => {
+      const secretOrigin = `origem-secreta-${Math.random().toString(36).slice(2)}`;
+      const held = [pool.reserve(secretOrigin), pool.reserve(secretOrigin)];
+      let caught: unknown;
+      try {
+        pool.reserve(secretOrigin);
+      } catch (err) {
+        caught = err;
+      }
+      assert.ok(caught instanceof BcryptBusyError);
+      const dump = JSON.stringify(caught, Object.getOwnPropertyNames(caught)) + String(caught);
+      assert.ok(!dump.includes(secretOrigin), 'a chave de origem não está no erro');
+      assert.deepEqual(Object.keys(caught).sort(), ['code', 'lane', 'name', 'reason']);
+      for (const reservation of held) reservation.release();
+    });
+  });
+});

@@ -40,10 +40,17 @@ import { Worker } from 'node:worker_threads';
 import { z } from 'zod';
 import type { BcryptRequest, BcryptResponse } from './bcrypt-worker.js';
 
+/**
+ * Por que a pista recusou (revisão S1 rodada 3c, B-8): `origin` = o balde de origem já segura o máximo de lugares de espera;
+ * `capacity` = sem vaga e sem lugar na fila (pista cheia); `closing` = pista em desligamento. É só para o LOG e o diagnóstico: nunca vai
+ * ao cliente nem carrega a chave de origem (o HMAC do balde).
+ */
+export type BcryptBusyReason = 'origin' | 'capacity' | 'closing';
+
 /** Sem vaga e sem lugar na fila, balde de origem no limite, ou pista em desligamento: a rota traduz em 503 + `Retry-After`. */
 export class BcryptBusyError extends Error {
   readonly code = 'BCRYPT_BUSY';
-  constructor(readonly lane: string) {
+  constructor(readonly lane: string, readonly reason: BcryptBusyReason) {
     super('bcrypt_busy');
     this.name = 'BcryptBusyError';
   }
@@ -236,7 +243,7 @@ export class BcryptPool {
     this.closing = true;
     for (const job of this.waiting.splice(0)) {
       this.dropOrigin(job.origin);
-      job.reject(new BcryptBusyError(this.lane));
+      job.reject(new BcryptBusyError(this.lane, 'closing'));
     }
     if (this.active > 0) {
       let timer: NodeJS.Timeout | undefined;
@@ -258,15 +265,15 @@ export class BcryptPool {
   }
 
   private takePlace(origin: string | null): void {
-    if (this.closing) throw new BcryptBusyError(this.lane);
+    if (this.closing) throw new BcryptBusyError(this.lane, 'closing');
     if (origin !== null && (this.byOrigin.get(origin) ?? 0) >= this.maxPerOrigin) {
       this.rejected += 1;
       this.rejectedByOrigin += 1;
-      throw new BcryptBusyError(this.lane);
+      throw new BcryptBusyError(this.lane, 'origin');
     }
     if (this.inFlight >= this.size + this.maxQueue) {
       this.rejected += 1;
-      throw new BcryptBusyError(this.lane);
+      throw new BcryptBusyError(this.lane, 'capacity');
     }
     this.pending += 1;
     if (origin !== null) this.byOrigin.set(origin, (this.byOrigin.get(origin) ?? 0) + 1);
@@ -284,7 +291,7 @@ export class BcryptPool {
     return new Promise((resolve, reject) => {
       if (this.closing) {
         this.dropOrigin(origin);
-        reject(new BcryptBusyError(this.lane));
+        reject(new BcryptBusyError(this.lane, 'closing'));
         return;
       }
       const job: Job = { request, origin, resolve, reject };
@@ -297,7 +304,7 @@ export class BcryptPool {
       if (this.waiting.length >= this.maxQueue) {
         this.rejected += 1;
         this.dropOrigin(origin);
-        reject(new BcryptBusyError(this.lane));
+        reject(new BcryptBusyError(this.lane, 'capacity'));
         return;
       }
       this.waiting.push(job);

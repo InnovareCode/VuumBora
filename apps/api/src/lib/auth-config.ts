@@ -59,9 +59,20 @@ const schema = z.object({
    */
   AUTH_CODE_CHECK_MAX_PER_PAIR: positiveInt(10),
   AUTH_CODE_CHECK_WINDOW_MINUTES: positiveInt(15),
-  /** Limite por IP (em memória, além dos limites no banco). */
-  AUTH_IP_RATE_LIMIT_MAX: positiveInt(30),
+  /**
+   * Limites por IP em memória (além dos limites no banco), em DUAS classes de rota (`lib/ip-rate-limits.ts`):
+   *  - credenciais e códigos (cadastro, login, verificar e-mail, redefinir senha, reenvio, esqueci a senha): `MAX` por
+   *    endereço IPv4 ou por /64 IPv6 em cada janela, mais um TETO por bloco /48 IPv6 (`BLOCK_MAX`). O padrão de 100 cobre uma
+   *    rede de operadora em que algumas dezenas de pessoas usam o mesmo endereço ao mesmo tempo (cada pessoa gasta 1 a 3 pedidos
+   *    por rota ao entrar); o teto do /48 existe para quem gira o /64 dentro de um bloco gratuito, e o /64 só vale por endereço;
+   *  - sessão (refresh, logout, logout-all, reaceite): SEM cota por rota. Não gastam bcrypt, e o refresh token é aleatório de
+   *    256 bits. Valem o limite global por /64 (`GLOBAL_RATE_LIMIT_MAX` em env.ts) e um teto por /48 de 1 minuto (`SESSION_BLOCK_MAX`).
+   * Os valores são pontos de partida revisáveis (docs/decisoes-do-dono.md): ajuste pelos `rate_limited` por rota nos logs.
+   */
+  AUTH_IP_RATE_LIMIT_MAX: positiveInt(100),
   AUTH_IP_RATE_LIMIT_WINDOW_MINUTES: positiveInt(15),
+  AUTH_IP_RATE_LIMIT_BLOCK_MAX: positiveInt(1000),
+  AUTH_SESSION_BLOCK_RATE_LIMIT_MAX: positiveInt(3000),
 });
 
 export interface AuthConfig {
@@ -85,8 +96,13 @@ export interface AuthConfig {
   readonly resetMaxFailuresPerDay: number;
   readonly codeCheckMaxPerPair: number;
   readonly codeCheckWindowMinutes: number;
+  /** Credenciais e códigos: pedidos por rota, por endereço IPv4 ou /64 IPv6, em `ipRateLimitWindowMs`. */
   readonly ipRateLimitMax: number;
   readonly ipRateLimitWindowMs: number;
+  /** Credenciais e códigos: teto por rota para um bloco /48 IPv6 inteiro, na mesma janela. */
+  readonly ipRateLimitBlockMax: number;
+  /** Sessão (refresh, logout, logout-all, reaceite): teto por minuto para um bloco /48 IPv6 inteiro. */
+  readonly sessionBlockRateLimitMax: number;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -176,5 +192,7 @@ export function loadAuthConfig(source: NodeJS.ProcessEnv = process.env): AuthCon
     codeCheckWindowMinutes: v.AUTH_CODE_CHECK_WINDOW_MINUTES,
     ipRateLimitMax: v.AUTH_IP_RATE_LIMIT_MAX,
     ipRateLimitWindowMs: v.AUTH_IP_RATE_LIMIT_WINDOW_MINUTES * 60 * 1000,
+    ipRateLimitBlockMax: v.AUTH_IP_RATE_LIMIT_BLOCK_MAX,
+    sessionBlockRateLimitMax: v.AUTH_SESSION_BLOCK_RATE_LIMIT_MAX,
   };
 }

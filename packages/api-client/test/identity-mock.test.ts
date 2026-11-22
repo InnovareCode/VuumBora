@@ -277,7 +277,7 @@ describe('mock — login, tokens e sessão', () => {
     expectError(await api.me(rotated.data.accessToken), { code: 'unauthorized' });
   });
 
-  test('token de acesso vence em 15 min; refresh de lixo/curto é invalid_body, desconhecido é invalid_refresh_token', async () => {
+  test('token de acesso vence em 15 min; refresh de lixo/curto é invalid_refresh_body, desconhecido é invalid_refresh_token', async () => {
     let now = NOW;
     const api = fresh({ now: () => now });
     await verified(api);
@@ -286,7 +286,7 @@ describe('mock — login, tokens e sessão', () => {
     assert.ok((await api.me(login.data.accessToken)).ok);
     now += 15 * 60_000 + 1;
     expectError(await api.me(login.data.accessToken), { kind: 'unauthorized', code: 'unauthorized' });
-    expectError(await api.refresh('curto'), { kind: 'validation', code: 'invalid_body' });
+    expectError(await api.refresh('curto'), { kind: 'validation', code: 'invalid_refresh_body' });
     expectError(await api.refresh('x'.repeat(40)), { kind: 'unauthorized', code: 'invalid_refresh_token' });
   });
 
@@ -502,7 +502,7 @@ describe('mock x contrato', () => {
     const missing = [...emitted].filter((code) => !realButUndocumented.has(code) && !new RegExp(`\\b${code}\\b`).test(contract));
     assert.deepEqual(missing, [], `o mock inventou códigos que o contrato não tem: ${missing.join(', ')}`);
     // Sanidade: a suíte exercitou a maior parte do vocabulário do contrato (senão a conferência acima é vazia).
-    for (const code of ['invalid_email', 'invalid_password', 'invalid_phone', 'invalid_birth_date', 'underage', 'consent_required', 'consent_outdated', 'email_taken', 'invalid_code', 'code_locked', 'code_expired', 'reset_locked', 'invalid_credentials', 'email_not_verified', 'too_many_attempts', 'invalid_refresh_token', 'invalid_body']) {
+    for (const code of ['invalid_email', 'invalid_password', 'invalid_phone', 'invalid_birth_date', 'underage', 'consent_required', 'consent_outdated', 'email_taken', 'invalid_code', 'code_locked', 'code_expired', 'reset_locked', 'invalid_credentials', 'email_not_verified', 'too_many_attempts', 'invalid_refresh_token', 'invalid_refresh_body', 'invalid_body']) {
       assert.ok(emitted.has(code), `a suíte nunca provocou ${code}`);
     }
   });

@@ -112,6 +112,18 @@ const schema = z.object({
   /** Quanto esperar o Postgres aceitar conexão no boot: ele costuma subir depois da API. */
   DB_BOOT_WAIT_SECONDS: z.coerce.number().int().positive().default(60),
 
+  /**
+   * Limite GLOBAL (por minuto, por IPv4 ou /64 IPv6): vale para toda rota que não declara cota própria, entre elas as de sessão da
+   * identidade dos apps (refresh, logout, logout-all, reaceite, /me). Rede de operadora com muita gente no mesmo endereço: suba.
+   */
+  GLOBAL_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
+
+  /**
+   * Quanto tempo o resultado do `/healthz` (banco ok ou não) fica guardado, em segundos (0 a 10; padrão 2; 0 desliga). O endpoint não
+   * tem limite de taxa (o orquestrador o chama sem parar) e cada consulta usa uma das poucas conexões do banco.
+   */
+  HEALTHZ_CACHE_SECONDS: z.coerce.number().int().min(0).max(10).default(2),
+
   WAITLIST_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
   WAITLIST_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(10),
 

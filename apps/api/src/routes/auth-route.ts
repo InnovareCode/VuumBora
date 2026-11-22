@@ -12,7 +12,7 @@ import { checkBirthDate } from '../domain/birth-date.js';
 import { makeRequireAccount } from '../hooks/require-account.js';
 import { authConfigProblems, loadAuthConfig } from '../lib/auth-config.js';
 import { drainBackgroundTasks } from '../lib/background-tasks.js';
-import { routeRateLimitKey } from '../lib/ip-bucket.js';
+import { createIpLimits } from '../lib/ip-rate-limits.js';
 import { loadLegalConfig, type LegalConfig } from '../lib/legal-config.js';
 import { unavailableMailPort, type MailPort } from '../lib/mail-port.js';
 import * as identity from '../services/identity-service.js';
@@ -52,13 +52,14 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
   // Esquenta o hash descartável (login de conta desconhecida) fora da thread principal: o primeiro login com e-mail
   // inexistente não pode custar mais que os seguintes (o tempo denunciaria). Falha aqui é ignorada: tenta no primeiro uso.
   identity.getDummyHash(config.bcryptCost).catch(() => undefined);
-  // Um balde por IPv4 e por /48 IPv6 (I-5d e M-1 da rodada 3b): com o /64 um /48 gratuito dava 65 536 baldes a uma máquina só.
-  const ipLimit = { config: { rateLimit: { max: config.ipRateLimitMax, timeWindow: config.ipRateLimitWindowMs, keyGenerator: routeRateLimitKey } } };
+  // Duas classes de limite por IP (lib/ip-rate-limits.ts): credenciais e códigos têm cota por rota; sessão (refresh, logout, logout-all,
+  // reaceite) não gasta bcrypt e vale só o limite global, mais um teto por bloco /48.
+  const limits = createIpLimits(app, config);
 
   // Envios em segundo plano terminam antes do servidor fechar.
   app.addHook('onClose', async () => drainBackgroundTasks());
 
-  app.post('/v1/auth/register', ipLimit, async (request, reply) => {
+  app.post('/v1/auth/register', limits.credentials(), async (request, reply) => {
     const parsed = registerSchema.safeParse(request.body);
     if (!parsed.success) {
       const field = parsed.error.issues[0]?.path[0];
@@ -125,7 +126,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
     }
   });
 
-  app.post('/v1/auth/login', ipLimit, async (request, reply) => {
+  app.post('/v1/auth/login', limits.credentials(), async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) return invalidBody(request, reply, 'auth_login_rejected');
     try {
@@ -149,11 +150,13 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
     }
   });
 
-  registerAuthRecoveryRoutes(app, config, mail, ipLimit);
+  registerAuthRecoveryRoutes(app, config, mail, limits.credentials);
 
-  app.post('/v1/auth/refresh', ipLimit, async (request, reply) => {
+  app.post('/v1/auth/refresh', limits.session(), async (request, reply) => {
     const parsed = refreshSchema.safeParse(request.body);
-    if (!parsed.success) return invalidBody(request, reply, 'auth_refresh_rejected');
+    // Código PRÓPRIO (não o genérico `invalid_body`): é a assinatura que o app lê para saber que o refresh guardado está malformado e a sessão acabou. Um 4xx de
+    // transporte (413, 415, corpo ilegível) sai como `invalid_body` (app.ts) e NÃO encerra sessão nenhuma.
+    if (!parsed.success) return invalidBody(request, reply, 'auth_refresh_rejected', 'invalid_refresh_body');
     try {
       const result = await identity.refresh(pool, config, parsed.data.refreshToken, contextOf(request, config));
       if (result.kind === 'invalid') {
@@ -166,7 +169,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
     }
   });
 
-  app.post('/v1/auth/logout', ipLimit, async (request, reply) => {
+  app.post('/v1/auth/logout', limits.session(), async (request, reply) => {
     const parsed = refreshSchema.safeParse(request.body);
     if (!parsed.success) return invalidBody(request, reply, 'auth_logout_rejected');
     try {
@@ -177,7 +180,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
     }
   });
 
-  app.post('/v1/auth/logout-all', { ...ipLimit, preHandler: requireAccount }, async (request, reply) => {
+  app.post('/v1/auth/logout-all', { ...limits.session(), preHandler: requireAccount }, async (request, reply) => {
     try {
       const revoked = await identity.logoutAll(pool, request.authAccount!.accountId, contextOf(request, config));
       reply.code(200).send({ ok: true, data: { revokedSessions: revoked } });
@@ -186,7 +189,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
     }
   });
 
-  registerAuthConsentRoutes(app, config, legal, ipLimit, requireAccount);
+  registerAuthConsentRoutes(app, config, legal, limits.session, requireAccount);
 
   app.get('/v1/auth/me', { preHandler: requireAccount }, async (request, reply) => {
     try {

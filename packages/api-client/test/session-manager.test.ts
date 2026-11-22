@@ -178,8 +178,8 @@ describe('SessionManager — falha do refresh', () => {
     assert.equal(kit.refreshCalls.length, 2, 'aos 5,5 s tenta de novo');
   });
 
-  test('400 no refresh (token malformado guardado) é definitivo: desloga em vez de repetir para sempre', async () => {
-    const kit = createKit({ refresh: async () => err({ kind: 'validation', fields: { form: 'x' }, code: 'invalid_body' }) });
+  test('400 invalid_refresh_body no refresh (token malformado guardado) é definitivo: desloga em vez de repetir para sempre', async () => {
+    const kit = createKit({ refresh: async () => err({ kind: 'validation', fields: { form: 'x' }, code: 'invalid_refresh_body' }) });
     const result = await kit.manager.run(protectedResource(() => 'a2').call);
     assert.ok(!result.ok && result.error.kind === 'unauthorized');
     assert.equal(kit.manager.getState().status, 'signed_out');
@@ -196,7 +196,10 @@ describe('SessionManager — M-4: a recusa do refresh só é definitiva com um `
     ['403 com code de outro assunto', { kind: 'forbidden', code: 'email_not_verified' }],
     ['400 sem envelope', { kind: 'validation', fields: { form: 'status HTTP 400' } }],
     ['400 com code de outro assunto', { kind: 'validation', fields: { email: 'x' }, code: 'invalid_email' }],
-    ['401 com code que só existe em 400 (status e code não combinam)', { kind: 'unauthorized', code: 'invalid_body' }],
+    ['401 com code que só existe em 400 (status e code não combinam)', { kind: 'unauthorized', code: 'invalid_refresh_body' }],
+    // B5: a API usa o `invalid_body` GENÉRICO para qualquer 4xx de transporte (413, 415, corpo ilegível): não prova que o refresh morreu.
+    ['400 invalid_body GENÉRICO (4xx de transporte: 413, 415, corpo ilegível)', { kind: 'validation', fields: { form: 'x' }, code: 'invalid_body' }],
+    ['401 invalid_body genérico', { kind: 'unauthorized', code: 'invalid_body' }],
     ['404 de rota que o proxy não achou', { kind: 'not_found' }],
     ['code com nome de propriedade de Object (constructor)', { kind: 'unauthorized', code: 'constructor' }],
   ];
@@ -247,7 +250,7 @@ describe('SessionManager — M-4: a recusa do refresh só é definitiva com um `
 
   const definitive: ReadonlyArray<[string, ApiError]> = [
     ['401 invalid_refresh_token (o contrato)', { kind: 'unauthorized', code: 'invalid_refresh_token' }],
-    ['400 invalid_body (refresh malformado guardado)', { kind: 'validation', fields: { form: 'x' }, code: 'invalid_body' }],
+    ['400 invalid_refresh_body (refresh malformado guardado, código PRÓPRIO)', { kind: 'validation', fields: { form: 'x' }, code: 'invalid_refresh_body' }],
     ['403 com invalid_refresh_token (o code é a assinatura, o status é transporte)', { kind: 'forbidden', code: 'invalid_refresh_token' }],
     ['400 com invalid_refresh_token', { kind: 'validation', fields: { form: 'x' }, code: 'invalid_refresh_token' }],
   ];

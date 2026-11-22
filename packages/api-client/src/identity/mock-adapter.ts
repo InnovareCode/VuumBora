@@ -77,6 +77,8 @@ function reject(status: number, code: string, message: string, extras: Record<st
 const accept = <T>(data: T): Outcome<T> => ({ ok: true, data });
 
 const INVALID_BODY = (): Outcome<never> => reject(400, 'invalid_body', 'Corpo da requisição inválido.');
+/** O `400` do refresh malformado tem código PRÓPRIO (como a API): o genérico não prova que a sessão acabou (B5). */
+const INVALID_REFRESH_BODY = (): Outcome<never> => reject(400, 'invalid_refresh_body', 'Corpo da requisição inválido.');
 
 function utf8ByteLength(text: string): number {
   let bytes = 0;
@@ -414,7 +416,7 @@ export function createMockIdentityApi(accountType: AccountType, options: MockIde
 
   function refresh(raw: Record<string, unknown>): Outcome<SessionTokens> {
     const { refreshToken } = raw;
-    if (!isString(refreshToken) || refreshToken.length < 20 || refreshToken.length > 200) return INVALID_BODY();
+    if (!isString(refreshToken) || refreshToken.length < 20 || refreshToken.length > 200) return INVALID_REFRESH_BODY();
     const record = refreshTokens.get(refreshToken);
     const family = record ? families.get(record.familyId) : undefined;
     if (!record || !family?.live) return invalidRefresh();

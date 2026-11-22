@@ -161,7 +161,7 @@ export interface IdentityApi {
   forgotPassword(input: ForgotPasswordInput): Promise<Result<ResendOutput>>;
   resetPassword(input: ResetPasswordInput): Promise<Result<{ readonly passwordChanged: true; readonly sessionsRevoked: true }>>;
   login(input: LoginInput, device: DeviceInfo): Promise<Result<AuthenticatedSession>>;
-  /** `401 invalid_refresh_token` para qualquer recusa. Rotação: o refresh enviado morre, vem um sucessor. */
+  /** `401 invalid_refresh_token` para qualquer recusa; `400 invalid_refresh_body` se o refresh enviado está malformado. Rotação: o refresh enviado morre, vem um sucessor. */
   refresh(refreshToken: string): Promise<Result<SessionTokens>>;
   /** Idempotente: refresh desconhecido ou já revogado também dá sucesso. Revoga a FAMÍLIA do token. */
   logout(refreshToken: string): Promise<Result<void>>;
