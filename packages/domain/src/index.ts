@@ -46,6 +46,8 @@ export interface Place {
   readonly label: string;
   readonly address: string;
   readonly point: GeoPoint;
+  /** Bairro, quando conhecido — zona de tarifa (§5.1) e base de `ApproximatePlace` (ver `geo.ts`). */
+  readonly neighborhood?: string;
 }
 
 /**
@@ -65,3 +67,20 @@ export type TripStatus =
   | 'failed';
 
 export type PaymentStatus = 'pending' | 'authorized' | 'declined' | 'refunded';
+
+/**
+ * Transições de `TripStatus` no nível do servidor (quem pode cancelar o quê) — compartilhadas por
+ * `./passenger` e `./driver`. Ver `trip-lifecycle.ts` para a regra completa e o porquê de morar aqui.
+ */
+export {
+  TRIP_TRANSITIONS,
+  canTransitionTrip,
+  cancelTrip,
+  isTripCancellable,
+  transitionTrip,
+} from './trip-lifecycle';
+export type { CancelActor, TripTransitionResult } from './trip-lifecycle';
+
+/** Localização aproximada (bairro + ponto arredondado) — decisão do dono em 22/11/2026. */
+export { toApproximatePlace } from './geo';
+export type { ApproximatePlace } from './geo';

@@ -6,8 +6,15 @@ Portas (interfaces) que as telas consomem + adaptadores `mock` e `http` **distin
   `attemptsLeft`, `retryAfterSeconds` opcionais do servidor), `Result<T>`. O `AuthPort` antigo foi removido.
 - `@vuumbora/api-client/identity`: **identidade dos apps** (passageiro e motorista), contrato em
   `docs/contrato-identidade-apps.md`. Ver abaixo.
-- `@vuumbora/api-client/passenger`: `PassengerRidePort`, `PlacesPort` — só `apps/passenger`.
-- `@vuumbora/api-client/driver`: `DriverJourneyPort`, `DriverOfferPort` — só `apps/driver`.
+- `@vuumbora/api-client/trip`: `TripBaseSnapshot`, `TripEvent`, `TripRealtimePort`, `CancelActor` — o que
+  `./passenger` e `./driver` precisam concordar sobre uma corrida. Nenhum perfil importa o subcaminho do
+  outro (`scripts/check-boundaries.mjs`); o que é comum mora aqui. O snapshot COMPLETO é de cada perfil
+  (`PassengerTripSnapshot`, `DriverTripSnapshot`) — ver "Corrida", abaixo.
+- `@vuumbora/api-client/passenger`: `PassengerRidePort` (cotação por categoria, pedido, status,
+  cancelamento, tempo real), `PlacesPort` — só `apps/passenger`.
+- `@vuumbora/api-client/driver`: `DriverJourneyPort` (disponibilidade), `DriverOfferPort`
+  (oferta/aceite atômico/tempo real das ofertas), `DriverTripPort` (ações depois do aceite),
+  `DriverLocationPort` (posição) — só `apps/driver`.
 - `@vuumbora/api-client/waitlist`: `WaitlistPort` + `createWaitlistHttpAdapter` — só `apps/site`. Primeiro
   adaptador `http` real do monorepo (backend em `apps/api`); contrato completo em
   `docs/lista-de-espera.md`.
@@ -102,11 +109,243 @@ const identity = createIdentityClient({
   progressiva do login, `attemptsLeft`, `reset_locked`, reuso de refresh, 15 min de access token). Opções em `mock`
   (`verificationCode`, `latencyMs`, `clock`). Não reproduz limites por IP/e-mail do servidor nem `503`.
 
+## Corrida (`/trip`, `/passenger`, `/driver`)
+
+Contratos de cotação, corrida, oferta, disponibilidade e tempo real (`docs/plano-sistema-arquitetura.md`
+§6.2 [passageiro], §6.3 [motorista], §6.4 [tempo real]; `docs/plano-sistema.md` §5.2–§5.6). A pendência do
+S0 (`docs/plano-apps-execucao.md`, fatia A5), **conferida e ajustada** por
+`docs/contratos/conferencia-f08-nova.md` (1ª rodada, veredito AJUSTES — os achados A1–A4, B1–B7 e C1–C4
+abaixo já estão corrigidos no código) e **reconferida** na mesma seção do documento (2ª rodada, veredito
+AJUSTES pequenos — os achados R1–R8 abaixo também já estão corrigidos: R1 o motorista atribuído recebe o
+cancelamento feito pelo passageiro, R2 o resumo do motorista nunca "vaza" para o motorista seguinte, R3 a
+ordem das checagens em `start`, R4 quem aceita não recebe a revogação da própria oferta, R5 embarque sem
+bairro cai em texto neutro, R6 idempotência do cancelamento por `tripId`, R7 ficar offline sempre funciona,
+R8 texto de ressincronização e de `reason` desconhecido).
+
+**Token:** nenhuma porta de corrida recebe `accessToken` como parâmetro. O adaptador `http` (quando
+existir) é construído com a sessão da identidade e chama `identity.session.run(...)` por dentro de cada
+método — exatamente como qualquer outra porta autenticada (ver "Identidade", acima). O WebSocket usa
+`identity.session.getValidAccessToken()` no primeiro quadro. O `mock` não autentica nada.
+
+### Cotação — `PassengerRidePort.quote`
+
+`quote({ origin, destination, kind? })` → `Quote { categories: CategoryQuote[] }`. **Cada categoria tem o
+PRÓPRIO `quoteId`/`expiresAt`** (padrão 5 min, §5.6) — não existe mais um `quoteId` único para todas (era o
+achado B1: o modelo de dados, `fare_quotes`, já é por categoria). Cada `CategoryQuote` também traz
+`distanceM`, `durationS`, `pickupEtaS` e `availability: 'high' | 'low' | 'none'` (§5.3 — a UI avisa de
+espera maior ANTES do pedido; **não bloqueia**: um pedido com `availability: 'none'` é aceito e só termina
+em `failed` se nenhum motorista aparecer a tempo).
+
+Categoria **desligada** (Entrega — §13.3; Motorista mulher — D-08 em aberto; **Pet — D-09, nasce desligada
+igual à Entrega**) **não aparece na lista**: isso é diferente de "sem motorista agora". `kind: 'delivery'`
+(padrão `'ride'`) sempre devolve lista vazia hoje. `409 conflict` (`reason: 'outside_service_area'`) se o
+endereço estiver fora da área (mock: opção `isOutsideServiceArea`, S3 ainda não decidiu a geometria real).
+No mock, um teste que precise de Pet liga por `control.setCategoryEnabled('pet', true)`.
+
+### Pedido — `PassengerRidePort.request`
+
+`request({ quoteId, paymentMethodId }, idempotencyKey)` → `{ tripId, status }`. A categoria **vem da
+cotação** (não é mais um campo separado). **A corrida nasce em `requested` e não avança sozinha** (achado
+B2: com Pix antes da corrida, S5, ela fica ali até o pagamento confirmar — a interface precisa tratar essa
+fase desde já). `404 not_found` (`quoteId` desconhecido), `409 conflict`: `quote_expired` (cotação vencida),
+`category_unavailable` (categoria foi desligada ENTRE a cotação e o pedido — não no momento da cotação, que
+já filtra) ou `idempotency_key_reused` (achado A4, ver "Idempotência", abaixo).
+
+### Status — `.status` (cada perfil tem o SEU snapshot)
+
+`PassengerRidePort.status`/`DriverTripPort.status` devolvem `{ tripId, status, seq, ...o resto }` —
+`tripId`/`status`/`seq` são a base comum (`TripBaseSnapshot`, `@vuumbora/api-client/trip`); o resto é
+**diferente por perfil** (achado B4, para o S4 não misturar dado que só um lado pode ver — ex.: o código de
+embarque, D-12):
+- `PassengerTripSnapshot.driver?: { driverId, firstName, plate }` — só enquanto a corrida TEM motorista
+  atribuído; some depois de uma volta para a busca (achado A2 — nunca mostra o motorista antigo). **R2
+  (reconferência):** o mock resolve o resumo pelo `assignedDriverId` ATUAL da store (não por um valor
+  guardado à parte do `tripId`) — é assim que o resumo de um motorista que já saiu nunca "é herdado" pelo
+  motorista seguinte, mesmo que ninguém tenha lido o snapshot no meio da troca.
+- `DriverTripSnapshot`: `pickup`/`destination` **completos** (`Place`, endereço e ponto exatos — só porque
+  o motorista já foi atribuído), `categoryId`, `estimatedPayout`, `passenger?: { firstName }`.
+
+`404 not_found` se a corrida não existe **ou** (do lado do motorista) não é a ele atribuída — achado A3,
+ver "Visibilidade do motorista", abaixo.
+
+### Cancelamento — `.cancel` (passageiro) / `DriverTripPort.cancel` (motorista)
+
+`cancel(tripId, { reason? }, idempotencyKey)` → `{ status, cancellationFee? }` (achado B3 — não é mais
+`void`; `cancellationFee` fica para a decisão 15/M6, o mock nunca cobra). `reason` é uma união pequena e
+provisória (`CancelReason`/`DriverCancelReason`, com `'other'`) até a decisão 15 fixar os valores finais.
+**Não é idempotente no sentido de "sempre sucesso"**: cancelar uma corrida terminal, ou (do lado do
+motorista) uma corrida que não é dele, dá `409 conflict` (`reason: 'invalid_transition'`) — o que a
+`idempotencyKey` garante é que a MESMA chave repetida (retry de rede) devolve a MESMA resposta.
+
+**A correção do S0 + o achado A1 (quem pode cancelar de onde):**
+
+| Ator | De onde pode cancelar | Para onde |
+|---|---|---|
+| passageiro, admin, sistema | `requested` … `driver_arrived` | `cancelled` |
+| motorista | `driver_assigned`, `driver_en_route` | `searching_driver` (o passageiro não perde o pedido) |
+| motorista | `driver_arrived` | `cancelled` (depois do embarque não há volta à busca) |
+| motorista | `requested`, `searching_driver` | **recusado** — a corrida ainda não é dele ali |
+
+Essa tabela é UMA função só — `cancelTrip(from, actor)` em `@vuumbora/domain` (raiz, não em
+`./passenger` nem `./driver` — nenhum perfil importa o subcaminho do outro só para cancelar). Nenhuma
+porta decide o destino, nem a permissão, por conta própria.
+
+### Oferta — `DriverOfferPort` (despacho, §6.2)
+
+`accept(offer, idempotencyKey)` → `{ tripId }`, atômico: `404 not_found` (oferta desconhecida), `409
+conflict`: `offer_expired`, `offer_taken` (outro motorista venceu, OU a corrida por baixo já não está em
+`searching_driver`) ou `idempotency_key_reused`. **A passagem `driver_assigned` → `driver_en_route` é
+automática no aceite** (sistema) — o app do motorista não chama nada para ela.
+
+`decline(offer, { reason? })` é idempotente e nunca falha (oferta desconhecida/já resolvida também dá
+sucesso); `reason` é `DeclineReason` (provisória, com `'other'`).
+
+`subscribeOffers(onEvent)` (achado C2) → `offer.created` (chegou uma oferta) e `offer.revoked`
+(`reason: 'expired' | 'taken' | 'cancelled'`) quando ela morre por fora — inclusive quando o PASSAGEIRO
+cancela a corrida enquanto a oferta ainda está pendente. **R4 (reconferência):** quem ACEITA a própria
+oferta nunca recebe `offer.revoked` dela — a passagem automática `driver_assigned → driver_en_route` (C1) é
+lida pelo vigia da oferta como "ela se resolveu", não como "a corrida saiu de `driver_assigned`"; o mock
+desliga o vigia antes das duas transições do aceite, não depois.
+
+**O embarque E o destino na oferta são só o bairro — decisão do dono em 22/11/2026**
+(`docs/decisoes-do-dono.md`, "Complemento: o embarque na oferta é só o bairro" e "Complemento: o destino na
+oferta também é só o bairro"): `RideOffer.pickup` **e** `RideOffer.destination` são `ApproximatePlace`
+(`@vuumbora/domain`: `{ neighborhood, approximatePoint }`, SEMPRE arredondado a 2 casas, nunca o ponto
+exato), mais `pickupDistanceM` (arredondado a 100 m) e `pickupEtaS` (arredondado a 1 min) — exatos
+estreitariam demais o quadrado aproximado do embarque. **Nunca** o endereço nem o ponto exato de nenhum dos
+dois — a oferta vai a vários motoristas, um de cada vez, inclusive aos que recusam. "Destino visível"
+(§5.4) continua valendo: o motorista sabe PARA ONDE vai (o bairro), só não o endereço exato antes de
+aceitar. O endereço e o ponto exatos dos dois só existem em `DriverTripSnapshot`, depois do aceite, para o
+motorista atribuído.
+
+**R5 (reconferência):** sem bairro cadastrado, `toApproximatePlace` cai num texto NEUTRO
+(`"Bairro não informado"`), nunca em `place.label` nem `place.address` — cair no `label` vazava o endereço
+exato quando ele era, por acaso, o próprio endereço (mock sem bairro, ou um geocodificador real que não
+devolve bairro).
+
+### Visibilidade do motorista — achado A3, revisado por R1
+
+`DriverTripPort` (status, eventos, `arrived`/`start`/`complete`/`cancel`) só responde para o motorista
+**ATRIBUÍDO** à corrida. Quem recusou a oferta, ou perdeu para outro motorista, recebe `404 not_found` —
+nunca `403` (não confirma que a corrida existe para quem não é dela) — em QUALQUER chamada, inclusive
+`status`. `subscribe` para de entregar eventos quando a atribuição muda porque o PRÓPRIO motorista
+desistiu (volta para `searching_driver`) ou foi reatribuída a outro.
+
+**R1 (reconferência):** isso NÃO vale para o desfecho de uma corrida que ele continua atribuído. Se é o
+passageiro, o admin ou o sistema quem cancela (não o motorista voltando à busca), ou a corrida é concluída,
+o motorista atribuído continua vendo o resultado: recebe o evento terminal por `subscribe` e `status()`
+devolve o snapshot terminal, nunca `404`. A 1ª rodada corrigiu demais aqui — "a assinatura deixa de
+entregar eventos depois do cancelamento" não distinguia QUEM cancelou.
+
+### Ações depois do aceite — `DriverTripPort` (achado C1)
+
+`arrived` (`driver_en_route` → `driver_arrived`), `start({ pickupCode? })` (`driver_arrived` →
+`in_progress`; `pickupCode` é opcional — D-12 em aberto; errado é `400 validation`, a 6ª tentativa errada é
+`429 rate_limited`), `complete({ deliveryCode? })` (`in_progress` → `completed`; `deliveryCode` só importa
+para `kind: 'delivery'`, hoje desligado). Todas recebem `idempotencyKey` e devolvem
+`Result<DriverTripSnapshot>`; `409 conflict` (`invalid_transition` ou `idempotency_key_reused`).
+
+**R3 (reconferência) — ordem das checagens em `start`:** `404` (motorista não é o atribuído) → `409
+invalid_transition` (corrida não está em `driver_arrived`) → `400 validation` (código errado) → `429
+rate_limited` (muitas tentativas). Checar a atribuição ANTES do código importa porque o `tripId` vai em
+TODA `RideOffer`: sem essa ordem, qualquer motorista que recebeu a oferta (mesmo sem aceitar) confirmava
+que a corrida existe e gastava as tentativas do motorista ATRIBUÍDO. As tentativas contam por corrida E
+motorista, e só as do atribuído chegam a ser contadas.
+
+### Disponibilidade — `DriverJourneyPort.setAvailability` (achado C3, revisado por R7)
+
+`setAvailability({ online, point? })` → `{ phase }`. `point` é obrigatório para ficar online (o despacho
+filtra por posição < 30 s, §5.4): sem ele, `400 validation`. `409 conflict`: `driver_not_approved` (conta
+não aprovada) ou `not_eligible` (documento vencido). **R7 (reconferência):** essas duas checagens valem só
+para `online: true` — ficar OFFLINE sempre funciona, mesmo com documento vencido ou conta não aprovada
+(senão o motorista trava online sem conseguir saída no meio do turno).
+
+### Posição — `DriverLocationPort.sendLocations` (achado C4)
+
+`sendLocations(fixes: LocationFix[])` → `void`. `LocationFix.mocked` é o sinal de GPS falso (§5.10),
+gravado desde o primeiro dia. O mock só guarda o que recebeu (`control.receivedLocations()`).
+
+### Tempo real da corrida — `TripRealtimePort.subscribe`
+
+`(tripId, onEvent) => unsubscribe`. Evento sempre com `type`, `seq` e `sentAt`. **`seq` conta só mudança de
+ESTADO** (achado B5): o evento `location` carrega o `seq` do estado EM VIGOR (não cria um `seq` novo — a
+posição não é um novo estado) mais `at` (instante da leitura do GPS, pode chegar atrasado) e `heading?`.
+`seq` também vem no `status()` REST, não só no evento, para dar um ponto de partida depois de ressincronizar.
+
+**Ressincronização mora na PORTA, não em cada tela** (achado B5): ao assinar, `subscribe` entrega
+IMEDIATAMENTE um evento `status` com o estado atual — quem assina nunca fica sem saber o ponto de partida,
+mesmo que a corrida já tenha avançado antes da assinatura. **R8 (reconferência, texto):** a porta faz o
+MESMO ao RECONECTAR depois de uma queda e ao ver um BURACO (`seq` maior que o último + 1) — consulta o
+estado atual e entrega um `status` com ele antes de voltar a repassar o canal; a tela nunca pede isso
+sozinha. A porta só repassa eventos de estado com `seq` ESTRITAMENTE crescente e descarta ela mesma
+qualquer duplicado. Sem `Result`: é um stream — "WS avisa, REST é a verdade"; corrida inexistente, ou não
+mais visível a quem assina (A3), não entrega nada.
+
+### Idempotência — achado A4, revisado por R6
+
+`request`, `cancel` (dos dois lados), `accept`, `arrived`, `start` e `complete` recebem `idempotencyKey`. A
+MESMA chave com o MESMO corpo devolve a MESMA resposta (nenhum efeito duplicado). A MESMA chave com um corpo
+DIFERENTE — ex.: pedir Conforto com outra cotação usando a chave de um pedido de VuumBora já feito — é
+`409 conflict` (`reason: 'idempotency_key_reused'`), nunca um sucesso silencioso com o resultado antigo.
+**R6 (reconferência):** no cancelamento do passageiro, a impressão do corpo inclui o `tripId` (como já era
+do lado do motorista) — sem isso, a MESMA chave usada no cancelamento de OUTRA corrida com o mesmo `input`
+(ex.: `{}` sem `reason`) batia no cache e devolvia o resultado da corrida ERRADA, deixando a corrida certa
+intocada em silêncio.
+
+### `reason` tipado por operação — achado B6, texto pendente R8
+
+`ApiErrorKind` (`packages/api-client/src/index.ts`) continua com `reason: string` — não foi tocado, porque
+`identity` e `waitlist` já dependem dele com valores arbitrários do servidor. A segurança de tipo mora em
+`trip/result.ts`: cada operação tem seu próprio construtor (`quoteConflict`, `requestConflict`,
+`cancelConflict`, `acceptConflict`, `availabilityConflict`, `driverActionConflict`), cada um com uma união
+FECHADA de `reason` — um valor fora da união não compila. É assim que os mocks garantem que só emitem os
+`reason` documentados aqui. O adaptador `http` (quando existir) transforma qualquer `reason` que o servidor
+mande FORA destas uniões em `kind: 'unknown'` — nunca repassa um valor não documentado para a tela como se
+fosse um dos reconhecidos.
+
+### O mock não despacha motorista sozinho — isso é `control`
+
+Ao contrário da identidade (que se comporta como um servidor sozinho), o mock de corrida não decide
+"quando" a coisa acontece: `createMockPassengerRidePort()` e `createMockDriverRidePort()` devolvem, cada
+um, `{ port/offerPort+tripPort, control }`. As telas usam só a porta; `control` é quem avança o tempo —
+com a MESMA validação do domínio (`transitionTrip`/`cancelTrip`): uma transição que o domínio recusaria
+também é recusada em `control`, nunca forçada.
+
+```ts
+const { port, control } = createMockPassengerRidePort();
+const unsubscribe = port.subscribe(tripId, onEvent);
+
+// Troque o setTimeout do rideSimulator.ts de hoje por chamadas a control, na mesma cadência:
+setTimeout(() => control.advance(tripId, 'searching_driver'), 0);
+// R2: passe o driverId ao ir para 'driver_assigned' — é por ele que setDriverSummary resolve a quem
+// atribuir o resumo depois (sem isso, a corrida fica sem motorista atribuído na store e nenhum
+// resumo aparece, mesmo chamando setDriverSummary).
+setTimeout(() => control.advance(tripId, 'driver_assigned', driverId), 2600);
+setTimeout(() => control.setDriverSummary(tripId, { driverId, firstName, plate }), 2600);
+setTimeout(() => control.advance(tripId, 'driver_en_route'), 2600 + 2600);
+// control.cancel(tripId, 'driver') simula o motorista desistindo — volta para searching_driver (A2 limpa o resumo).
+```
+
+**Trocar o simulador por este mock (para a Lyra, mais tarde):** `apps/passenger/src/sim/rideSimulator.ts`
+de hoje chama `transitionRide` direto e grava o resultado na store Zustand. O equivalente aqui é: 1) pedir a
+corrida por `port.request(...)`; 2) assinar `port.subscribe(tripId, onEvent)` e projetar cada `TripEvent` na
+store (no lugar de `advancePhaseFromSimulator`); 3) mover os `setTimeout`/`setInterval` do simulador para
+chamar `control.advance`/`control.setDriverSummary`/`control.emitLocation` em vez de `transitionRide` — a
+cadência (2600ms por etapa, progresso de corrida a cada 500ms) pode ser copiada como está. Nenhuma tela
+trata `control` como real: ele só existe no adaptador `mock`, o `http` não o exporta.
+
+**Os dois lados com a MESMA corrida:** passe a mesma `TripStore` (`createTripStore()` de `./trip`) para
+`createMockPassengerRidePort({ store })` e `createMockDriverRidePort({ store })` — útil para um demo com
+os dois apps ao vivo, ou para testar os achados A1–A3 (ver `test/driver-ride-mock.test.ts`, suíte "cenários
+da sonda da Nova"). `createMockDriverRidePort({ driverId })` identifica a instância — cada chamada é UM
+motorista; sem isso, um id é gerado.
+
 ### Testes
 
 ```bash
 npm test -w @vuumbora/api-client      # node --test + tsx, como a API (sem banco)
 npm run typecheck -w @vuumbora/api-client   # src (com DOM) + src SEM DOM + test
+npm test -w @vuumbora/domain                # máquina de estados (TripStatus e PassengerTripPhase)
 ```
 
 O pacote **não depende dos tipos de DOM** (`window`, `document`, `Crypto`): lê o ambiente por `globalThis`. Os apps
