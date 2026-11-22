@@ -1,16 +1,26 @@
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { theme } from '@vuumbora/tokens';
+import { CircleAlert } from 'lucide-react-native';
 import { SecondaryButton } from './SecondaryButton';
-import { glyphStyle, textStyle } from './typography';
+import { textStyle } from './typography';
+
+export interface ErrorStateIconProps {
+  readonly size: number;
+  readonly color: string;
+}
 
 export interface ErrorStateProps {
   readonly title?: string;
   readonly description?: string;
   readonly onRetry?: () => void;
   readonly retryLabel?: string;
+  /** Ícone dentro da pastilha de 56 (§8: 32pt). Sem a prop, usa `CircleAlert` do lucide (C-09). */
+  readonly icon?: (props: ErrorStateIconProps) => ReactNode;
   readonly testID?: string;
 }
+
+const ICON_SIZE = 32;
 
 /** Falha (API, rede, carregamento) — `accessibilityRole="alert"` para leitores de tela. */
 export const ErrorState = memo(function ErrorState({
@@ -18,8 +28,10 @@ export const ErrorState = memo(function ErrorState({
   description,
   onRetry,
   retryLabel = 'Tentar novamente',
+  icon,
   testID,
 }: ErrorStateProps) {
+  const color = theme.role.danger;
   return (
     <View
       style={styles.root}
@@ -28,7 +40,7 @@ export const ErrorState = memo(function ErrorState({
       accessibilityLabel={`${title}${description ? `. ${description}` : ''}`}
     >
       <View style={styles.glyphCircle}>
-        <Text style={styles.glyph}>✕</Text>
+        {icon ? icon({ size: ICON_SIZE, color }) : <CircleAlert size={ICON_SIZE} color={color} strokeWidth={1.75} />}
       </View>
       <Text style={styles.title}>{title}</Text>
       {description ? <Text style={styles.description}>{description}</Text> : null}
@@ -54,8 +66,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: theme.spacing['2'],
   },
-  // Glifo (✕): fonte do sistema de propósito — ver nota em typography.ts.
-  glyph: { color: theme.role.danger, ...glyphStyle(theme.typography.weight.bold, 'title') },
   title: {
     color: theme.role.textPrimary,
     ...textStyle('semibold', 'subtitle'),

@@ -1,6 +1,7 @@
 import { memo, useCallback, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { theme } from '@vuumbora/tokens';
+import { Star } from 'lucide-react-native';
 
 export interface StarRatingIconProps {
   readonly filled: boolean;
@@ -16,12 +17,9 @@ export interface StarRatingProps {
   readonly onChange?: (value: number) => void;
   readonly size?: number;
   /**
-   * Ícone já resolvido pelo app (lib de ícone é decisão do app, não da `ui` — mesmo
-   * padrão de `BottomTabBar.icon`/`ButtonCore.icon`). Auditoria F3: a estrela do
-   * glifo `★/☆` do sistema destoa do resto do app (lucide); passe `(props) => <Star
-   * size={props.size} color={props.color} fill={props.filled ? props.color : 'none'}
-   * strokeWidth={1.75} />`. Sem a prop, cai no glifo (compatibilidade com quem ainda
-   * não instalou a lib de ícone).
+   * Substitui a estrela padrão (`Star` do lucide — §5/§15: "Estrela lucide como
+   * padrão", corrige a auditoria F3). Só precisa ser passado para um ícone DIFERENTE
+   * do padrão; o uso comum é não passar nada.
    */
   readonly icon?: (props: StarRatingIconProps) => ReactNode;
   readonly accessibilityLabel?: string;
@@ -42,7 +40,6 @@ const DEFAULT_SIZE = 28;
 export const StarRating = memo(function StarRating({ value, max = DEFAULT_MAX, onChange, size = DEFAULT_SIZE, icon, accessibilityLabel, testID }: StarRatingProps) {
   const interactive = Boolean(onChange);
   const stars = Array.from({ length: max }, (_, index) => index + 1);
-  const glyphLineHeight = Math.round(size * 1.3);
 
   const handlePress = useCallback(
     (star: number) => {
@@ -54,8 +51,7 @@ export const StarRating = memo(function StarRating({ value, max = DEFAULT_MAX, o
   const renderStar = (filled: boolean) => {
     const color = filled ? theme.role.ctaBackground : theme.role.textMuted;
     if (icon) return icon({ filled, size, color });
-    // Glifo (★/☆) de fallback: fonte do sistema de propósito — ver nota em typography.ts.
-    return <Text style={[styles.glyph, { fontSize: size, lineHeight: glyphLineHeight, color }]}>{filled ? '★' : '☆'}</Text>;
+    return <Star size={size} color={color} fill={filled ? color : 'none'} strokeWidth={1.75} />;
   };
 
   if (!interactive) {
@@ -94,5 +90,4 @@ export const StarRating = memo(function StarRating({ value, max = DEFAULT_MAX, o
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['1'] },
   touchTarget: { minWidth: theme.layout.touchTarget, minHeight: theme.layout.touchTarget, alignItems: 'center', justifyContent: 'center' },
-  glyph: { fontWeight: theme.typography.weight.bold },
 });

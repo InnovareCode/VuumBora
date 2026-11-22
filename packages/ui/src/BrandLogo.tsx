@@ -1,6 +1,6 @@
 /// <reference path="./assets.d.ts" />
 import { memo } from 'react';
-import { Image, StyleSheet } from 'react-native';
+import { Image, StyleSheet, type ImageStyle } from 'react-native';
 import horizontalSource from '../assets/brand/vuumbora-horizontal.png';
 import lockupSource from '../assets/brand/vuumbora-lockup.png';
 import seloSource from '../assets/brand/vuumbora-selo.png';
@@ -35,11 +35,14 @@ const HORIZONTAL_HEIGHT: Record<BrandLogoSize, number> = { sm: 28, md: 40, lg: 5
 const SELO_HEIGHT: Record<BrandLogoSize, number> = { sm: 32, md: 44, lg: 64 };
 const LOCKUP_WIDTH: Record<BrandLogoSize, number> = { sm: 160, md: 240, lg: 320 };
 
-function dimensionsOf(variant: BrandLogoVariant, size: BrandLogoSize): { width: number; height: number } {
+function dimensionsOf(variant: BrandLogoVariant, size: BrandLogoSize): ImageStyle {
   const aspect = ASPECT[variant];
   if (variant === 'lockup') {
-    const width = LOCKUP_WIDTH[size];
-    return { width, height: Math.round(width / aspect) };
+    // §9/auditoria: a largura nominal (160/240/320) não cabia num container mais estreito
+    // (`lg`=320 não cabe nos 280 úteis de uma tela de 320pt, `boas-vindas.tsx:48`).
+    // `width:'100%'` + `maxWidth` deixa a imagem encolher junto do container em vez de
+    // vazar; `aspectRatio` mantém a proporção calculando a altura sozinho.
+    return { width: '100%', maxWidth: LOCKUP_WIDTH[size], aspectRatio: aspect };
   }
   const height = variant === 'horizontal' ? HORIZONTAL_HEIGHT[size] : SELO_HEIGHT[size];
   return { width: Math.round(height * aspect), height };
@@ -54,11 +57,11 @@ function dimensionsOf(variant: BrandLogoVariant, size: BrandLogoSize): { width: 
  * (amarelo) ou outra superfície clara: as partes vazadas ficariam "furadas".
  */
 export const BrandLogo = memo(function BrandLogo({ variant = 'horizontal', size = 'md', testID }: BrandLogoProps) {
-  const { width, height } = dimensionsOf(variant, size);
+  const dims = dimensionsOf(variant, size);
   return (
     <Image
       source={SOURCE[variant]}
-      style={[styles.image, { width, height }]}
+      style={[styles.image, dims]}
       resizeMode="contain"
       accessibilityRole="image"
       accessibilityLabel="VuumBora"

@@ -21,11 +21,17 @@
  * Estado atual: catálogo base implementado (ver apps/passenger/app/catalogo.tsx). Avatar,
  * MockBadge, BottomTabBar e StarRating entraram depois da Etapa A inicial — ainda
  * faltam no catálogo visual (apps/passenger/app/catalogo.tsx).
- * Faltam: Toast, Modal, BottomSheet e o adaptador de mapa
- * (MapView/RouteOverlay/LocationMarker) — fora deste escopo.
+ *
+ * Onda 0 do F09 (22/11/2026, `docs/padrao-premium-telas.md` §15): PressableScale (C-13),
+ * NetworkBanner/useNetworkStatus (C-01), ConfirmDialog (C-03, o "Modal" do DS), FooterActions
+ * (C-04), Toast (C-05), SectionHeader (C-07), ListRow/ToggleSwitch (C-08), MoneyText/
+ * EstimateLabel (C-10), SegmentedControl (C-16). Nenhum ainda está no catálogo visual nem foi
+ * adotado por uma tela (esta fatia não altera `apps/*​/app`).
+ * Faltam: BottomSheet (C-02) e o adaptador de mapa (MapView/RouteOverlay/LocationMarker,
+ * C-12) — fora deste escopo.
  */
 export { theme, tokens } from '@vuumbora/tokens';
-export type { Theme, Tokens, GradientStop, BoxShadowValue } from '@vuumbora/tokens';
+export type { Theme, Tokens, GradientStop, BoxShadowValue, CubicBezier } from '@vuumbora/tokens';
 
 export { textStyle, textStyleForSize, tabularNums, glyphStyle } from './typography';
 export type { TextWeightKey, TextSizeKey } from './typography';
@@ -41,7 +47,7 @@ export { AppShell } from './AppShell';
 export type { AppShellProps } from './AppShell';
 
 export { ScreenHeader } from './ScreenHeader';
-export type { ScreenHeaderProps } from './ScreenHeader';
+export type { ScreenHeaderProps, ScreenHeaderAlign } from './ScreenHeader';
 
 export { BrandLogo } from './BrandLogo';
 export type { BrandLogoProps, BrandLogoSize, BrandLogoVariant } from './BrandLogo';
@@ -83,6 +89,9 @@ export type { LinkButtonProps } from './LinkButton';
 export { useKeyboardFocusRing, focusRingStyle } from './useFocusRing';
 export type { FocusRingPlacement, KeyboardFocusRing } from './useFocusRing';
 
+export { PressableScale } from './PressableScale';
+export type { PressableScaleProps, PressableScaleRenderState } from './PressableScale';
+
 export { InlineAlert } from './InlineAlert';
 export type { InlineAlertProps, InlineAlertTone } from './InlineAlert';
 
@@ -98,10 +107,10 @@ export { StatusBadge } from './StatusBadge';
 export type { StatusBadgeProps, StatusBadgeVariant } from './StatusBadge';
 
 export { EmptyState } from './EmptyState';
-export type { EmptyStateProps } from './EmptyState';
+export type { EmptyStateProps, EmptyStateIconProps } from './EmptyState';
 
 export { ErrorState } from './ErrorState';
-export type { ErrorStateProps } from './ErrorState';
+export type { ErrorStateProps, ErrorStateIconProps } from './ErrorState';
 
 export { LoadingSkeleton } from './LoadingSkeleton';
 export type { LoadingSkeletonProps, LoadingSkeletonVariant } from './LoadingSkeleton';
@@ -128,6 +137,36 @@ export { driverDemoAvatarSource } from './demoAssets';
 
 export { OnboardingBackground } from './OnboardingBackground';
 export type { OnboardingBackgroundProps } from './OnboardingBackground';
+
+// Onda 0 do F09 — ver nota no topo deste arquivo.
+export { useNetworkStatus } from './useNetworkStatus';
+
+export { NetworkBanner } from './NetworkBanner';
+export type { NetworkBannerProps } from './NetworkBanner';
+
+export { ConfirmDialog } from './ConfirmDialog';
+export type { ConfirmDialogProps } from './ConfirmDialog';
+
+export { FooterActions } from './FooterActions';
+export type { FooterActionsProps } from './FooterActions';
+
+export { Toast } from './Toast';
+export type { ToastProps } from './Toast';
+
+export { SectionHeader } from './SectionHeader';
+export type { SectionHeaderProps } from './SectionHeader';
+
+export { ListRow } from './ListRow';
+export type { ListRowProps, ListRowToggleProps } from './ListRow';
+
+export { ToggleSwitch } from './ToggleSwitch';
+export type { ToggleSwitchProps } from './ToggleSwitch';
+
+export { MoneyText, EstimateLabel, formatBRL } from './MoneyText';
+export type { MoneyTextProps, EstimateLabelProps } from './MoneyText';
+
+export { SegmentedControl } from './SegmentedControl';
+export type { SegmentedControlProps, SegmentedControlOption } from './SegmentedControl';
 
 // Camada do APARELHO compartilhada pelos dois apps (A3/B-6; não é visual): cofre da sessão e "baixar e conferir".
 // Cada app cria o seu cofre uma vez, em `src/identity/identityClient.ts`; a lógica fica em `src/device/`.

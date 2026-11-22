@@ -67,6 +67,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toggle: { color: theme.role.ctaBackground, ...textStyle('semibold', 'small') },
+  // L3 (`docs/padrao-premium-telas.md` §15): é controle de campo, não ação — `textSecondary`,
+  // não `ctaBackground` (amarelo é sinal de ação/seleção, §2).
+  toggle: { color: theme.role.textSecondary, ...textStyle('semibold', 'small') },
   toggleDisabled: { color: theme.role.textMuted },
 });
