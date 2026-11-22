@@ -34,6 +34,12 @@ export interface InlineAlertProps {
    * No nativo `focus()` num `View` não faz nada: lá o anúncio é a região viva / `announceForAccessibility` acima.
    */
   readonly focusRef?: Ref<ViewInstance>;
+  /**
+   * `false` = aviso ESTÁTICO: contexto que fica na tela (ex.: "a conta não é o cadastro de motorista"), não resposta a uma
+   * ação. Sem `role`, sem região viva e sem `announceForAccessibility`: o leitor de tela o lê na ordem normal, uma vez,
+   * em vez de interromper a pessoa a cada vez que a tela abre. Padrão `true` (o de sempre: erro/estado que acabou de surgir).
+   */
+  readonly announce?: boolean;
 }
 
 const TONE: Record<InlineAlertTone, { readonly glyph: string; readonly color: string; readonly border: string }> = {
@@ -43,13 +49,13 @@ const TONE: Record<InlineAlertTone, { readonly glyph: string; readonly color: st
   success: { glyph: '✓', color: theme.role.success, border: theme.role.success },
 };
 
-export const InlineAlert = memo(function InlineAlert({ tone, message, title, children, testID, focusRef }: InlineAlertProps) {
+export const InlineAlert = memo(function InlineAlert({ tone, message, title, children, testID, focusRef, announce = true }: InlineAlertProps) {
   const assertive = tone === 'danger' || tone === 'warning';
   const spoken = title ? `${title}. ${message}` : message;
 
   useEffect(() => {
-    if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(spoken);
-  }, [spoken]);
+    if (announce && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(spoken);
+  }, [announce, spoken]);
 
   const visual = TONE[tone];
   return (
@@ -62,8 +68,9 @@ export const InlineAlert = memo(function InlineAlert({ tone, message, title, chi
       {/* Só texto + glifo ficam na região anunciada: contagem/ações que mudam abaixo não reanunciam o aviso. */}
       <View
         style={styles.row}
-        role={assertive ? 'alert' : 'status'}
-        accessibilityLiveRegion={assertive ? 'assertive' : 'polite'}
+        {...(announce
+          ? { role: assertive ? ('alert' as const) : ('status' as const), accessibilityLiveRegion: assertive ? ('assertive' as const) : ('polite' as const) }
+          : null)}
       >
         <Text style={[styles.glyph, { color: visual.color }]}>{visual.glyph}</Text>
         <View style={styles.body}>

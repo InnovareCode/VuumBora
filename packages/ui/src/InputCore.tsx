@@ -19,7 +19,7 @@ import {
   type KeyboardTypeOptions,
   type TextInputProps as RNTextInputProps,
 } from 'react-native';
-import { theme } from '@vuumbora/tokens';
+import { theme, type BoxShadowValue } from '@vuumbora/tokens';
 import { glyphStyle, textStyle } from './typography';
 
 /** O que `inputRef` entrega (`.focus()`, `.blur()`...): a instância do campo nativo. */
@@ -66,6 +66,17 @@ export interface InputCoreProps {
  * do outro, é ruído. O foco continua visível (pela borda do campo); só o anel interno do navegador sai.
  */
 const WEB_NO_INNER_OUTLINE = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null;
+
+/**
+ * Campo INVÁLIDO e FOCADO ao mesmo tempo. A borda de 2pt é o indicador de foco E o de erro (vermelha quando inválido),
+ * então um campo inválido com foco ficava IDÊNTICO ao mesmo campo sem foco: quem navega por teclado (ou o foco que a
+ * tela leva ao campo depois de um envio que falhou) não via onde estava (achado da B2, 22/11/2026, medido por imagem
+ * do campo focado × desfocado). O anel é nítido — sem desfoque, não é halo (direção de arte §0/§4) — na cor de destaque,
+ * por FORA da borda vermelha: o erro continua vermelho e o foco ganha um sinal próprio, sem mexer no layout.
+ */
+const FOCUS_RING_ON_ERROR: readonly BoxShadowValue[] = [
+  { offsetX: 0, offsetY: 0, blurRadius: 0, spreadDistance: 3, color: theme.role.ctaBackground },
+];
 
 /**
  * O react-native-web imita o RN: todo campo de uma linha com `onSubmitEditing` se DESFOCA depois do Enter
@@ -124,6 +135,7 @@ export const InputCore = memo(function InputCore({
             borderTopColor,
             borderWidth: highlighted ? 2 : 1,
           },
+          error && focused ? { boxShadow: FOCUS_RING_ON_ERROR } : null,
         ]}
       >
         {leftAccessory ? <View style={styles.leftAccessory}>{leftAccessory}</View> : null}

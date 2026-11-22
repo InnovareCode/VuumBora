@@ -15,7 +15,8 @@ import { stackScreenOptions } from '../src/navigation/stackScreenOptions';
 
 /**
  * Layout raiz (Expo Router). Três grupos de rota:
- *   (auth)/  — rotas públicas (hoje só `entrar`, o acesso de demonstração): só existem SEM sessão.
+ *   (auth)/  — rotas públicas (entrar, criar conta, código, esqueci/redefinir senha, termos e privacidade): só
+ *              existem SEM sessão.
  *   (app)/   — rotas do produto (dashboard M05): só existem COM sessão.
  *   (dev)/   — telas de desenvolvimento (`/mapbox-check`; o grupo não entra na URL). Tudo sob
  *              `app/(dev)/` fica FORA DO BUILD DE PRODUÇÃO por convenção de pasta (ver `metro.config.js`):
@@ -26,11 +27,15 @@ import { stackScreenOptions } from '../src/navigation/stackScreenOptions';
  * mandada para `redirectTo` (`entrar`). O `redirectTo` é explícito de propósito: sem ele o padrão
  * é a âncora do navegador raiz, que é o GRUPO `(auth)` — a URL vira `/(auth)`, que não é rota
  * ("Unmatched Route", medido no export web do passageiro em 21/11/2026). Mesma lógica no sentido
- * contrário: com sessão, `/entrar` manda para o dashboard.
+ * contrário: com sessão, `/entrar` e `/criar-conta` mandam para o dashboard.
+ *
+ * Ter sessão aqui é ter uma CONTA de motorista (identidade, fatia B2); não é ter o cadastro de motorista aprovado
+ * — essa é outra etapa (docs/plano-apps-execucao.md, princípio 5).
  *
  * SafeAreaProvider entra aqui porque `AppShell` (@vuumbora/ui) usa SafeAreaView por
  * baixo — sem o provider as insets ficam zeradas (adicionado na M05, mesma razão do
- * passageiro).
+ * passageiro). A sessão é a do cliente de identidade (`src/identity/identityClient.ts`), não mais um estado de
+ * demonstração.
  *
  * Fonte da marca (Plus Jakarta Sans, 4 TTF estáticos — docs/tipografia.md), mesma
  * carga que o app Passageiro: `@vuumbora/ui` é compartilhada, então os dois apps
@@ -53,6 +58,34 @@ function RootNavigator() {
   );
 }
 
+/**
+ * Só monta a navegação quando a fonte da marca E a sessão estão resolvidas. A sessão sai de `loading` quando o
+ * cliente de identidade termina de ler o cofre (memória hoje, SecureStore na A3). Antes disso a splash nativa
+ * continua na tela: montar o `Stack` cedo faria a guarda decidir com a sessão ainda desconhecida e piscar a tela de
+ * entrada para quem já está logado.
+ */
+function RootGate({ fontsLoaded }: { readonly fontsLoaded: boolean }) {
+  const { status } = useSession();
+  const ready = fontsLoaded && status !== 'loading';
+
+  useEffect(() => {
+    if (ready) {
+      SplashScreen.hideAsync();
+    }
+  }, [ready]);
+
+  if (!ready) {
+    return null;
+  }
+
+  return (
+    <SafeAreaProvider>
+      <StatusBar style="light" />
+      <RootNavigator />
+    </SafeAreaProvider>
+  );
+}
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     PlusJakartaSans_400Regular,
@@ -61,22 +94,10 @@ export default function RootLayout() {
     PlusJakartaSans_700Bold,
   });
 
-  useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
-
-  if (!fontsLoaded) {
-    return null;
-  }
-
+  // O provider fica FORA do portão da fonte: a leitura do cofre começa em paralelo ao carregamento da fonte.
   return (
-    <SafeAreaProvider>
-      <StatusBar style="light" />
-      <SessionProvider>
-        <RootNavigator />
-      </SessionProvider>
-    </SafeAreaProvider>
+    <SessionProvider>
+      <RootGate fontsLoaded={fontsLoaded} />
+    </SessionProvider>
   );
 }

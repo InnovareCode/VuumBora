@@ -10,7 +10,8 @@ import {
   User,
   Wallet,
 } from 'lucide-react-native';
-import { AppShell, BottomTabBar, SecondaryButton, driverDemoAvatarSource, theme, type BottomTabBarItem } from '@vuumbora/ui';
+import { AppShell, BottomTabBar, MockBadge, SecondaryButton, driverDemoAvatarSource, theme, type BottomTabBarItem } from '@vuumbora/ui';
+import { RegistrationNotice } from '../../src/components/auth/RegistrationNotice';
 import { DriverHeader } from '../../src/components/home/DriverHeader';
 import { DriverProfileRow } from '../../src/components/home/DriverProfileRow';
 import { OnlineToggle } from '../../src/components/home/OnlineToggle';
@@ -36,9 +37,14 @@ const QUICK_ACTIONS: readonly QuickActionItem[] = [
  * para Vega). Duas regras de domínio (MOTORISTA.md) que o CÓDIGO respeita, não só a
  * aparência: `registrationApproved` bloqueia o toggle online (ver `OnlineToggle`), e o
  * contador da oferta é só demonstração local — quem expira de verdade é o servidor.
+ *
+ * Quem chega aqui tem uma CONTA de motorista (identidade, B2), não um cadastro de motorista aprovado: o
+ * `RegistrationNotice` diz isso e o resto da tela segue marcado como exemplo. "Sair da conta" é o logout do cliente de
+ * identidade (`useSession().signOut`): o aparelho sai SEMPRE (mesmo sem rede) e o servidor é avisado se der.
  */
 export default function DriverHomeScreen() {
-  const { signOut } = useSession();
+  const { signOut, mode: sessionMode } = useSession();
+  const [signingOut, setSigningOut] = useState(false);
   const [online, setOnline] = useState(true);
   const [secondsRemaining, setSecondsRemaining] = useState(OFFER_COUNTDOWN_SECONDS);
 
@@ -56,6 +62,12 @@ export default function DriverHomeScreen() {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    await signOut(); // a tela é desmontada pela guarda ao sair; não há o que reativar depois
+  }
 
   const tabs: readonly BottomTabBarItem[] = [
     { key: 'inicio', label: 'Início', icon: ({ color, active }) => <HomeIcon size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
@@ -76,6 +88,10 @@ export default function DriverHomeScreen() {
     <AppShell scroll footer={<BottomTabBar items={tabs} activeKey="inicio" testID="driver-tab-bar" />}>
       <View style={styles.content}>
         <DriverHeader notificationCount={3} />
+        {sessionMode === 'mock' ? (
+          <MockBadge label="acesso simulado, sem autenticação real" testID="simulated-access-badge" />
+        ) : null}
+        <RegistrationNotice context="home" testID="home-registration-notice" />
         <DriverProfileRow driverName="Carlos Santos" approved={registrationApproved} avatarSource={driverDemoAvatarSource} />
         <OnlineToggle online={online} approved={registrationApproved} onToggle={setOnline} />
         <DriverMapPreview cityLabel="São Paulo - SP" />
@@ -97,10 +113,15 @@ export default function DriverHomeScreen() {
 
         <QuickActionsRow items={QUICK_ACTIONS} />
 
-        {/* ANDAIME DA SESSÃO DE DEMONSTRAÇÃO: não está na referência da M05. Existe só para quem revisa
-            conseguir encerrar a sessão e ver a guarda de rota. Sai quando houver tela de perfil/menu
-            do motorista com "Sair" de verdade (A2/Bloco B). */}
-        <SecondaryButton label="Sair da demonstração" onPress={signOut} accessibilityLabel="Sair da demonstração" testID="driver-demo-sign-out" />
+        {/* ANDAIME: o "Sair" ainda não tem lugar na referência da M05 (a aba Perfil não navega). Vira item da tela de
+            perfil/menu do motorista (M13) quando ela existir; o logout em si já é o real. */}
+        <SecondaryButton
+          label="Sair da conta"
+          onPress={() => void handleSignOut()}
+          loading={signingOut}
+          accessibilityLabel="Sair da conta"
+          testID="driver-sign-out-button"
+        />
       </View>
     </AppShell>
   );

@@ -32,8 +32,10 @@ export const DriverProfileRow = memo(function DriverProfileRow({ driverName, app
           {...(avatarSource !== undefined ? { imageSource: avatarSource } : {})}
           {...(avatarUri !== undefined ? { imageUri: avatarUri } : {})}
         />
+        {/* Rótulo SEM a palavra "cadastro" e marcado como exemplo: quem chega aqui tem uma CONTA de motorista, não um
+            cadastro aprovado (B2). O selo continua demonstração até a M04 trazer o estado real do servidor. */}
         {approved ? (
-          <View style={styles.verifiedBadge} accessibilityRole="image" accessibilityLabel="Cadastro de motorista aprovado">
+          <View style={styles.verifiedBadge} accessibilityRole="image" accessibilityLabel="Selo de motorista aprovado (exemplo)">
             <ShipWheel size={13} color={theme.role.ctaText} strokeWidth={2.25} />
           </View>
         ) : null}
