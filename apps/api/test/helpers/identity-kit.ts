@@ -4,6 +4,7 @@
  * `./auth-env.js` e `./setup.js` ANTES deste arquivo.
  */
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import type { MailMessage, MailPort } from '../../src/lib/mail-port.js';
 import { drainBackgroundTasks } from '../../src/lib/background-tasks.js';
 import { pool, startApp, type TestApp } from './harness.js';
@@ -55,9 +56,17 @@ export function randomIp(): string {
   counter += 1;
   return `10.${(counter >> 16) & 255}.${(counter >> 8) & 255}.${counter & 255}`;
 }
+/**
+ * Marca única POR EXECUÇÃO do processo. O banco de teste persiste entre execuções (nada zera `accounts`), e um contador que
+ * recomeça em 1 gerava `pessoa1@...` de novo na 2ª execução: o cadastro respondia 409 `email_taken` e os testes de
+ * B-1 e F4 do bcrypt-ceiling falhavam sem defeito nenhum no código (achado N2 da passada 4 da Íris).
+ * Começa com LETRA de propósito: `FakeMailbox.lastCode` procura um número de 6 dígitos isolado (`\b\d{6}\b`) no texto do
+ * e-mail, e uma marca só de dígitos poderia ser confundida com o código.
+ */
+const RUN_TAG = `x${randomBytes(4).toString('hex')}`;
 export function uniqueEmail(label = 'pessoa'): string {
   counter += 1;
-  return `${label}${counter}@teste.vuumbora.dev`;
+  return `${label}${counter}-${RUN_TAG}@teste.vuumbora.dev`;
 }
 
 export type AccountType = 'passenger' | 'driver';

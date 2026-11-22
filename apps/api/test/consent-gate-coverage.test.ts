@@ -12,15 +12,28 @@
  * Hoje não há rota de compromisso (corrida, ficar online), então as três autenticadas são exceções com motivo. Quando a
  * primeira rota de compromisso nascer, ela entra como `account-gated` (e o teste cobra o preHandler) ou o teste falha.
  *
- * A detecção é pelo NOME das funções de `preHandler` (`requireAccount`, `requireCurrentConsent`): o último teste trava esses
- * nomes contra as fábricas reais, para um renome não esvaziar o teste em silêncio.
+ * Duas detecções se completam (N3 da passada 4 da Íris: só pelo nome, três formas de esconder a autenticação passavam
+ * declaradas `public` — autenticar por `onRequest`, por função anônima no `preHandler` e por `addHook` do contexto):
+ *
+ *  1. POR NOME, em toda fase do ciclo (`onRequest`, `preParsing`, `preValidation`, `preHandler`): vê `requireAccount` e
+ *     `requireCurrentConsent`. O último teste trava esses nomes contra as fábricas reais (um renome não esvazia o teste).
+ *  2. POR EFEITO: cada rota fora do painel é sondada SEM sessão (cabeçalho `Authorization` com lixo) e a recusa característica
+ *     de `requireAccount` (401 com `error.code = 'unauthorized'`) tem de aparecer exatamente nas rotas declaradas como de conta.
+ *     Isso independe de COMO a autenticação foi ligada (nome de função, função anônima, hook do contexto).
+ *
+ * LIMITAÇÃO REGISTRADA (a sondagem não cobre o portão): o portão de aceite (`requireCurrentConsent`) só se manifesta com uma
+ * sessão real e um aceite pendente, e isto aqui não cria conta. Ele continua detectado só pelo nome. Consequências: (a) rota
+ * declarada `account-gated` cujo portão esteja escondido (anônimo, `addHook`) FALHA por não achar o nome (falha fechada);
+ * (b) um portão escondido numa rota `account-exempt` não é visto, mas essa rota já é uma exceção declarada com motivo; (c) o
+ * comportamento do portão por HTTP fica para quando a primeira rota de compromisso existir (pendência registrada no PROGRESSO).
+ * A sondagem também só vale para rotas fora de `/v1/admin` (outra identidade, outra recusa).
  */
 import './helpers/auth-env.js';
 import './helpers/setup.js';
 import assert from 'node:assert/strict';
 import { Writable } from 'node:stream';
 import { after, before, describe, test } from 'node:test';
-import type { FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type HTTPMethods, type onRouteHookHandler } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { closePool } from '../src/db.js';
 import { makeRequireAccount } from '../src/hooks/require-account.js';
@@ -58,11 +71,70 @@ const ROUTE_POLICY: Readonly<Record<string, Policy>> = {
   'POST /v1/auth/logout-all': { kind: 'account-exempt', reason: 'encerrar sessões não cria compromisso novo e precisa funcionar com aceite pendente' },
 };
 
+/** Fases em que uma função pode autenticar a requisição, na ordem em que o Fastify as roda. */
+const HOOK_PHASES = ['onRequest', 'preParsing', 'preValidation', 'preHandler'] as const;
+/** Cabeçalho da sondagem: um "token" que nenhuma sessão reconhece (a recusa vem antes de qualquer consulta ao banco). */
+const PROBE_AUTHORIZATION = 'Bearer lixo.sem.sessao';
+
 interface RouteFacts {
   /** "MÉTODO caminho completo (com o prefixo do contexto)". */
   readonly key: string;
-  /** Nomes das funções de `preHandler`, na ordem. */
+  /** Nomes das funções de hook de ROTA (`onRequest`, `preParsing`, `preValidation`, `preHandler`), na ordem do ciclo de vida. */
   readonly handlers: readonly string[];
+  /**
+   * Resultado da sondagem SEM sessão: a recusa de `requireAccount` apareceu? `undefined` = rota não sondada (painel, ou rota
+   * sintética dos controles negativos). Preenchido por `probeWithoutSession`.
+   */
+  refusesWithoutSession?: boolean | undefined;
+}
+
+/** `onRoute` que anota cada rota do app (e dos contextos encapsulados, que herdam o hook) com os nomes dos hooks da própria rota. */
+function createRouteCollector(): { readonly routes: RouteFacts[]; readonly onRoute: onRouteHookHandler } {
+  const routes: RouteFacts[] = [];
+  const onRoute: onRouteHookHandler = (route) => {
+    const options = route as unknown as Record<string, unknown>;
+    const handlers: string[] = [];
+    for (const phase of HOOK_PHASES) {
+      for (const hook of ([] as unknown[]).concat(options[phase] ?? [])) handlers.push(typeof hook === 'function' ? hook.name : '?');
+    }
+    for (const method of ([] as string[]).concat(route.method)) {
+      // HEAD é criado sozinho para cada GET, e OPTIONS é o preflight do CORS: nenhum dos dois é uma rota da aplicação.
+      if (method === 'HEAD' || method === 'OPTIONS') continue;
+      routes.push({ key: `${method} ${route.url}`, handlers });
+    }
+  };
+  return { routes, onRoute };
+}
+
+const isAdminPath = (path: string): boolean => path === ADMIN_PREFIX || path.startsWith(`${ADMIN_PREFIX}/`);
+
+/** A recusa característica de `requireAccount`: 401 com `error.code = 'unauthorized'` (um 401 de outra rota, como `invalid_refresh_token`, não conta). */
+function isSessionRefusal(statusCode: number, body: string): boolean {
+  if (statusCode !== 401) return false;
+  try {
+    return (JSON.parse(body) as { error?: { code?: unknown } }).error?.code === 'unauthorized';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Chama cada rota fora do painel SEM sessão (sem corpo, com um Bearer inválido) e anota se a autenticação a recusou. Sem corpo
+ * e sem `content-type`, as rotas públicas param na validação (400) e nada é gravado. É isto que enxerga a autenticação
+ * escondida do olhar por nome (`onRequest`, função anônima, `addHook` do contexto): o efeito é o mesmo de qualquer forma.
+ */
+async function probeWithoutSession(app: FastifyInstance, routes: readonly RouteFacts[]): Promise<void> {
+  for (const route of routes) {
+    const separator = route.key.indexOf(' ');
+    const path = route.key.slice(separator + 1);
+    if (isAdminPath(path)) continue;
+    const response = await app.inject({
+      method: route.key.slice(0, separator) as HTTPMethods,
+      url: path.replace(/:[A-Za-z0-9_]+/g, 'x'),
+      headers: { authorization: PROBE_AUTHORIZATION },
+    });
+    route.refusesWithoutSession = isSessionRefusal(response.statusCode, response.body);
+  }
 }
 
 /** Só leitura da tabela e das rotas: devolve o que está errado (vazio = tudo certo). Testada com rotas sintéticas abaixo. */
@@ -73,7 +145,7 @@ function findViolations(routes: readonly RouteFacts[], policy: Readonly<Record<s
     const authenticated = route.handlers.includes(REQUIRE_ACCOUNT);
     const gateAt = route.handlers.indexOf(REQUIRE_CURRENT_CONSENT);
 
-    if (path === ADMIN_PREFIX || path.startsWith(`${ADMIN_PREFIX}/`)) {
+    if (isAdminPath(path)) {
       if (authenticated || gateAt !== -1) violations.push(`${route.key}: rota do painel usa requireAccount/requireCurrentConsent (o painel é outra identidade)`);
       continue;
     }
@@ -82,6 +154,15 @@ function findViolations(routes: readonly RouteFacts[], policy: Readonly<Record<s
     if (!declared) {
       violations.push(`${route.key}: SEM CLASSIFICAÇÃO. Declare em ROUTE_POLICY: 'public' (sem sessão), 'account-gated' (cria compromisso novo: use requireCurrentConsent) ou 'account-exempt' (com o motivo).`);
       continue;
+    }
+    // Por EFEITO (N3): vale qualquer que seja a forma de ligar a autenticação, inclusive as que o nome não enxerga.
+    if (route.refusesWithoutSession !== undefined) {
+      if (declared.kind === 'public' && route.refusesWithoutSession) {
+        violations.push(`${route.key}: declarada 'public', mas RECUSA a requisição sem sessão (401 unauthorized): há autenticação escondida do teste (hook em onRequest, função anônima ou addHook do contexto). Declare a rota como de conta e use requireAccount no preHandler dela.`);
+      }
+      if (declared.kind !== 'public' && !route.refusesWithoutSession) {
+        violations.push(`${route.key}: declarada '${declared.kind}', mas NÃO recusou a requisição sem sessão (esperado 401 unauthorized): a autenticação não está valendo de verdade.`);
+      }
     }
     if (declared.kind === 'public') {
       if (authenticated) violations.push(`${route.key}: declarada 'public', mas usa requireAccount`);
@@ -104,21 +185,16 @@ function findViolations(routes: readonly RouteFacts[], policy: Readonly<Record<s
 }
 
 let app: FastifyInstance;
-const discovered: RouteFacts[] = [];
+const collector = createRouteCollector();
+const discovered: RouteFacts[] = collector.routes;
 
 before(async () => {
   app = await buildApp({
     logStream: new Writable({ write: (_chunk, _encoding, callback) => callback() }),
-    onRoute: (route) => {
-      const handlers = ([] as unknown[]).concat(route.preHandler ?? []).map((handler) => (typeof handler === 'function' ? handler.name : '?'));
-      for (const method of ([] as string[]).concat(route.method)) {
-        // HEAD é criado sozinho para cada GET, e OPTIONS é o preflight do CORS: nenhum dos dois é uma rota da aplicação.
-        if (method === 'HEAD' || method === 'OPTIONS') continue;
-        discovered.push({ key: `${method} ${route.url}`, handlers });
-      }
-    },
+    onRoute: collector.onRoute,
   });
   await app.ready();
+  await probeWithoutSession(app, discovered);
 });
 after(async () => {
   await app.close();
@@ -142,6 +218,17 @@ describe('B-2: toda rota autenticada exige requireCurrentConsent OU uma exceçã
   test('os nomes que a detecção usa são os das fábricas reais (um renome não esvazia o teste em silêncio)', () => {
     assert.equal(makeRequireAccount(loadAuthConfig()!).name, REQUIRE_ACCOUNT);
     assert.equal(makeRequireCurrentConsent(null).name, REQUIRE_CURRENT_CONSENT);
+  });
+
+  test('a sondagem sem sessão enxerga de verdade (não é vazia): todas as rotas fora do painel foram sondadas e só as de conta recusaram', () => {
+    const outsideAdmin = discovered.filter((route) => !isAdminPath(route.key.slice(route.key.indexOf(' ') + 1)));
+    assert.ok(outsideAdmin.length >= 15, `só ${outsideAdmin.length} rotas fora do painel enumeradas`);
+    assert.ok(outsideAdmin.every((route) => route.refusesWithoutSession !== undefined), 'toda rota fora do painel foi sondada');
+    const refused = outsideAdmin.filter((route) => route.refusesWithoutSession).map((route) => route.key).sort();
+    const declared = Object.entries(ROUTE_POLICY).filter(([, policy]) => policy.kind !== 'public').map(([key]) => key).sort();
+    assert.ok(refused.length >= 3, `só ${refused.length} rota(s) recusou(aram) a requisição sem sessão: a sondagem está cega`);
+    assert.deepEqual(refused, declared);
+    assert.ok(discovered.filter((route) => isAdminPath(route.key.slice(route.key.indexOf(' ') + 1))).every((route) => route.refusesWithoutSession === undefined), 'o painel não é sondado aqui');
   });
 });
 
@@ -188,5 +275,79 @@ describe('B-2: o verificador cai quando deve (controle negativo, com rotas sint�
   test('rota do painel que use o portão das contas dos apps: falha; rota do painel comum não precisa de classificação', () => {
     assert.match(findViolations([route('GET /v1/admin/x', REQUIRE_ACCOUNT)], {})[0]!, /rota do painel usa requireAccount/);
     assert.deepEqual(findViolations([route('GET /v1/admin/x', 'requireAdmin')], {}), []);
+  });
+
+  test('sondagem: pública que recusa sem sessão falha; de conta que NÃO recusa falha; coerente passa; não sondada é ignorada (N3)', () => {
+    const probed = (key: string, refuses: boolean | undefined, ...handlers: string[]): RouteFacts => ({ key, handlers, refusesWithoutSession: refuses });
+    assert.match(findViolations([probed('POST /x', true)], { 'POST /x': { kind: 'public' } })[0]!, /declarada 'public', mas RECUSA a requisição sem sessão/);
+    assert.match(findViolations([probed('GET /y', false, REQUIRE_ACCOUNT)], { 'GET /y': exempt() })[0]!, /NÃO recusou a requisição sem sessão/);
+    assert.deepEqual(findViolations([probed('POST /livre', false), probed('GET /y', true, REQUIRE_ACCOUNT)], { 'POST /livre': { kind: 'public' }, 'GET /y': exempt() }), []);
+    assert.deepEqual(findViolations([probed('GET /v1/admin/z', undefined)], {}), [], 'o painel e as rotas não sondadas não entram na sondagem');
+  });
+});
+
+describe('B-2 (N3): as três formas de esconder a autenticação, declaradas `public`, são pegas (rotas reais do Fastify, `requireAccount` real)', () => {
+  /** Mini app com as três formas + uma rota pública honesta, todas anotadas pelo MESMO coletor e pela MESMA sondagem do app real. */
+  async function buildMiniApp() {
+    const requireAccount = makeRequireAccount(loadAuthConfig()!);
+    const mini = Fastify({ logger: false });
+    const miniCollector = createRouteCollector();
+    mini.addHook('onRoute', miniCollector.onRoute); // antes das rotas, como no app real
+    const handler = async () => ({ ok: true });
+    mini.get('/forma-onrequest', { onRequest: requireAccount }, handler);
+    // Função anônima: o nome dela é `preHandler` (herdado da propriedade), nunca `requireAccount`.
+    mini.get('/forma-anonima', { preHandler: async (request, reply) => { await requireAccount(request, reply); } }, handler);
+    await mini.register(async (context) => {
+      context.addHook('preHandler', requireAccount); // vale para toda rota do contexto e NÃO aparece nas opções da rota
+      context.get('/forma-contexto', handler);
+    });
+    mini.get('/honesta', handler);
+    await mini.ready();
+    await probeWithoutSession(mini, miniCollector.routes);
+    return { mini, routes: miniCollector.routes };
+  }
+  const allPublic = Object.fromEntries(['/forma-onrequest', '/forma-anonima', '/forma-contexto', '/honesta'].map((path) => [`GET ${path}`, { kind: 'public' } as const])) as Record<string, Policy>;
+
+  test('cada forma escondida é pega; a rota pública honesta do mesmo app não é', async () => {
+    const { mini, routes } = await buildMiniApp();
+    try {
+      const byKey = (key: string) => routes.find((route) => route.key === key)!;
+      // O que o NOME enxerga: só a forma onRequest. As outras duas são invisíveis por nome (o ponto do N3).
+      assert.ok(byKey('GET /forma-onrequest').handlers.includes(REQUIRE_ACCOUNT), 'por nome: onRequest é visto');
+      assert.ok(!byKey('GET /forma-anonima').handlers.includes(REQUIRE_ACCOUNT), 'por nome: a função anônima NÃO é vista');
+      assert.deepEqual(byKey('GET /forma-contexto').handlers, [], 'por nome: o hook do contexto NÃO é visto');
+      // O que a SONDAGEM enxerga: as três recusam sem sessão; a honesta não.
+      assert.deepEqual(routes.filter((route) => route.refusesWithoutSession).map((route) => route.key).sort(), ['GET /forma-anonima', 'GET /forma-contexto', 'GET /forma-onrequest']);
+      assert.equal(byKey('GET /honesta').refusesWithoutSession, false);
+
+      const violations = findViolations(routes, allPublic);
+      for (const path of ['/forma-onrequest', '/forma-anonima', '/forma-contexto']) {
+        assert.ok(violations.some((v) => v.startsWith(`GET ${path}: declarada 'public'`)), `GET ${path} declarada public deveria falhar (${violations.join(' || ')})`);
+      }
+      assert.ok(!violations.some((v) => v.startsWith('GET /honesta')), 'a rota pública honesta não gera violação');
+      assert.match(violations.find((v) => v.startsWith('GET /forma-anonima'))!, /RECUSA a requisição sem sessão/);
+      assert.match(violations.find((v) => v.startsWith('GET /forma-contexto'))!, /RECUSA a requisição sem sessão/);
+    } finally {
+      await mini.close();
+    }
+  });
+
+  test('declaradas como de conta, a sondagem concorda (as duas recusam sem sessão) e só a checagem por NOME reclama, pedindo requireAccount visível (falha fechada)', async () => {
+    const { mini, routes } = await buildMiniApp();
+    try {
+      const policy: Record<string, Policy> = {
+        'GET /forma-anonima': { kind: 'account-exempt', reason: 'rota de teste: autentica por função anônima' },
+        'GET /forma-contexto': { kind: 'account-exempt', reason: 'rota de teste: autentica por hook do contexto' },
+        'GET /honesta': { kind: 'public' },
+      };
+      // A forma onRequest é vista por nome E por efeito; fora de `policy` ela cai como "sem classificação" (esperado).
+      const violations = findViolations(routes.filter((route) => route.key !== 'GET /forma-onrequest'), policy);
+      // As duas formas escondidas declaradas como de conta falham SÓ por não terem `requireAccount` visível por nome:
+      // a verificação por nome continua exigindo o nome para rota autenticada (falha fechada), e a sondagem concorda com ela.
+      assert.deepEqual(violations.filter((v) => /NÃO recusou/.test(v)), [], 'a sondagem confirma que as duas recusam sem sessão');
+      assert.ok(violations.every((v) => /não usa requireAccount/.test(v)), `só a checagem por nome reclama (${violations.join(' || ')})`);
+    } finally {
+      await mini.close();
+    }
   });
 });

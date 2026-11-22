@@ -30,6 +30,13 @@ process.env['AUTH_BCRYPT_CONCURRENCY'] = '2';
 process.env['AUTH_BCRYPT_QUEUE_MAX'] = '4';
 const SIZE = 2;
 const QUEUE = 4;
+/** Ver a justificativa no item (3) da rajada: protegem o defeito (segundos), não a velocidade da máquina. */
+const HEALTHZ_MEDIAN_LIMIT_MS = 50;
+const HEALTHZ_WORST_LIMIT_MS = 1000;
+/** Ciclo normal da sonda = chamada (poucos ms) + pausa de 15 ms. Só o que passa de 50 ms por ciclo entra na conta da parada total. */
+const HEALTHZ_CYCLE_FLOOR_MS = 50;
+const HEALTHZ_STALL_BUDGET_MS = 1000;
+const ADMIN_LOGIN_LIMIT_MS = 1000;
 
 let h: Harness;
 let fillersAtBoot: Array<Promise<unknown>> = [];
@@ -79,6 +86,9 @@ describe('A-1: teto global do bcrypt', () => {
     const baseline = appBcrypt().stats();
 
     const probes: Array<{ ms: number; status: number }> = [];
+    // Duração de cada CICLO da sonda (a chamada + a pausa de 15 ms). A latência da chamada (`ms`) não vê uma parada do laço que
+    // caia DURANTE a pausa (o relógio só começa depois dela); o ciclo inteiro vê.
+    const cycles: number[] = [];
     let running = true;
     const prober = (async () => {
       while (running) {
@@ -86,17 +96,21 @@ describe('A-1: teto global do bcrypt', () => {
         const r = await h.t.app.inject({ method: 'GET', url: '/healthz' });
         probes.push({ ms: performance.now() - t0, status: r.statusCode });
         await sleep(15);
+        cycles.push(performance.now() - t0);
       }
     })();
 
     const started = performance.now();
-    const burst = Promise.all(Array.from({ length: 30 }, (_, i) => post('/v1/auth/verify-email', `10.77.0.${i + 1}`, verifyBody(uniqueEmail('rajada')))));
+    let burstSettled = false;
+    const burst = Promise.all(Array.from({ length: 30 }, (_, i) => post('/v1/auth/verify-email', `10.77.0.${i + 1}`, verifyBody(uniqueEmail('rajada')))))
+      .finally(() => { burstSettled = true; });
     // Espera a pista dos apps lotar e trabalhar (sem fixar um tempo: o banco de CI pode ser lento).
     for (const deadline = Date.now() + 5000; appBcrypt().stats().active < SIZE && Date.now() < deadline; ) await sleep(5);
     assert.equal(appBcrypt().stats().active, SIZE, 'a pista dos apps está ocupada de verdade');
     const adminStarted = performance.now();
     const adminReply = await adminLogin();
     const adminMs = performance.now() - adminStarted;
+    const adminFinishedDuringBurst = !burstSettled; // lido logo ao voltar do login: a rajada pública ainda tinha operação em curso?
     const replies = await burst;
     const burstMs = performance.now() - started;
     running = false;
@@ -118,15 +132,40 @@ describe('A-1: teto global do bcrypt', () => {
     assert.equal(stats.completed - baseline.completed, byStatus(400).length, 'cada requisição atendida gastou exatamente UMA operação de bcrypt');
     // F4 da Íris (passada 3): na rajada SIMULTÂNEA a recusa também não gasta tentativa (antes: 30 linhas para 30 requisições, 20 recusadas).
     assert.equal(await attempts(), byStatus(400).length, 'só as requisições atendidas reservaram tentativa do par; as 503 não gravaram nada');
-    // (3) O servidor segue vivo: o /healthz respondeu várias vezes DURANTE a rajada e nunca demorou 200 ms.
+    // (3) O servidor segue vivo: o /healthz respondeu várias vezes DURANTE a rajada, e o laço de eventos não ficou parado.
+    // Por que NÃO um máximo de 200 ms (N1 da passada 4 da Íris): o máximo falhou 3 vezes em ~107 execuções (223, 228 e 233 ms)
+    // com o típico de 16 a 34 ms, nas três condições (sem afinidade, 2 CPUs, carga 2x). Não era bcrypt na thread principal (esse
+    // trava por SEGUNDOS): é UMA parada do laço por disputa de CPU (2 vagas de bcrypt + principal + Postgres na mesma máquina).
+    // Um limite absoluto apertado mede a máquina, não o código. O que o teste protege é o defeito original: o bcrypt na thread
+    // principal parando o laço (mediana de 1,9 s e máximo de 6,2 s). Uma parada ISOLADA de ~0,2 s é ruído; o defeito é parada
+    // SUSTENTADA e somada (6 comparações de ~0,5 s = ~2,9 s). Por isso quatro travas, cada uma com folga:
+    //  - pelo menos 10 sondas dentro da rajada (a sonda só reinicia quando a anterior responde);
+    //  - mediana < 50 ms: o laço NÃO está ocupado de forma sustentada (uma parada isolada não mexe na mediana);
+    //  - máximo < 1000 ms: nenhuma parada de segundos;
+    //  - parada TOTAL < 1000 ms: a soma, por ciclo da sonda, do que passou de 50 ms. É esta a que pega o bcrypt SÍNCRONO na
+    //    principal com teto (cada comparação para o laço por ~0,5 s, mas as paradas vêm em blocos de ~1 s e a latência máxima
+    //    da chamada fica no limite), sem reprovar a parada única de 0,2 s do ruído. Medido em cópia: esse mutante soma 2,8 a 2,9 s;
+    //    as execuções limpas, 0 a 60 ms (máquina livre, presa a 2 CPUs e com carga 2x); uma parada simulada de 250 ms soma ~220 ms
+    //    e 4 delas (~0,9 s) ainda passam.
     assert.ok(probes.length >= 10, `só ${probes.length} sondas do /healthz couberam na rajada de ${burstMs.toFixed(0)} ms (o laço de eventos parou)`);
-    const worst = Math.max(...probes.map((p) => p.ms));
-    assert.ok(worst < 200, `/healthz demorou ${worst.toFixed(0)} ms durante a rajada (limite 200 ms)`);
+    const sortedMs = probes.map((p) => p.ms).sort((a, b) => a - b);
+    const worst = sortedMs[sortedMs.length - 1]!;
+    const median = sortedMs[Math.floor(sortedMs.length / 2)]!;
+    const stalledMs = cycles.reduce((sum, cycle) => sum + Math.max(0, cycle - HEALTHZ_CYCLE_FLOOR_MS), 0);
+    assert.ok(median < HEALTHZ_MEDIAN_LIMIT_MS, `/healthz teve mediana de ${median.toFixed(0)} ms durante a rajada (limite ${HEALTHZ_MEDIAN_LIMIT_MS} ms): o laço está ocupado de forma sustentada`);
+    assert.ok(worst < HEALTHZ_WORST_LIMIT_MS, `/healthz demorou ${worst.toFixed(0)} ms durante a rajada (limite ${HEALTHZ_WORST_LIMIT_MS} ms)`);
+    assert.ok(stalledMs < HEALTHZ_STALL_BUDGET_MS, `o laço de eventos ficou parado ${stalledMs.toFixed(0)} ms no total durante a rajada (limite ${HEALTHZ_STALL_BUDGET_MS} ms, contando só o que passa de ${HEALTHZ_CYCLE_FLOOR_MS} ms por ciclo da sonda)`);
     assert.ok(probes.every((p) => p.status === 200), '/healthz sempre 200');
     // (4) O login do admin tem pista própria: entra durante a rajada pública, sem fila nem recusa.
+    // Mesma lição do N1: um único login medido contra 400 ms só tinha margem de 4x sobre o pior caso medido (96 ms com 2 CPUs e
+    // carga 2x), e uma parada de ~0,2 s do laço já o aproximava do limite. A prova que não depende da velocidade da máquina é a
+    // ORDEM: com pista própria o admin termina enquanto a rajada pública ainda tem operação em curso (ele leva dezenas de ms;
+    // a rajada, 3 rodadas de ~480 ms). Se ele esperasse numa fila de bcrypt dos apps, terminaria DEPOIS das atendidas.
+    // O limite absoluto fica só como rede contra "segundos".
     assert.equal(adminReply.status, 200, JSON.stringify(adminReply.body));
-    assert.ok(adminMs < 400, `login do admin levou ${adminMs.toFixed(0)} ms durante a rajada pública`);
-    console.log(`# rajada de 30: ${byStatus(400).length} atendidas, ${byStatus(503).length} recusadas, ${burstMs.toFixed(0)} ms; /healthz ${probes.length} sondas, máx ${worst.toFixed(0)} ms; login do admin ${adminMs.toFixed(0)} ms; pico ${stats.peakActive}/${SIZE}, fila ${stats.peakWaiting}/${QUEUE}`);
+    assert.ok(adminFinishedDuringBurst, `o login do admin (${adminMs.toFixed(0)} ms) só terminou DEPOIS de a rajada pública acabar: ele esperou na fila dos apps`);
+    assert.ok(adminMs < ADMIN_LOGIN_LIMIT_MS, `login do admin levou ${adminMs.toFixed(0)} ms durante a rajada pública (limite ${ADMIN_LOGIN_LIMIT_MS} ms)`);
+    console.log(`# rajada de 30: ${byStatus(400).length} atendidas, ${byStatus(503).length} recusadas, ${burstMs.toFixed(0)} ms; /healthz ${probes.length} sondas, mediana ${median.toFixed(0)} ms, máx ${worst.toFixed(0)} ms, laço parado ${stalledMs.toFixed(0)} ms no total; login do admin ${adminMs.toFixed(0)} ms; pico ${stats.peakActive}/${SIZE}, fila ${stats.peakWaiting}/${QUEUE}`);
   });
 
   test('pista cheia: login, cadastro, verificação e redefinição recusam com 503 ANTES de reservar tentativa ou criar conta', async () => {
