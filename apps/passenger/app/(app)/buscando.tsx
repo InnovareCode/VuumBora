@@ -4,7 +4,8 @@ import { router } from 'expo-router';
 import { Car, MapPin } from 'lucide-react-native';
 import { AppShell, DangerButton, MockBadge, SurfaceRaised, theme, textStyle, tabularNums } from '@vuumbora/ui';
 import { SearchingPulse } from '../../src/components/search/SearchingPulse';
-import { findMockRideCategory } from '../../src/data/mockRideCategories';
+import { rideCategoryName } from '../../src/data/rideCategoryDisplay';
+import { formatQuotePrice } from '../../src/utils/rideQuoteFormatting';
 import { useRideRequestStore } from '../../src/store/useRideRequestStore';
 
 /**
@@ -21,9 +22,9 @@ import { useRideRequestStore } from '../../src/store/useRideRequestStore';
 export default function SearchingDriverScreen() {
   const phase = useRideRequestStore((state) => state.phase);
   const destination = useRideRequestStore((state) => state.destination);
-  const categoryId = useRideRequestStore((state) => state.categoryId);
+  // A categoria de fato PEDIDA (não a seleção atual, que pode ter mudado) — F08b.
+  const category = useRideRequestStore((state) => state.requestedCategory);
   const cancelSearch = useRideRequestStore((state) => state.cancelSearch);
-  const category = findMockRideCategory(categoryId);
 
   useEffect(() => {
     if (phase === 'searching_driver') return;
@@ -84,10 +85,10 @@ export default function SearchingDriverScreen() {
             <View style={styles.infoRow}>
               <Car size={18} color={theme.role.textSecondary} strokeWidth={2} />
               <Text style={styles.infoText} numberOfLines={1}>
-                {category.name}
+                {rideCategoryName(category.categoryId)}
               </Text>
               <Text style={styles.infoPrice} numberOfLines={1}>
-                {category.priceLabel}
+                {formatQuotePrice(category)}
               </Text>
             </View>
           ) : null}

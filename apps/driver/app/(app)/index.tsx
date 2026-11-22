@@ -100,10 +100,10 @@ export default function DriverHomeScreen() {
         <DailySummarySection earningsLabel="R$ 247,90" ridesLabel="12" ratingLabel="4,95" acceptanceLabel="92%" />
 
         <NewRideOfferCard
-          passengerName="Ana Oliveira"
-          pickupDistanceLabel="2,3 km até o embarque"
-          pickupAddress="Rua Haddock Lobo, 347 – Cerqueira César"
-          destinationLabel="Itaim Bibi – SP"
+          pickupNeighborhood="Cerqueira César"
+          destinationNeighborhood="Itaim Bibi"
+          pickupDistanceM={2300}
+          pickupEtaS={360}
           priceLabel="R$ 32,40"
           surgeLabel="Dinâmica +20%"
           secondsRemaining={secondsRemaining}

@@ -1,7 +1,19 @@
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Briefcase, Calendar, Car, Home as HomeIcon, MessageCircle, Package, PawPrint, Star, User, UserRound, type LucideIcon } from 'lucide-react-native';
-import { AppShell, BottomTabBar, type BottomTabBarItem, MockBadge, PrimaryButton, theme, textStyle, type VehicleIllustrationVariant } from '@vuumbora/ui';
+import {
+  AppShell,
+  BottomTabBar,
+  type BottomTabBarItem,
+  EmptyState,
+  ErrorState,
+  LoadingSkeleton,
+  MockBadge,
+  PrimaryButton,
+  theme,
+  textStyle,
+  type VehicleIllustrationVariant,
+} from '@vuumbora/ui';
 import { HomeHeader } from '../../src/components/home/HomeHeader';
 import { GreetingRow } from '../../src/components/home/GreetingRow';
 import { HomeMapPreview } from '../../src/components/home/HomeMapPreview';
@@ -9,7 +21,8 @@ import { DestinationSearchBar } from '../../src/components/home/DestinationSearc
 import { QuickAccessGrid, type QuickAccessItem } from '../../src/components/home/QuickAccessGrid';
 import { RideCategoryCard } from '../../src/components/home/RideCategoryCard';
 import { SafetyPromoBanner } from '../../src/components/home/SafetyPromoBanner';
-import { MOCK_RIDE_CATEGORIES, type RideCategoryKey } from '../../src/data/mockRideCategories';
+import { rideCategoryName, type RideCategoryKey } from '../../src/data/rideCategoryDisplay';
+import { formatQuotePickupEta, formatQuotePrice } from '../../src/utils/rideQuoteFormatting';
 import { useRideRequestStore } from '../../src/store/useRideRequestStore';
 import { useSession } from '../../src/session/SessionProvider';
 
@@ -22,29 +35,42 @@ const QUICK_ACCESS_ITEMS: readonly QuickAccessItem[] = [
 ];
 
 /**
- * Como cada categoria aparece no card: as duas que são o próprio veículo (`base_tier`) mostram a
- * ilustração do carro; as demais, só o símbolo. A arte `economico` é a do nível de entrada.
+ * Como cada categoria CONHECIDA aparece no card: as duas que são o próprio veículo mostram a
+ * ilustração do carro; as demais, só o símbolo. A arte `economico` é a do nível de entrada. F08b:
+ * isto é só aparência — QUAIS categorias existem vem da cotação (`quoteCategories` da store), nunca
+ * desta lista; uma categoria que a cotação devolver e não estiver aqui cai no ícone genérico
+ * (`DEFAULT_CATEGORY_ICON`), sem quebrar a tela.
  */
-const CATEGORY_VISUALS: Record<RideCategoryKey, { readonly icon: LucideIcon; readonly vehicleVariant?: VehicleIllustrationVariant }> = {
+const CATEGORY_VISUALS: Partial<Record<RideCategoryKey, { readonly icon: LucideIcon; readonly vehicleVariant?: VehicleIllustrationVariant }>> = {
   vuumbora: { icon: Car, vehicleVariant: 'economico' },
   conforto: { icon: Car, vehicleVariant: 'comfort' },
   motorista_mulher: { icon: UserRound },
   entrega: { icon: Package },
   pet: { icon: PawPrint },
 };
+const DEFAULT_CATEGORY_ICON: LucideIcon = Car;
+
+function categoryVisual(categoryId: string): { readonly icon: LucideIcon; readonly vehicleVariant?: VehicleIllustrationVariant } {
+  return CATEGORY_VISUALS[categoryId as RideCategoryKey] ?? { icon: DEFAULT_CATEGORY_ICON };
+}
 
 /**
  * P03 — Início/mapa do passageiro (VuumBora_Claude_Design_System/referencias/passageiro_home.png).
- * Tela só de UI: nenhuma das ações abaixo (destino, atalhos, categoria, solicitar corrida, abas)
- * chama uma API real ainda — não existe contrato/endpoint definido (pendência para Vega).
+ * Tela só de UI: nenhuma das ações abaixo (destino, atalhos, solicitar corrida, abas) chama uma API
+ * real ainda — não existe contrato/endpoint definido (pendência para Vega). A lista de categorias
+ * (abaixo) é a exceção desde a F08b: vem de `port.quote` (mock da porta de corrida), por isso tem
+ * estado de carregamento/erro/vazio de verdade, não só "sempre pronta".
  */
 export default function PassengerHomeScreen() {
   const { mode: sessionMode } = useSession();
   const destination = useRideRequestStore((state) => state.destination);
   const categoryId = useRideRequestStore((state) => state.categoryId);
   const setCategory = useRideRequestStore((state) => state.setCategory);
+  const quoteStatus = useRideRequestStore((state) => state.quoteStatus);
+  const quoteCategories = useRideRequestStore((state) => state.quoteCategories);
+  const refreshQuote = useRideRequestStore((state) => state.refreshQuote);
 
-  const canProceed = Boolean(destination);
+  const canProceed = Boolean(destination && categoryId);
 
   function handleRequestRide() {
     if (!canProceed) return;
@@ -79,26 +105,54 @@ export default function PassengerHomeScreen() {
         <View style={styles.categorySection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Escolha sua viagem</Text>
-            <MockBadge label="preço estimado de demonstração" testID="categories-mock-badge" />
+            {quoteStatus === 'ready' && quoteCategories.length > 0 ? (
+              <MockBadge label="preço estimado de demonstração" testID="categories-mock-badge" />
+            ) : null}
           </View>
-          <View style={styles.categoryColumn}>
-            {MOCK_RIDE_CATEGORIES.map((category) => {
-              const visual = CATEGORY_VISUALS[category.key];
-              return (
-                <RideCategoryCard
-                  key={category.key}
-                  name={category.name}
-                  icon={visual.icon}
-                  {...(visual.vehicleVariant ? { vehicleVariant: visual.vehicleVariant } : {})}
-                  etaLabel={category.etaLabel}
-                  priceLabel={category.priceLabel}
-                  selected={categoryId === category.key}
-                  onPress={() => setCategory(category.key)}
-                  testID={`ride-category-${category.key}`}
-                />
-              );
-            })}
-          </View>
+
+          {quoteStatus === 'idle' ? (
+            <EmptyState
+              title="Defina seu destino"
+              description="Escolha para onde você vai para ver as opções de viagem disponíveis."
+              testID="categories-idle-state"
+            />
+          ) : quoteStatus === 'loading' ? (
+            <View style={styles.categoryColumn} testID="categories-loading-state">
+              <LoadingSkeleton variant="block" height={64} lines={3} />
+            </View>
+          ) : quoteStatus === 'error' ? (
+            <ErrorState
+              title="Não deu para carregar as opções"
+              description="Tente de novo em instantes."
+              onRetry={refreshQuote}
+              testID="categories-error-state"
+            />
+          ) : quoteCategories.length === 0 ? (
+            <EmptyState
+              title="Nenhuma opção disponível"
+              description="Não há categoria de viagem para este trajeto agora."
+              testID="categories-empty-state"
+            />
+          ) : (
+            <View style={styles.categoryColumn}>
+              {quoteCategories.map((category) => {
+                const visual = categoryVisual(category.categoryId);
+                return (
+                  <RideCategoryCard
+                    key={category.categoryId}
+                    name={rideCategoryName(category.categoryId)}
+                    icon={visual.icon}
+                    {...(visual.vehicleVariant ? { vehicleVariant: visual.vehicleVariant } : {})}
+                    etaLabel={formatQuotePickupEta(category)}
+                    priceLabel={formatQuotePrice(category)}
+                    selected={categoryId === category.categoryId}
+                    onPress={() => setCategory(category.categoryId)}
+                    testID={`ride-category-${category.categoryId}`}
+                  />
+                );
+              })}
+            </View>
+          )}
         </View>
 
         <SafetyPromoBanner />
@@ -113,7 +167,7 @@ export default function PassengerHomeScreen() {
         />
         {!canProceed ? (
           <Text style={styles.helperText} accessibilityRole="alert">
-            Defina seu destino para continuar.
+            {destination ? 'Escolha uma categoria de viagem para continuar.' : 'Defina seu destino para continuar.'}
           </Text>
         ) : null}
       </View>
