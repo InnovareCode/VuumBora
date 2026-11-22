@@ -13,14 +13,19 @@ import { makeRequireAccount } from '../hooks/require-account.js';
 import { authConfigProblems, loadAuthConfig } from '../lib/auth-config.js';
 import { drainBackgroundTasks } from '../lib/background-tasks.js';
 import { rateLimitKey } from '../lib/ip-bucket.js';
+import { loadLegalConfig, type LegalConfig } from '../lib/legal-config.js';
 import { unavailableMailPort, type MailPort } from '../lib/mail-port.js';
 import * as identity from '../services/identity-service.js';
+import { getConsentStatus } from '../services/legal-service.js';
+import { registerAuthConsentRoutes } from './auth-consent-route.js';
 import { registerAuthRecoveryRoutes } from './auth-recovery-route.js';
-import { contextOf, fail, invalidBody, mailFailureLogger, tooManyAttempts, unavailable } from './auth-http.js';
+import { consentOutdated, consentUnavailable, contextOf, fail, invalidBody, mailFailureLogger, tooManyAttempts, unavailable } from './auth-http.js';
 
 export interface AuthRoutesOptions {
   /** Adaptador de e-mail (SMTP em produção, fake nos testes). Sem ele, o envio sempre falha (`emailSent: false`). */
   readonly mail?: MailPort | undefined;
+  /** Documentos legais (URL base dos textos). Omitido = lê do ambiente; `null` = indisponível (503 `consent_unavailable`). */
+  readonly legal?: LegalConfig | null | undefined;
 }
 
 export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOptions = {}): void {
@@ -42,6 +47,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
   }
 
   const mail = options.mail ?? unavailableMailPort;
+  const legal = options.legal === undefined ? loadLegalConfig() : options.legal;
   const requireAccount = makeRequireAccount(config);
   // Esquenta o hash descartável (login de conta desconhecida) fora da thread principal: o primeiro login com e-mail
   // inexistente não pode custar mais que os seguintes (o tempo denunciaria). Falha aqui é ignorada: tenta no primeiro uso.
@@ -59,7 +65,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
       if (field === 'email') return invalidBody(request, reply, 'auth_register_rejected', 'invalid_email', 'E-mail inválido.');
       if (field === 'password') return invalidBody(request, reply, 'auth_register_rejected', 'invalid_password', 'A senha deve ter de 8 a 72 caracteres.');
       if (field === 'birthDate') return invalidBody(request, reply, 'auth_register_rejected', 'invalid_birth_date', 'Informe a data de nascimento no formato AAAA-MM-DD.');
-      if (field === 'termsAccepted' || field === 'privacyAccepted') {
+      if (field === 'termsAccepted' || field === 'privacyAccepted' || field === 'termsVersion' || field === 'privacyVersion') {
         return invalidBody(request, reply, 'auth_register_rejected', 'consent_required', 'É preciso aceitar os Termos de Uso e a Política de Privacidade.');
       }
       return invalidBody(request, reply, 'auth_register_rejected');
@@ -77,11 +83,19 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
 
     try {
       const deps = { mail, onMailFailure: mailFailureLogger(request.log) };
-      const { accountType, fullName, email, password, birthDate } = parsed.data;
-      const result = await identity.registerAccount(pool, config, deps, { accountType, fullName, email, password, birthDate, phone: phone.value }, contextOf(request, config));
+      const { accountType, fullName, email, password, birthDate, termsVersion, privacyVersion } = parsed.data;
+      const result = await identity.registerAccount(
+        pool, config, legal, deps,
+        { accountType, fullName, email, password, birthDate, termsVersion, privacyVersion, phone: phone.value },
+        contextOf(request, config),
+      );
       if (result.kind === 'consent_unavailable') {
-        request.log.error({ event: 'auth_register_unavailable', reason: 'consent_versions_not_configured' });
-        return fail(reply, 503, 'consent_unavailable', 'Cadastro indisponível no momento. Tente novamente mais tarde.');
+        request.log.error({ event: 'auth_register_unavailable', reason: 'legal_documents_unavailable' });
+        return consentUnavailable(reply);
+      }
+      if (result.kind === 'consent_outdated') {
+        request.log.info({ event: 'auth_register_rejected', reason: 'consent_outdated' });
+        return consentOutdated(reply, result.current);
       }
       if (result.kind === 'blocked') {
         request.log.warn({ event: 'auth_register_blocked' });
@@ -172,11 +186,18 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
     }
   });
 
+  registerAuthConsentRoutes(app, config, legal, ipLimit, requireAccount);
+
   app.get('/v1/auth/me', { preHandler: requireAccount }, async (request, reply) => {
     try {
-      const account = await identity.getAccount(pool, request.authAccount!.accountId);
+      const accountId = request.authAccount!.accountId;
+      const account = await identity.getAccount(pool, accountId);
       if (!account) return fail(reply, 401, 'unauthorized', 'Sessão inválida ou expirada.');
-      reply.code(200).send({ ok: true, data: account });
+      // Aceite pendente (M-3): uma consulta a `legal_pending_for_account`. `null` = textos indisponíveis por configuração
+      // (o boot já avisou): o app não consegue mostrar reaceite, mas a sessão continua funcionando.
+      const status = await getConsentStatus(pool, legal, accountId);
+      if (status.kind === 'account_missing') return fail(reply, 401, 'unauthorized', 'Sessão inválida ou expirada.');
+      reply.code(200).send({ ok: true, data: { ...account, consent: status.kind === 'ok' ? status.status : null } });
     } catch (err) {
       unavailable(request, reply, err, 'auth_me_failed_internal');
     }

@@ -13,20 +13,24 @@
 import type { Pool } from 'pg';
 import type { AccountSummary, AccountType, DeviceInput } from '../domain/auth.js';
 import { normalizeIdentifier } from '../domain/auth.js';
+import type { CurrentLegal } from '../domain/legal.js';
 import type { AuthConfig } from '../lib/auth-config.js';
 import { appBcrypt, assertAppBcryptCapacity } from '../lib/bcrypt-pool.js';
 import { generateEmailCode, hashEmailCode } from '../lib/email-code.js';
 import { canonicalEmailForLimit } from '../lib/email-normalize.js';
 import { emailGlobalKey } from '../lib/email-budget.js';
+import type { LegalConfig } from '../lib/legal-config.js';
 import { LOGIN_FAILURE_MEMORY_HOURS } from '../lib/progressive-delay.js';
 import { hmacHex, newOpaqueToken, sha256Hex, signAccessToken } from '../lib/token-crypto.js';
 import { issueEmailCode } from '../repositories/email-code-repository.js';
 import {
-  BirthDateRejectedError, createSession, EmailTakenError, findAccountById, findLoginCandidate, getRefreshTokenExpiry, insertAccessLog, insertConsents, insertOrReclaimAccount,
+  BirthDateRejectedError, createSession, EmailTakenError, findAccountById, findLoginCandidate, getRefreshTokenExpiry, insertAccessLog, insertOrReclaimAccount,
   PublicIdCollisionError, recordLoginSuccess, reserveAttempts, reserveDelayedAttempt, revokeAllFamilies, revokeFamilyByRefreshHash,
   rotateRefreshToken, upsertDevice, type AttemptKey, type Queryable,
 } from '../repositories/identity-repository.js';
+import { ConsentOutdatedError, insertConsents } from '../repositories/legal-repository.js';
 import { deliverCode, type MailDeps } from './code-delivery.js';
+import { loadCurrentLegal } from './legal-service.js';
 
 export { BirthDateRejectedError, EmailTakenError };
 
@@ -98,13 +102,18 @@ export interface RegisterInput {
   readonly phone: string | null;
   /** `AAAA-MM-DD`, já validada (18+). Dado pessoal: vai ao banco e nunca mais é lida, logada nem devolvida. */
   readonly birthDate: string;
+  /** As versões dos Termos e da Política que o app EXIBIU (as de `GET /v1/legal/current`). Só viram aceite se forem a vigente do perfil. */
+  readonly termsVersion: string;
+  readonly privacyVersion: string;
 }
 
 export type RegisterResult =
   | { kind: 'ok'; account: AccountSummary; emailSent: boolean; resendAfterSeconds: number; reclaimed: boolean }
   | { kind: 'blocked' }
-  /** Versões dos Termos/Política não configuradas: sem elas não há como registrar o aceite, então não se cadastra. */
-  | { kind: 'consent_unavailable' };
+  /** Sem URL base dos textos ou sem versão publicada para o perfil: não há o que mostrar nem aceitar, então não se cadastra. */
+  | { kind: 'consent_unavailable' }
+  /** O app exibiu uma versão que não é a vigente (ou que nunca foi publicada): nada foi criado; `current` é o que mostrar de novo. */
+  | { kind: 'consent_outdated'; current: CurrentLegal };
 
 /**
  * Chaves do limite do escopo `register`: por (tipo + e-mail CANONICAL), por IP e o teto GLOBAL de e-mails de
@@ -129,9 +138,31 @@ function registerKeys(config: AuthConfig, accountType: AccountType, email: strin
  * some, com o aceite do primeiro cadastrante) — I-4: ninguém "reserva" o e-mail de outra pessoa.
  * Se o envio falhar a conta existe e o cliente pede reenvio (`emailSent: false`).
  */
-export async function registerAccount(pool: Pool, config: AuthConfig, deps: MailDeps, input: RegisterInput, ctx: RequestContext): Promise<RegisterResult> {
-  const versions = config.consentVersions;
-  if (!versions) return { kind: 'consent_unavailable' };
+export async function registerAccount(pool: Pool, config: AuthConfig, legal: LegalConfig | null, deps: MailDeps, input: RegisterInput, ctx: RequestContext): Promise<RegisterResult> {
+  // Aceite com a versão EXIBIDA (M-3): confere ANTES de gastar limite ou bcrypt (leitura barata, não revela conta alguma).
+  const gate = await loadCurrentLegal(pool, legal, input.accountType);
+  if (gate.kind === 'unavailable') return { kind: 'consent_unavailable' };
+  if (gate.current.terms.version !== input.termsVersion || gate.current.privacy.version !== input.privacyVersion) {
+    return { kind: 'consent_outdated', current: gate.current };
+  }
+  try {
+    return await createRegistration(pool, config, deps, input, ctx);
+  } catch (err) {
+    if (!(err instanceof ConsentOutdatedError)) throw err;
+    // Corrida: publicaram outra versão entre a conferência e o INSERT. O banco recusou o aceite e a transação desfez a conta.
+    // A conexão já voltou ao pool (o `finally` do laço roda antes deste catch): reler a vigente aqui é seguro.
+    const reread = await loadCurrentLegal(pool, legal, input.accountType);
+    return reread.kind === 'ok' ? { kind: 'consent_outdated', current: reread.current } : { kind: 'consent_unavailable' };
+  }
+}
+
+async function createRegistration(
+  pool: Pool,
+  config: AuthConfig,
+  deps: MailDeps,
+  input: RegisterInput,
+  ctx: RequestContext,
+): Promise<Exclude<RegisterResult, { kind: 'consent_unavailable' } | { kind: 'consent_outdated' }>> {
   assertAppBcryptCapacity();
   const allowed = await reserveAttempts(pool, {
     scope: 'register',
@@ -148,9 +179,15 @@ export async function registerAccount(pool: Pool, config: AuthConfig, deps: Mail
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const { account, reclaimed } = await insertOrReclaimAccount(client, { ...input, passwordHash });
+      const { account, reclaimed } = await insertOrReclaimAccount(client, {
+        accountType: input.accountType, email: input.email, fullName: input.fullName, phone: input.phone, birthDate: input.birthDate, passwordHash,
+      });
       // O aceite entra na MESMA transação da conta: não existe conta sem aceite registrado.
-      await insertConsents(client, { accountId: account.id, termsVersion: versions.termsOfUse, privacyVersion: versions.privacyPolicy, ipHash: ctx.ipHash });
+      await insertConsents(client, {
+        accountId: account.id,
+        items: [{ document: 'terms', version: input.termsVersion }, { document: 'privacy', version: input.privacyVersion }],
+        ipHash: ctx.ipHash,
+      });
       const code = generateEmailCode();
       const issued = await issueEmailCode(client, {
         accountId: account.id,

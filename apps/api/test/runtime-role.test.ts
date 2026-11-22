@@ -24,6 +24,7 @@ import { base32Encode, hotp, totpStep } from '../src/lib/totp.js';
 import { DEVICE, makeClient, PASSWORD, startIdentityApp, type Harness } from './helpers/identity-kit.js';
 import { pool, send, shutdown } from './helpers/harness.js';
 import { OWNER_DATABASE_URL } from './helpers/runtime-role-env.js';
+import { ensureBaseline } from './helpers/legal-kit.js';
 
 const owner = new pg.Pool({ connectionString: OWNER_DATABASE_URL, max: 2 });
 const TOTP_SECRET = Buffer.alloc(20, 5);
@@ -47,6 +48,8 @@ const WRITES: Record<string, readonly ('INSERT' | 'UPDATE' | 'DELETE')[]> = {
   devices: ['INSERT', 'UPDATE'],
   driver_applications: ['INSERT', 'UPDATE'],
   email_settings: ['INSERT', 'UPDATE'],
+  // Catálogo de versões dos Termos/Política (0021): a API só LÊ; quem publica é o operador (`npm run legal:publish`, credencial dona).
+  legal_document_versions: [],
   login_attempts: ['INSERT'],
   refresh_token_families: ['INSERT', 'UPDATE'],
   refresh_tokens: ['INSERT', 'UPDATE'],
@@ -59,6 +62,8 @@ let h: Harness;
 before(async () => {
   // Migra como DONO (o papel da API não faz DDL); depois o app conecta como `vuumbora_api`.
   await prepararBanco({ databaseUrl: OWNER_DATABASE_URL, pool: owner, log: () => undefined });
+  // O cadastro exige versão publicada (0021): catálogo baseline, publicado com a credencial dona.
+  await ensureBaseline(owner);
   h = await startIdentityApp();
 });
 after(async () => {
@@ -89,6 +94,28 @@ describe('matriz de privilégios do papel vuumbora_api', () => {
     }
   });
 
+  // A matriz acima só olha `relkind = 'r'` (tabelas): a view e a função da 0021 têm asserção própria.
+  test('0021: a view legal_current_versions é só leitura e a função legal_pending_for_account só executa para o papel da API', async () => {
+    const view = await owner.query<{ s: boolean; i: boolean; u: boolean; d: boolean; t: boolean; kind: string }>(
+      `SELECT c.relkind AS kind,
+              has_table_privilege('vuumbora_api', c.oid, 'SELECT') AS s,
+              has_table_privilege('vuumbora_api', c.oid, 'INSERT') AS i,
+              has_table_privilege('vuumbora_api', c.oid, 'UPDATE') AS u,
+              has_table_privilege('vuumbora_api', c.oid, 'DELETE') AS d,
+              has_table_privilege('vuumbora_api', c.oid, 'TRUNCATE') AS t
+         FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace AND c.relname = 'legal_current_versions'`,
+    );
+    assert.deepEqual(view.rows, [{ kind: 'v', s: true, i: false, u: false, d: false, t: false }], 'a view existe e a API só lê');
+    const fn = await owner.query<{ api: boolean; pub: boolean }>(
+      `SELECT has_function_privilege('vuumbora_api', 'legal_pending_for_account(uuid)', 'EXECUTE') AS api,
+              has_function_privilege('public', 'legal_pending_for_account(uuid)', 'EXECUTE') AS pub`,
+    );
+    assert.deepEqual(fn.rows[0], { api: true, pub: false }, 'EXECUTE só para o papel da API');
+    // E funcionam de verdade COM o papel restrito (leitura do catálogo e da pendência).
+    assert.ok((await pool.query('SELECT 1 FROM legal_current_versions LIMIT 1')).rowCount === 1, 'a API lê a view');
+    assert.equal((await pool.query('SELECT * FROM legal_pending_for_account(gen_random_uuid())')).rowCount, 0);
+  });
+
   test('a conexão do app é de fato o papel restrito', async () => {
     const who = await pool.query('SELECT current_user AS u');
     assert.equal(who.rows[0].u, 'vuumbora_api');
@@ -112,6 +139,10 @@ describe('matriz de privilégios do papel vuumbora_api', () => {
     await denied(`UPDATE account_consents SET version = 'adulterada'`);
     await denied(`DELETE FROM account_consents`);
     await denied(`TRUNCATE account_consents`);
+    await denied(`INSERT INTO legal_document_versions (document, audience, version, text_sha256) VALUES ('terms_of_use', 'passenger', 'forjada', repeat('a', 64))`);
+    await denied(`UPDATE legal_document_versions SET text_sha256 = repeat('b', 64)`);
+    await denied(`DELETE FROM legal_document_versions`);
+    await denied(`TRUNCATE legal_document_versions`);
     await denied(`DELETE FROM refresh_tokens`);
     await denied(`UPDATE login_attempts SET succeeded = true`);
     await denied(`DELETE FROM login_attempts`);

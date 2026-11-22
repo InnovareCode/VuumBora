@@ -8,6 +8,7 @@ import { env } from '../../src/env.js';
 import { prepararBanco } from '../../src/migrate.js';
 import type { AdminRole } from '../../src/domain/admin.js';
 import type { MailPort } from '../../src/lib/mail-port.js';
+import { ensureBaseline } from './legal-kit.js';
 
 export const PASSWORD = 'Senha-de-teste-123';
 export { pool };
@@ -15,6 +16,8 @@ export { pool };
 export async function prepareDatabase(): Promise<void> {
   // Banco de teste do zero até a 0013: prova que a cadeia de migrações aplica.
   await prepararBanco({ databaseUrl: env.DATABASE_URL, pool, log: () => undefined });
+  // O cadastro exige versão publicada (0021, fail-closed): garante o catálogo baseline para os testes de identidade.
+  await ensureBaseline(pool);
 }
 
 

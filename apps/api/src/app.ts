@@ -9,6 +9,7 @@ import { env } from './env.js';
 import type { MailPort } from './lib/mail-port.js';
 import { BCRYPT_BUSY_RETRY_AFTER_SECONDS, BcryptBusyError, closeBcryptPools } from './lib/bcrypt-pool.js';
 import { rateLimitKey } from './lib/ip-bucket.js';
+import { loadLegalConfig } from './lib/legal-config.js';
 import { twoFactorConfig } from './lib/two-factor-config.js';
 import { describeErrorForLog } from './lib/safe-error.js';
 import { registerAuthRoutes } from './routes/auth-route.js';
@@ -19,6 +20,7 @@ import { registerAdminEmailSettingsRoutes } from './routes/admin-email-settings-
 import { registerAdminDriverApplicationRoutes } from './routes/admin-driver-application-route.js';
 import { registerDriverApplicationRoute } from './routes/driver-application-route.js';
 import { registerHealthRoute } from './routes/health-route.js';
+import { registerLegalRoutes } from './routes/legal-route.js';
 import { registerWaitlistRoute } from './routes/waitlist-route.js';
 
 /**
@@ -183,8 +185,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     registerHealthRoute(instance);
     registerWaitlistRoute(instance);
     registerDriverApplicationRoute(instance);
+    // Documentos legais (M-3): uma leitura da configuração serve ao catálogo público e ao aceite da identidade.
+    const legal = loadLegalConfig();
+    registerLegalRoutes(instance, legal);
     // Sem adaptador injetado (produção): SMTP configurado no painel/ambiente, lido a cada envio.
-    registerAuthRoutes(instance, { mail: options.mail ?? createSmtpMailer({ pool, encryptionKey: twoFactorConfig.encryptionKey, log: instance.log }) });
+    registerAuthRoutes(instance, { legal, mail: options.mail ?? createSmtpMailer({ pool, encryptionKey: twoFactorConfig.encryptionKey, log: instance.log }) });
   });
 
   // `prefix: '/v1/admin'` não é só estética: `@fastify/cors` registra uma

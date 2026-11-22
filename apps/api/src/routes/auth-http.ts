@@ -1,6 +1,7 @@
 /** Helpers HTTP compartilhados pelas rotas da identidade dos apps (`/v1/auth/*`). */
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { userAgentFamily } from '../domain/auth.js';
+import type { CurrentLegal } from '../domain/legal.js';
 import type { AuthConfig } from '../lib/auth-config.js';
 import { BCRYPT_BUSY_RETRY_AFTER_SECONDS, BcryptBusyError } from '../lib/bcrypt-pool.js';
 import type { MailDeps } from '../services/code-delivery.js';
@@ -44,6 +45,21 @@ export function unavailable(request: FastifyRequest, reply: FastifyReply, err: u
   if (err instanceof BcryptBusyError) return serverBusy(request, reply, err.lane);
   request.log.error({ event, ...describeErrorForLog(err) });
   fail(reply, 503, 'unavailable', 'Serviço temporariamente indisponível. Tente novamente em alguns minutos.');
+}
+
+/**
+ * 409 de aceite desatualizado (M-3): o app exibiu (ou a conta aceitou) uma versão que não é mais a vigente. `error.current` é o
+ * MESMO corpo de `GET /v1/legal/current`, para o app mostrar o texto atual sem outra chamada. Nunca vai para cache.
+ */
+export function consentOutdated(reply: FastifyReply, current: CurrentLegal, extras: ErrorExtras = {}): void {
+  reply.header('Cache-Control', 'no-store');
+  fail(reply, 409, 'consent_outdated', 'Os Termos ou a Política mudaram. Leia a versão atual e aceite de novo.', { ...extras, current });
+}
+
+/** 503 de documentos legais indisponíveis (sem URL base dos textos ou sem versão publicada). Mensagem fixa; o motivo vai só para o log. */
+export function consentUnavailable(reply: FastifyReply): void {
+  reply.header('Cache-Control', 'no-store');
+  fail(reply, 503, 'consent_unavailable', 'Os Termos e a Política estão indisponíveis no momento. Tente novamente mais tarde.');
 }
 
 /** 429 padrão: mensagem fixa, `Retry-After` (em segundos) e o mesmo número no corpo (`retryAfterSeconds`). */

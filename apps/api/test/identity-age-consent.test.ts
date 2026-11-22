@@ -9,11 +9,13 @@ import type { Pool } from 'pg';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { checkBirthDate, latestAdultBirthDate, todayInBusinessZone } from '../src/domain/birth-date.js';
 import { loadAuthConfig } from '../src/lib/auth-config.js';
+import { loadLegalConfig } from '../src/lib/legal-config.js';
 import { hmacHex } from '../src/lib/token-crypto.js';
 import { BirthDateRejectedError, insertOrReclaimAccount } from '../src/repositories/identity-repository.js';
 import { registerAccount } from '../src/services/identity-service.js';
 import { pool, prepareDatabase, shutdown } from './helpers/harness.js';
 import { makeClient, PASSWORD, PEPPER, REGISTER_EXTRAS, startIdentityApp, uniqueEmail, type Harness } from './helpers/identity-kit.js';
+import { BASELINE_VERSION, sha256For } from './helpers/legal-kit.js';
 
 let h: Harness;
 let api!: ReturnType<typeof makeClient>;
@@ -130,15 +132,17 @@ describe('cadastro: aceite dos Termos de Uso e da Política de Privacidade', () 
     assert.equal((await pool.query('SELECT count(*)::int AS n FROM account_consents')).rows[0].n, 0);
   });
 
-  test('o aceite é gravado na criação: dois documentos, versão da configuração, HMAC do IP (nunca o IP) e relógio do banco', async () => {
+  test('o aceite é gravado na criação: dois documentos, a versão exibida, HMAC do IP (nunca o IP) e relógio do banco', async () => {
     const email = uniqueEmail('aceite');
     const ip = '203.0.113.50';
     const reply = await signUp({ email }, ip);
     assert.equal(reply.status, 201);
-    const rows = (await pool.query(`SELECT c.document, c.version, c.ip_hash, c.accepted_at > now() - interval '1 minute' AS recent
+    const rows = (await pool.query(`SELECT c.document, c.version, c.audience, c.text_sha256, c.ip_hash, c.accepted_at > now() - interval '1 minute' AS recent
                                       FROM account_consents c JOIN accounts a ON a.id = c.account_id WHERE a.email = $1 ORDER BY c.document`, [email])).rows;
-    assert.deepEqual(rows.map((r) => [r.document, r.version]), [['privacy_policy', 'teste-2026-11'], ['terms_of_use', 'teste-2026-11']]);
+    assert.deepEqual(rows.map((r) => [r.document, r.version]), [['privacy_policy', BASELINE_VERSION], ['terms_of_use', BASELINE_VERSION]]);
     for (const row of rows) {
+      assert.equal(row.audience, 'passenger', 'o perfil é o da conta (gravado pelo banco)');
+      assert.equal(row.text_sha256, sha256For(row.document, 'passenger', BASELINE_VERSION), 'o hash é o do catálogo (gravado pelo banco)');
       assert.equal(row.ip_hash, hmacHex(PEPPER, ip), 'HMAC com pepper do IP');
       assert.equal(row.recent, true);
     }
@@ -146,16 +150,24 @@ describe('cadastro: aceite dos Termos de Uso e da Política de Privacidade', () 
     assert.ok(!dump.includes(ip), 'o IP em claro nunca entra na tabela');
   });
 
-  test('a versão aceita é a da CONFIGURAÇÃO do servidor, não a que o cliente mandar', async () => {
+  test('perfil, hash do texto e data são do BANCO: campos a mais no corpo do cadastro são descartados', async () => {
     const email = uniqueEmail('versao');
-    const reply = await signUp({ email, termsVersion: 'v-do-cliente', version: 'x', privacyVersion: 'y' });
-    assert.equal(reply.status, 201);
-    const versions = (await pool.query(`SELECT DISTINCT c.version FROM account_consents c JOIN accounts a ON a.id = c.account_id WHERE a.email = $1`, [email])).rows;
-    assert.deepEqual(versions, [{ version: 'teste-2026-11' }]);
+    const reply = await signUp({ email, audience: 'driver', textSha256: 'a'.repeat(64), text_sha256: 'a'.repeat(64), version: 'x', acceptedAt: '2001-01-01T00:00:00Z' });
+    assert.equal(reply.status, 201, JSON.stringify(reply.body));
+    const rows = (await pool.query(`SELECT c.version, c.audience, c.text_sha256, c.accepted_at > now() - interval '1 minute' AS recent
+                                      FROM account_consents c JOIN accounts a ON a.id = c.account_id WHERE a.email = $1 ORDER BY c.document`, [email])).rows;
+    assert.equal(rows.length, 2);
+    for (const row of rows) {
+      assert.equal(row.version, BASELINE_VERSION);
+      assert.equal(row.audience, 'passenger');
+      assert.notEqual(row.text_sha256, 'a'.repeat(64));
+      assert.equal(row.recent, true);
+    }
   });
 
   test('o aceite entra na MESMA transação da conta: se ele falha, a conta não nasce', async () => {
     const config = loadAuthConfig()!;
+    const legal = loadLegalConfig();
     const email = uniqueEmail('atomica');
     const failingPool = {
       query: pool.query.bind(pool),
@@ -175,28 +187,33 @@ describe('cadastro: aceite dos Termos de Uso e da Política de Privacidade', () 
       },
     } as unknown as Pool;
     await assert.rejects(
-      registerAccount(failingPool, config, { mail: h.mailbox, onMailFailure: () => undefined }, { accountType: 'passenger', fullName: 'Pessoa', email, password: PASSWORD, phone: null, birthDate: BIRTH }, { ipHash: null, userAgentFamily: 'x', requestId: 'r' }),
+      registerAccount(
+        failingPool, config, legal, { mail: h.mailbox, onMailFailure: () => undefined },
+        { accountType: 'passenger', fullName: 'Pessoa', email, password: PASSWORD, phone: null, birthDate: BIRTH, termsVersion: BASELINE_VERSION, privacyVersion: BASELINE_VERSION },
+        { ipHash: null, userAgentFamily: 'x', requestId: 'r' },
+      ),
       /falha simulada no aceite/,
     );
     assert.equal((await pool.query('SELECT count(*)::int AS n FROM accounts WHERE email = $1', [email])).rows[0].n, 0, 'ROLLBACK levou a conta junto');
     assert.equal(h.mailbox.sent.length, 0, 'nenhum e-mail de verificação saiu');
   });
 
-  test('versões não configuradas (ou fora do formato): cadastro indisponível (503 consent_unavailable), login e o resto seguem', async () => {
-    for (const bad of ['', 'versão com espaço', 'x'.repeat(65)]) {
-      const saved = { terms: process.env['AUTH_TERMS_VERSION'], privacy: process.env['AUTH_PRIVACY_VERSION'] };
-      process.env['AUTH_TERMS_VERSION'] = bad;
+  test('sem a URL base dos textos (ausente ou inaceitável): cadastro indisponível (503 consent_unavailable), login e o resto seguem', async () => {
+    for (const bad of ['', 'ftp://textos.dev/legal', 'https://usuario:senha-secreta@textos.dev/legal', 'https://textos.dev/legal?x=1', 'não é url']) {
+      const saved = process.env['LEGAL_DOCUMENTS_BASE_URL'];
+      process.env['LEGAL_DOCUMENTS_BASE_URL'] = bad;
       const harness = await startIdentityApp();
       try {
         const client = makeClient(harness);
         const reply = await client.call('POST', '/v1/auth/register', { body: { accountType: 'passenger', fullName: 'Pessoa', email: uniqueEmail('sem-versao'), password: PASSWORD, ...REGISTER_EXTRAS } });
         assert.equal(reply.status, 503, JSON.stringify(bad));
         assert.equal(reply.body.error.code, 'consent_unavailable');
-        assert.equal((await client.call('POST', '/v1/auth/login', { body: { accountType: 'passenger', identifier: 'x@y.com', password: PASSWORD } })).status, 401, 'o login não depende das versões');
+        assert.equal((await client.call('POST', '/v1/auth/login', { body: { accountType: 'passenger', identifier: 'x@y.com', password: PASSWORD } })).status, 401, 'o login não depende dos documentos legais');
+        assert.ok(harness.t.logs().includes('LEGAL_DOCUMENTS_BASE_URL'), 'o boot avisa QUAL variável é o problema');
+        assert.ok(!harness.t.logs().includes('senha-secreta'), 'e nunca o valor');
       } finally {
         await harness.t.app.close();
-        process.env['AUTH_TERMS_VERSION'] = saved.terms;
-        process.env['AUTH_PRIVACY_VERSION'] = saved.privacy;
+        process.env['LEGAL_DOCUMENTS_BASE_URL'] = saved;
       }
     }
     assert.equal((await pool.query('SELECT count(*)::int AS n FROM accounts')).rows[0].n, 0);
@@ -217,7 +234,7 @@ describe('cadastro: aceite dos Termos de Uso e da Política de Privacidade', () 
       assert.equal(consent.account_id, second.body.data.account.id);
       assert.notEqual(consent.account_id, first.body.data.account.id);
       assert.equal(consent.ip_hash, hmacHex(PEPPER, '203.0.113.32'), 'IP do ÚLTIMO cadastro');
-      assert.equal(consent.version, 'teste-2026-11');
+      assert.equal(consent.version, BASELINE_VERSION);
       assert.ok(consent.accepted_at > firstAt, 'data do ÚLTIMO cadastro');
     }
   });

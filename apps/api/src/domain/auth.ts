@@ -1,5 +1,6 @@
 /** Regras puras da identidade dos apps: validação de entrada e normalização. Sem I/O. */
 import { z } from 'zod';
+import { legalVersionSchema } from './legal.js';
 import { normalizeBrazilianPhone } from './phone.js';
 
 /** Contas SEPARADAS (decisão do dono): um tipo por conta, nunca os dois. 'admin' não entra aqui. */
@@ -26,8 +27,9 @@ const codeSchema = z.string().trim().regex(/^[0-9]{6}$/);
 
 /**
  * Cadastro. `birthDate` (`AAAA-MM-DD`, 18 anos completos — regra em `birth-date.ts`) e o aceite dos Termos de Uso e da
- * Política de Privacidade (`termsAccepted` e `privacyAccepted`, literalmente `true`) são OBRIGATÓRIOS.
- * A versão aceita NÃO vem do cliente: é a versão vigente da configuração do servidor.
+ * Política de Privacidade (`termsAccepted` e `privacyAccepted`, literalmente `true`) são OBRIGATÓRIOS, junto com as
+ * versões que o app EXIBIU (`termsVersion`, `privacyVersion`: as de `GET /v1/legal/current`, M-3). O servidor só aceita
+ * se forem a vigente do perfil (senão 409 `consent_outdated`); o hash do texto é do banco, nunca do cliente.
  */
 export const registerSchema = z.object({
   accountType: accountTypeSchema,
@@ -38,6 +40,8 @@ export const registerSchema = z.object({
   birthDate: z.string().max(10),
   termsAccepted: z.literal(true),
   privacyAccepted: z.literal(true),
+  termsVersion: legalVersionSchema,
+  privacyVersion: legalVersionSchema,
 });
 
 export const loginSchema = z.object({

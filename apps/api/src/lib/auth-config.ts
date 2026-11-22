@@ -47,14 +47,6 @@ const schema = z.object({
    */
   AUTH_EMAIL_GLOBAL_MAX_PER_HOUR: positiveInt(100),
   /**
-   * Versão VIGENTE dos Termos de Uso e da Política de Privacidade, gravada em `account_consents` a cada cadastro.
-   * Sem valor padrão de propósito: os textos e as versões ainda não existem (decisão do dono) e a API não inventa.
-   * Sem as duas, o CADASTRO fica indisponível (503 `consent_unavailable`); o resto da autenticação segue.
-   * Formato igual ao CHECK do banco (0019): letras/dígitos e . _ : + -, até 64 caracteres.
-   */
-  AUTH_TERMS_VERSION: z.string().trim().optional(),
-  AUTH_PRIVACY_VERSION: z.string().trim().optional(),
-  /**
    * Redefinição de senha: teto CUMULATIVO de falhas de código por conta em 24 h (I-7). Somando todos os
    * códigos do dia: passado o teto, nem o código certo vale até as falhas saírem da janela.
    */
@@ -90,8 +82,6 @@ export interface AuthConfig {
   readonly emailCodeMinIntervalSeconds: number;
   readonly emailCodeMaxPerHour: number;
   readonly emailGlobalMaxPerHour: number;
-  /** `null` = versões não configuradas (ou fora do formato): cadastro indisponível. */
-  readonly consentVersions: ConsentVersions | null;
   readonly resetMaxFailuresPerDay: number;
   readonly codeCheckMaxPerPair: number;
   readonly codeCheckWindowMinutes: number;
@@ -119,19 +109,6 @@ export function shannonBitsPerChar(value: string): number {
  */
 export function isStrongSecret(value: string): boolean {
   return new Set(value).size >= MIN_DISTINCT_CHARS && shannonBitsPerChar(value) >= MIN_ENTROPY_BITS_PER_CHAR;
-}
-
-/** Mesmo formato do CHECK `account_consents_version_format` da migração 0019. */
-const CONSENT_VERSION = /^[A-Za-z0-9][A-Za-z0-9._:+-]{0,63}$/;
-
-export interface ConsentVersions {
-  readonly termsOfUse: string;
-  readonly privacyPolicy: string;
-}
-
-function parseConsentVersions(terms: string | undefined, privacy: string | undefined): ConsentVersions | null {
-  if (!terms || !privacy || !CONSENT_VERSION.test(terms) || !CONSENT_VERSION.test(privacy)) return null;
-  return { termsOfUse: terms, privacyPolicy: privacy };
 }
 
 /**
@@ -179,7 +156,6 @@ export function loadAuthConfig(source: NodeJS.ProcessEnv = process.env): AuthCon
     emailCodeMinIntervalSeconds: v.AUTH_EMAIL_CODE_MIN_INTERVAL_SECONDS,
     emailCodeMaxPerHour: v.AUTH_EMAIL_CODE_MAX_PER_HOUR,
     emailGlobalMaxPerHour: v.AUTH_EMAIL_GLOBAL_MAX_PER_HOUR,
-    consentVersions: parseConsentVersions(v.AUTH_TERMS_VERSION, v.AUTH_PRIVACY_VERSION),
     resetMaxFailuresPerDay: v.AUTH_RESET_MAX_FAILURES_PER_DAY,
     codeCheckMaxPerPair: v.AUTH_CODE_CHECK_MAX_PER_PAIR,
     codeCheckWindowMinutes: v.AUTH_CODE_CHECK_WINDOW_MINUTES,

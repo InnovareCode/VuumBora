@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { drainBackgroundTasks } from '../src/lib/background-tasks.js';
 import { loadAuthConfig } from '../src/lib/auth-config.js';
+import { loadLegalConfig } from '../src/lib/legal-config.js';
 import { registerAccount } from '../src/services/identity-service.js';
 import { canonicalEmailForLimit } from '../src/lib/email-normalize.js';
 import { hashEmailCode } from '../src/lib/email-code.js';
@@ -165,8 +166,9 @@ describe('I-4: cadastro sobre conta NÃO verificada', () => {
     const result = await registerAccount(
       pool,
       loadAuthConfig()!,
+      loadLegalConfig(),
       { mail: substituting, onMailFailure: () => undefined },
-      { accountType: 'passenger', fullName: 'Pessoa', email, password: PASSWORD, phone: null, birthDate: REGISTER_EXTRAS.birthDate },
+      { accountType: 'passenger', fullName: 'Pessoa', email, password: PASSWORD, phone: null, birthDate: REGISTER_EXTRAS.birthDate, termsVersion: REGISTER_EXTRAS.termsVersion, privacyVersion: REGISTER_EXTRAS.privacyVersion },
       { ipHash: null, userAgentFamily: 'x', requestId: 'r' },
     );
     assert.equal(result.kind, 'ok');

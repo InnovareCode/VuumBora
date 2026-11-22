@@ -7,10 +7,14 @@ import assert from 'node:assert/strict';
 import type { MailMessage, MailPort } from '../../src/lib/mail-port.js';
 import { drainBackgroundTasks } from '../../src/lib/background-tasks.js';
 import { pool, startApp, type TestApp } from './harness.js';
+import { BASELINE_VERSION } from './legal-kit.js';
 
 export const PASSWORD = 'Senha-de-teste-123';
-/** Campos obrigatórios do cadastro além de nome/e-mail/senha: data de nascimento (18+) e o aceite dos documentos. */
-export const REGISTER_EXTRAS = { birthDate: '1990-05-15', termsAccepted: true, privacyAccepted: true } as const;
+/**
+ * Campos obrigatórios do cadastro além de nome/e-mail/senha: data de nascimento (18+), o aceite dos documentos e as
+ * versões que o app EXIBIU (a baseline do catálogo de teste, publicada por `prepareDatabase`).
+ */
+export const REGISTER_EXTRAS = { birthDate: '1990-05-15', termsAccepted: true, privacyAccepted: true, termsVersion: BASELINE_VERSION, privacyVersion: BASELINE_VERSION } as const;
 export const DEVICE = { installationId: 'instalacao-0001', platform: 'android', label: 'Aparelho de teste' };
 export const PEPPER = 'pepper-de-teste-0123456789-0123456789-abcdef';
 export const JWT_SECRET = 'jwt-de-teste-0123456789-0123456789-abcdefghi';

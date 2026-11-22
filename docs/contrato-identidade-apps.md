@@ -23,6 +23,16 @@ rotas respondem `503 auth_unavailable`. Corpo inválido: `400 invalid_body` (ou 
 > 4. `POST /reset-password`: novo `429 reset_locked` (teto cumulativo de falhas por conta em 24 h) e o titular recebe um
 >    **e-mail "sua senha foi alterada"** depois da troca.
 > 5. Todo `429 too_many_attempts` agora traz `error.retryAfterSeconds` (além do cabeçalho `Retry-After`).
+>
+> **B3 (M-3 da rodada 3) — IMPLEMENTADO na API em 22/11/2026 (Vega), ainda sem validação independente da Íris e da Órion.** O que vale
+> é o **contrato real**, que difere do desenho original em três pontos: (1) o sucesso sai no envelope `{ ok: true, data }`, e o erro em
+> `{ ok: false, error: { code, message, current? } }`; (2) `GET /me` devolve `consent: null` quando `LEGAL_DOCUMENTS_BASE_URL` não está
+> configurada (a sessão continua valendo, mas o app não consegue mostrar reaceite); (3) `url` = `<LEGAL_DOCUMENTS_BASE_URL>/<terms|privacy>/<passenger|driver>/<versão>`,
+> sem extensão. `GET /v1/legal/current` é público e responde com `Cache-Control: public, max-age=60`. Texto original do desenho, abaixo: A migração 0021 já existe; o
+> aceite passa a registrar a **versão exibida** e o **hash do texto**, e há reaceite quando a versão muda. O que muda para o app
+> está na seção "Aceite com versão exibida e reaceite" (fim do documento): `GET /v1/legal/current`, `termsVersion`/`privacyVersion`
+> no cadastro, `409 consent_outdated`, `consent` em `GET /me` e `POST /v1/auth/consents`. Até a Vega entregar, vale o que está
+> descrito abaixo (versão da configuração do servidor, sem `termsVersion`/`privacyVersion`).
 
 ## Fluxo
 
@@ -46,6 +56,7 @@ Conta com e-mail não verificado **nunca** abre sessão (regra também no banco)
   `AUTH_PRIVACY_VERSION`; o cliente **não** envia versão), o instante (relógio do banco) e o HMAC do IP. A trilha é só-acrescenta:
   a API não altera nem apaga aceite. Enquanto as versões não estiverem configuradas (os textos ainda não existem) o cadastro
   responde `503 consent_unavailable`; login, verificação e recuperação seguem funcionando.
+  **(Substituído pelo desenho B3, no fim deste documento: o cliente passa a enviar a versão que exibiu e a versão vigente sai do banco, não da configuração.)**
 - `201` → `{ account: { id, publicId, fullName, accountType }, verification: { required: true, emailSent: boolean, resendAfterSeconds: 60 } }`.
   **Nenhum token.** `emailSent:false` = a conta existe mas o e-mail não saiu (SMTP indisponível): o app oferece
   "reenviar código" (`/resend-verification`). Não é erro HTTP.
@@ -132,7 +143,7 @@ Troca a senha e **revoga todas as sessões** (refresh e access tokens caem na ho
 - `POST /refresh` `{ refreshToken }` → `{ accessToken, ..., refreshToken, ... }`; qualquer recusa é `401 invalid_refresh_token`.
   Conta que perdeu o e-mail verificado também é recusada.
 - `POST /logout` `{ refreshToken }` (idempotente); `POST /logout-all` (Bearer) → `{ revokedSessions }`.
-- `GET /me` (Bearer) → `{ id, publicId, fullName, accountType }` (**`roles` foi removido**).
+- `GET /me` (Bearer) → `{ id, publicId, fullName, accountType }` (**`roles` foi removido**). Com a B3 ganha `consent` (ver o fim do documento).
 - Breaking vs. versão anterior: `role` → `accountType` (em register, login e na resposta); `register` não devolve mais tokens
   nem aceita `device`; `login` exige `accountType`.
 
@@ -152,7 +163,8 @@ Troca a senha e **revoga todas as sessões** (refresh e access tokens caem na ho
   substituem `AUTH_LOGIN_MAX_FAILURES`, `AUTH_LOGIN_IDENTIFIER_CEILING` e `AUTH_LOGIN_WINDOW_MINUTES`, que não existem mais; `AUTH_REGISTER_*`,
   `AUTH_CODE_REQUEST_*`, `AUTH_EMAIL_CODE_*`, `AUTH_EMAIL_GLOBAL_MAX_PER_HOUR` (100), `AUTH_RESET_MAX_FAILURES_PER_DAY` (10).
   **Sem valor padrão:** `AUTH_TERMS_VERSION` e `AUTH_PRIVACY_VERSION` (a versão vigente dos Termos e da Política; formato `[A-Za-z0-9][A-Za-z0-9._:+-]{0,63}`).
-  A API não inventa versão: sem as duas, o cadastro fica em `503 consent_unavailable`.
+  A API não inventa versão: sem as duas, o cadastro fica em `503 consent_unavailable`. **A B3 as aposenta:** a versão vigente passa a ser a
+  da tabela `legal_document_versions` (migração 0021), publicada pelo operador; as duas variáveis saem do código e do ambiente.
 - **Risco residual (I-6, aceito pelo dono):** sem bloqueio por conta, um atacante com muitos IPs faz ~13 tentativas na 1ª hora **por IP** contra uma
   conta (a conta acima). Para mitigar mais: CAPTCHA a partir de certa contagem e alerta de "muitas falhas distribuídas" (decisão do dono).
 - **Aceite e substituição de conta (resolvido, migração 0020):** o aceite é só-acrescenta para a API (sem UPDATE/DELETE). No recadastro a conta
@@ -161,3 +173,95 @@ Troca a senha e **revoga todas as sessões** (refresh e access tokens caem na ho
   API insere a conta nova com o aceite novo. O aceite final é, por construção, o do **último cadastro** (data e HMAC de IP dele).
 - **Tempo de resposta:** "esqueci a senha"/reenvio fazem um pouco mais de trabalho de banco quando a conta existe (milissegundos,
   sem esperar o SMTP). Não é indistinguível ao microssegundo; o vazamento que importa (corpo, status, e-mail) é idêntico.
+
+## Aceite com versão exibida e reaceite (B3 · M-3) — IMPLEMENTADO em 22/11/2026 (ver as diferenças no aviso do topo)
+
+Problema (M-3): hoje o servidor grava a versão da variável de ambiente, não a que a pessoa viu, e o rótulo "v1" pode ser reaproveitado
+com texto editado. Daqui em diante o aceite prova **qual texto** foi exibido. Estrutura de dados: migração `0021_create_legal_document_versions.sql`
+(reversão em `docs/sql/rollback/0021_down.sql`). Nomes no banco: `terms_of_use` e `privacy_policy`; no JSON: `terms` e `privacy`.
+
+### O que existe no banco
+
+| Objeto | O que é |
+|---|---|
+| `legal_document_versions` | Catálogo das versões **publicadas**: `document`, `audience` (`passenger`\|`driver`), `version`, `text_sha256` (hex minúsculo), `requires_reacceptance` (padrão `true`), `published_at` (relógio do banco). Chave `(document, audience, version)`. **Imutável**: sem UPDATE/DELETE/TRUNCATE para ninguém (gatilho, vale até para o dono) e a API (`vuumbora_api`) só tem SELECT. |
+| `legal_current_versions` (view) | A vigente de cada `(document, audience)` = a de maior `published_at`. **No máximo uma por par, por construção.** É a única definição de "vigente". |
+| `account_consents` (ganhou 2 colunas) | `audience` (perfil da conta) e `text_sha256` (hash do texto daquela versão), **preenchidos pelo banco** (a API só informa `document` e `version`; o que mandar a mais é descartado). FK composta de 4 colunas para o catálogo. Só aceita versão **publicada e vigente** (senão recusa, ver abaixo). Aceite anterior à 0021 fica com as duas colunas `NULL` (legado: só rótulo). |
+| `legal_pending_for_account(conta)` | Função: uma linha por documento que a conta ainda precisa aceitar (a versão **vigente**), numa consulta só. Zero linhas = em dia. |
+
+**Vigente é derivada, não marcada** (marcar a anterior como "aposentada" exigiria UPDATE na linha publicada, e ela é imutável); isto também
+responde "qual valia no dia X". `published_at` é sempre o relógio do banco e estritamente crescente por par: não há agendamento nem
+retroação. **Publicar = passar a valer.** Texto igual para os dois perfis = duas linhas (uma por perfil) com o mesmo hash; se o dono decidir Termos
+distintos por perfil, é só publicar textos diferentes. Não existe `audience` "todos".
+
+### `GET /v1/legal/current?audience=passenger|driver` (sem sessão)
+
+`200` → `{ audience, terms: { version, sha256, publishedAt, url }, privacy: { version, sha256, publishedAt, url } }` (sempre os **dois** documentos).
+
+- `sha256`: SHA-256 hex minúsculo do **arquivo exato** servido em `url` (bytes UTF-8). O app pode baixar e conferir.
+- `url`: aponta para texto **imutável por versão**; a API a monta a partir de configuração (URL base + documento/perfil/versão), **não** fica no banco
+  (um host que muda não pode deixar uma linha imutável com endereço velho). Onde os textos ficam hospedados é decisão aberta (ver PENDÊNCIAS do handoff).
+- `400 invalid_body` (`audience` ausente ou inválido); `503 consent_unavailable` se qualquer um dos dois documentos ainda não tem versão publicada para o perfil.
+- Cache: `Cache-Control: public, max-age=60` (o `409 consent_outdated` já traz `error.current`, então um cache velho se corrige sozinho).
+
+### `POST /v1/auth/register` — o que muda
+
+Acrescenta **`termsVersion`** e **`privacyVersion`** (texto): as versões que o app **exibiu** (as que recebeu de `GET /v1/legal/current`).
+`termsAccepted`/`privacyAccepted: true` continuam obrigatórios (as caixas de seleção).
+
+- Versões ausentes ou com formato inválido: `400 consent_required` (nada criado).
+- Bem formadas, mas **diferentes da vigente** do `accountType` (ou de versão que nunca foi publicada): `409 consent_outdated`, nada criado:
+  `{ "ok": false, "error": { "code": "consent_outdated", "message": "Os Termos ou a Política mudaram. Leia a versão atual e aceite de novo.", "current": <mesmo corpo do GET /v1/legal/current> } }`.
+  O app recarrega o texto de `error.current`, mostra de novo e reenvia.
+- Sem versão publicada para o perfil: `503 consent_unavailable` (como hoje).
+- O servidor grava, na mesma transação da conta, **as versões que o cliente enviou** (já confirmadas como vigentes); `audience`, `text_sha256` e a data
+  são do banco. Rede de segurança: se publicarem outra versão entre a conferência e o INSERT, o banco recusa (restrições abaixo) e a API devolve o mesmo 409.
+
+### Reaceite quando a versão muda
+
+Regra (está em `legal_pending_for_account`; a API não a reimplementa):
+
+- Cada versão nasce com `requires_reacceptance`: **`true` = mudança material** (quem aceitou antes precisa aceitar de novo); **`false` = correção
+  editorial** (typo, formatação: ninguém é incomodado). Quem decide é o dono/jurídico, no ato de publicar. Padrão seguro: `true`.
+- A conta está **em dia** num documento se aceitou uma versão publicada **em ou depois da última versão material**. Quem aceitou a v2 (material) segue em dia
+  quando sai a v3 editorial; quem só aceitou a v1 fica pendente — e o que ele aceita é a **vigente** (v3), não a material.
+- Aceite **legado** (anterior à 0021, sem hash) **não conta**: a conta reaceita a primeira versão publicada. Conta sem aceite nenhum idem. Em produção não há conta
+  nenhuma ainda (o banco está na 0009 e a identidade dos apps nasce na 0010), então **não há dado a migrar**; em banco de desenvolvimento nada é apagado nem inventado.
+- Sem versão publicada para o perfil, não há pendência (e o cadastro responde 503).
+
+Sinal e rota (a implementar pela Vega antes do S7):
+
+- **`GET /v1/auth/me`** passa a trazer `consent: { upToDate: boolean, pending: [ { document: "terms"|"privacy", version, sha256, publishedAt, url } ] }`
+  (uma consulta a `legal_pending_for_account`; os dois documentos juntos, sem N+1). `pending` lista a versão **vigente** de cada documento pendente.
+- **`POST /v1/auth/consents`** (Bearer) `{ termsVersion?, privacyVersion? }` (ao menos uma): cada versão enviada tem de ser a vigente do perfil da conta, senão
+  `409 consent_outdated` (com `error.current`). Idempotente: reaceitar a mesma versão devolve `200` sem duplicar. Resposta `200 { consent: { upToDate, pending } }`.
+  Registra o HMAC do IP como no cadastro. O app pode mandar sempre as duas versões que exibiu.
+- **Quem NÃO é bloqueado por aceite pendente:** `login`, `refresh`, `logout`, `logout-all`, `me`, `consents`, `legal/current` — e, quando existirem, tudo que
+  mexe em **viagem em andamento** (posição, concluir, cancelar), exclusão de conta e acesso aos próprios dados. Ninguém é jogado para fora no meio de uma corrida.
+- **Quem é bloqueado:** só as rotas que criam **compromisso novo** (motorista ficar online, passageiro pedir corrida, aceitar corrida — S-fatias futuras), por um
+  `preHandler` único (`requireCurrentConsent`): aceite pendente → `409 consent_outdated` com `error.pending: ["terms"|"privacy", ...]` e `error.current`. O app abre a tela
+  de reaceite (texto da versão, botão aceitar → `POST /v1/auth/consents`). **Proposta** a confirmar com o dono/jurídico; sem prazo de carência: a regra vale desde a publicação, e
+  quem publica escolhe o momento (e `requires_reacceptance=false` para o que é só editorial).
+
+### Publicação (operador, nunca a API)
+
+Só a credencial **dona** do banco insere em `legal_document_versions` (o papel da API não tem INSERT: quem conseguisse SQL com a credencial da API não publicaria nem trocaria
+o texto "aceito"). Passos: (1) subir o arquivo na URL daquela versão, que não muda mais; (2) `sha256sum` do arquivo; (3) `INSERT (document, audience, version, text_sha256,
+requires_reacceptance)`; (4) conferir com `SELECT * FROM legal_current_versions` e `GET /v1/legal/current` (o `sha256` devolvido deve bater com o do arquivo baixado da `url`).
+A Vega pode embrulhar isto num script (`legal:publish`) com a credencial de migração. Reenviar a mesma versão não altera nada (o hash original permanece). Publicação errada
+**não se edita nem se apaga**: publica-se a versão seguinte. Hash do texto vazio é recusado (pipe que falhou). Duas publicações simultâneas do mesmo par entram em fila.
+
+### Erros do banco que a API traduz (`err.constraint`)
+
+| Restrição | SQLSTATE | Significa | API |
+|---|---|---|---|
+| `account_consents_version_published` | 23503 | versão que nunca foi publicada para o perfil da conta | `409 consent_outdated` (relê a vigente para o corpo) |
+| `account_consents_version_current` | 23514 | versão publicada, mas já substituída | `409 consent_outdated` |
+| `legal_document_versions_published_at_monotonic` | 23514 | publicação não é posterior à vigente (relógio voltou) | script de publicação: tentar de novo |
+| `account_consents_published_version_fk`, `account_consents_audience_sha256_paired` | 23503 / 23514 | não deveriam ocorrer (o gatilho preenche as colunas) | `503 unavailable` + log (é bug) |
+
+### Migração 0021: efeito sobre o código atual
+
+O gatilho do aceite passa a **exigir versão publicada** (fail-closed, de propósito). Enquanto a API continuar gravando a versão de `AUTH_TERMS_VERSION`/`AUTH_PRIVACY_VERSION`, o cadastro
+só funciona se essa mesma versão existir no catálogo e for a vigente — senão o INSERT do aceite falha (`23503`). O teste de matriz de privilégios (`runtime-role.test.ts`) passa a exigir
+a linha `legal_document_versions: []` (a API só lê). A Vega adapta cadastro, `/me`, `consents`, a leitura de `legal_current_versions` e os fixtures (publicar versão com o dono antes de cadastrar).

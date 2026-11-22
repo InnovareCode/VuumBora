@@ -15,7 +15,7 @@ import { after, before, describe, test } from 'node:test';
 import { adminBcrypt, appBcrypt } from '../src/lib/bcrypt-pool.js';
 import { getDummyHash } from '../src/services/identity-service.js';
 import { createAdmin, pool, prepareDatabase, PASSWORD as ADMIN_PASSWORD, send, shutdown } from './helpers/harness.js';
-import { startIdentityApp, uniqueEmail, type Harness } from './helpers/identity-kit.js';
+import { REGISTER_EXTRAS, startIdentityApp, uniqueEmail, type Harness } from './helpers/identity-kit.js';
 
 // Custo real e pista pequena e conhecida (2 operações simultâneas, 4 na fila). Depois do `auth-env.js` (que fixa 4).
 process.env['AUTH_BCRYPT_COST'] = '12';
@@ -129,7 +129,7 @@ describe('A-1: teto global do bcrypt', () => {
     const email = uniqueEmail('cheia');
     const replies = {
       login: await post('/v1/auth/login', '10.88.0.1', { accountType: 'passenger', identifier: email, password: 'Senha-de-teste-123' }),
-      register: await post('/v1/auth/register', '10.88.0.2', { accountType: 'passenger', fullName: 'Pessoa', email, password: 'Senha-de-teste-123', birthDate: '1990-05-15', termsAccepted: true, privacyAccepted: true }),
+      register: await post('/v1/auth/register', '10.88.0.2', { accountType: 'passenger', fullName: 'Pessoa', email, password: 'Senha-de-teste-123', ...REGISTER_EXTRAS }),
       verify: await post('/v1/auth/verify-email', '10.88.0.3', verifyBody(email)),
       reset: await post('/v1/auth/reset-password', '10.88.0.4', resetBody(email)),
     };

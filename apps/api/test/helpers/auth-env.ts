@@ -6,6 +6,6 @@ process.env['AUTH_IP_RATE_LIMIT_MAX'] = '1000';
 // Teto global de e-mails por hora: alto de propósito (os testes cadastram dezenas de contas); os testes do
 // teto (identity-hardening.test.ts) fixam um valor baixo ANTES de montar o app.
 process.env['AUTH_EMAIL_GLOBAL_MAX_PER_HOUR'] = '100000';
-// Versões vigentes dos Termos de Uso e da Política de Privacidade (só de teste: os textos reais ainda não existem).
-process.env['AUTH_TERMS_VERSION'] = 'teste-2026-11';
-process.env['AUTH_PRIVACY_VERSION'] = 'teste-2026-11';
+// Onde os textos legais são servidos (só de teste; a API apenas monta o endereço, nada é baixado). A VERSÃO vigente não
+// é configuração: vem do catálogo do banco (helpers/legal-kit.ts publica a versão baseline).
+process.env['LEGAL_DOCUMENTS_BASE_URL'] = 'https://textos.teste.vuumbora.dev/legal';
