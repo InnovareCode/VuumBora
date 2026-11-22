@@ -79,21 +79,45 @@ ver o `MapView` nativo (iOS/Android) é preciso:
 
 1. `npx expo prebuild` (gera `ios/`/`android/` a partir do `app.config.ts`,
    com o plugin do Mapbox já aplicado), **ou**
-2. um **development build** via EAS (`npx eas build --profile development`) —
-   ainda não há `eas.json` neste repo (ver `docs/build-e-deploy.md`).
+2. um **development build** via EAS (`npx eas build --profile development`, dentro de `apps/passenger` ou
+   `apps/driver`). Os `eas.json` existem nos dois apps (perfil `development` com `VUUMBORA_BUILD_PROFILE=development`;
+   ver `docs/build-e-deploy.md`).
 
 Sem isso, `expo start` em iOS/Android com um dev client comum vai falhar ao
 tentar carregar o `MapView` (módulo nativo ausente). **O alvo web não tem essa
 exigência** — `expo start --web` já roda o Mapbox GL JS de verdade, sem build
 nenhum (é a prova que segue abaixo).
 
+## Perfil de build e telas de desenvolvimento
+
+`apps/passenger/metro.config.js` (idêntico ao de `apps/driver`, conferido com `cmp`) escolhe o perfil pela variável
+`VUUMBORA_BUILD_PROFILE` (`development` | `preview` | `production`):
+
+- Valor preenchido vale. Valor fora da lista aborta (`metro.config.js:52-56`). `development` com `NODE_ENV=production` aborta (`:57-62`).
+- Sem a variável: `EAS_BUILD_PROFILE=production` ou `NODE_ENV=production` dão `production`; `NODE_ENV=development|test` dão
+  `development` (`:71-73`). Build não interativa sem nenhum dos dois aborta (`:74-80`).
+- Só `production` tira as telas de dev do bundle: tudo sob `app/(dev)/`, em qualquer nível, entra na `resolver.blockList`
+  (`:39-40`, `:148-160`). `preview` não esconde telas de dev.
+- Convenção: tela de desenvolvimento nova nasce em `app/(dev)/` e já fica fora da loja, sem editar lista.
+
+Build `production` também **aborta** se a identidade for simulada: `IDENTITY_MODE` de `src/identity/identityClient.ts` precisa valer
+`'http'` (`metro.config.js:118-138`). Hoje o passageiro está em `'mock'` (`apps/passenger/src/identity/identityClient.ts:37`) e o
+motorista não tem `src/identity/`; sem o escape, os dois abortam em `production`.
+
+Escape temporário: `VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION=1` (só o valor exato `1`; cada uso imprime aviso; `metro.config.js:97-104`,
+`:127-133`). Nunca em build de loja. Sai quando os dois apps tiverem `IDENTITY_MODE = 'http'`.
+
 ## Prova de que carrega (feita, não assumida)
 
 Criada uma rota de diagnóstico em cada app — **não é tela de produto**, é só
 prova de infraestrutura, descartável quando não fizer mais falta:
 
-- `apps/passenger/app/mapbox-check.tsx` (nativo) + `mapbox-check.web.tsx` (web)
-- `apps/driver/app/mapbox-check.tsx` (nativo) + `mapbox-check.web.tsx` (web)
+- `apps/passenger/app/(dev)/mapbox-check.tsx` (nativo) + `mapbox-check.web.tsx` (web)
+- `apps/driver/app/(dev)/mapbox-check.tsx` (nativo) + `mapbox-check.web.tsx` (web)
+
+A pasta `(dev)` é um grupo do Expo Router: não entra na URL, então a rota segue `/mapbox-check` (confirmado nos comentários
+de `apps/passenger/metro.config.js:39-40` e no commit `0fe8883`; a URL não foi medida de novo nesta atualização).
+A regra da pasta e o perfil de build estão na seção seguinte.
 
 Testado via Playwright em `/mapbox-check`, nos dois apps, `expo start --web`:
 

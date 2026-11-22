@@ -121,6 +121,24 @@ escopo da linha da especificação; **—** = não existe. "Real" = fala com a A
 Cada fatia: **quem**, **depende de** (backend e outras fatias), **aceite**, e **📱** quando só se prova em aparelho
 real. "Dono" = exige ação ou decisão do dono.
 
+### Estado de entrega (atualizado em 22/11/2026)
+
+A seção 1 é de 21/11 e não reflete estes commits. Esta tabela é o estado atual de cada entrega, com o que **não** foi provado.
+"Provado" aqui quer dizer o que o commit ou o veredito registra; nada disto foi reexecutado nesta atualização.
+
+| Item | Commit | Provado (segundo o registro) | NÃO provado / pendente |
+|---|---|---|---|
+| **A1** Higiene do protótipo | `79f41d8` | Grupos `(auth)`/`(app)` com `Stack.Protected`; `catalogo` e `mapbox-check` saem do bundle de produção (`0fe8883`, na pasta `(dev)`). Lyra provou no Chromium (export web) e em bundles Android/iOS, sem aparelho. | Íris não validou de forma independente. Nada em aparelho. Sessão ainda é mock em memória (A3). |
+| **A2** Porta de identidade no `api-client` | `0ce3dd4` | 114 testes do pacote (Atlas reexecutou: 114/114). Vega: 43/43 contra a API real, com Postgres próprio. | Íris não validou. Armazenamento seguro (A3) não feito. Motorista ainda sem cliente de identidade (B2). |
+| **B1** Identidade no passageiro | `bb6c024`, correções em `6f59918` | Lyra: cerca de 280 verificações no navegador (320 a 430 px) e mutação. `6f59918` corrige F3 a F8 e F12 da Íris. | Veredito da Íris na passada 3: **REPROVADO** (F3, "Mostrar senha" sumia em Firefox/WebKit; corrigido em `6f59918`). **Sem nova passada da Íris depois de `6f59918`.** F10: `server_busy` (503) cai em "Serviço indisponível" (`apps/passenger/src/identity/authErrors.ts` não tem caso próprio). F9 (registrado na passada 3, não reverificado): Termos e Política só abrem deslogado. Nada em aparelho, leitor de tela ou Safari do iPhone. |
+| **B3** Aceite com versão exibida, parte do app | `0cc39aa` (API: `d75b9b9`) | Vega: 216 testes; 29/29 contra a API real. Lyra: 136 verificações no navegador (320 px). Atlas reexecutou `npm run check` (exit 0). | Íris e Órion não validaram. F10 da passada 3 registrou `consent_outdated` caindo em "Algo deu errado"; o código atual tem caso para ele (`authErrors.ts:218`), não reconfirmado na tela. B-6 (SHA-256 do texto no app) ficou para A3. Nada em aparelho. |
+| **M-3** Build de loja sem telas de dev e sem identidade simulada (Órion, rodada 3b) | `0fe8883` | Perfil derivado de `NODE_ENV`; aborta sem perfil, em contradição ou com `mock` em `production`; escape `VUUMBORA_ALLOW_MOCK_IDENTITY_IN_PRODUCTION=1`. Lyra: 59/59 nos dois apps, mutação, exports web e Android. Atlas conferiu a config com e sem escape. | Do próprio commit: `eas build` real, Gradle/Xcode, iOS e aparelho **não provados**. Órion não revalidou depois do commit (a confirmar). Escape temporário ainda existe. |
+| **B-9** Painel: `csrfToken` obrigatório em sessão nova (Órion, rodada 3b) | `0fe8883` | Código: `apps/admin/src/api/authResponses.ts:73-74` exige texto; `null` só é aceito em `/me` (`:82-84`). Rodada 3b marca como resolvido (`docs/revisao-seguranca-s1-rodada3b.md:243`). | Painel contra a API viva não provado (commit). Órion não revalidou (a confirmar). |
+
+Observação: **M-3** aqui é o da rodada 3b (build de loja). O M-3 da rodada 3 (aceite com versão exibida) é o item **B3**, e
+por isso aparecem as duas linhas separadas. CI: o veredito da passada 3 registrou CI vermelho no SHA anterior (F1 e F2,
+bloqueantes). O estado do CI no HEAD atual **não foi verificado** (a confirmar).
+
 ### Bloco A — Fundação do app (pode andar já; nenhuma depende do dono)
 
 **A1. Higiene do protótipo** — Lyra
@@ -193,6 +211,7 @@ real. "Dono" = exige ação ou decisão do dono.
 - **Depende de:** B1. **Aceite:** idem B1; copy revisada contra a regra candidatura/cadastro (seção 2, item 5).
 
 **B3. Aceite com versão exibida (M-3 da rodada 3 do Órion)** — Vega, depois Lyra
+> Entregue (API `d75b9b9`, app `0cc39aa`; ver a tabela "Estado de entrega"). O texto abaixo é o desenho original, mantido como histórico.
 - Hoje o servidor grava a versão da variável de ambiente, não a que a pessoa viu. Contrato proposto (a Vega finaliza
   e o Órion confere):
   - `GET /v1/legal/current?audience=passenger|driver` → `{ terms: { version, sha256, publishedAt, url },

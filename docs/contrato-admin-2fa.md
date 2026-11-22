@@ -88,6 +88,7 @@ Confirmar o enrolamento já conclui o login (não precisa voltar ao e-mail/senha
 | 429 | `account_locked` | espera progressiva do par (e-mail + IP) depois de senha errada (login OU reautenticação): 1 s … 15 min | mostrar `error.retryAfterSeconds` (e header `Retry-After`); nem a senha certa entra até lá |
 | 429 | `rate_limited` | limite por IP (mesmo do login: 5/15 min) | "aguarde" |
 | 503 | `two_factor_unavailable` | servidor sem `ADMIN_TOTP_ENCRYPTION_KEY` | "indisponível, contate o responsável técnico" |
+| 503 | `server_busy` (`Retry-After: 3`, `error.retryAfterSeconds: 3`) | pista do bcrypt cheia, no **login** (`POST /v1/admin/auth/login`) e na **reautenticação por senha** (`enroll/start`, `regenerate`, `disable` e o `stepUp` de salvar/remover a senha do SMTP em `settings/email`). Recusada antes de qualquer comparação | "Muitas solicitações, tente de novo em instantes"; não é sessão expirada. Código: `src/app.ts:106-111` (handler global; a rota não captura), `src/services/admin-auth-service.ts:125-134` |
 
 ## 5. Para o deploy (Vulcano)
 

@@ -91,6 +91,7 @@ Auditoria `email_settings.password_removed` + o mesmo alerta de log.
 | 429 | `two_factor_locked` | 5 códigos errados seguidos: bloqueio de 15 min do **código** (inalterado) | contagem regressiva |
 | 409 | `two_factor_not_enrolled` | dono sem 2FA ativo | (não ocorre: dono sempre tem) |
 | 503 | `two_factor_unavailable` | servidor sem `ADMIN_TOTP_ENCRYPTION_KEY` | "indisponível" |
+| 503 | `server_busy` (`Retry-After: 3`) | pista do bcrypt cheia (a senha do `stepUp` ainda não foi comparada) | "tente de novo em instantes" |
 
 ## POST `/settings/email/test` — e-mail de teste
 

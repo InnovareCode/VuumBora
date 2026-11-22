@@ -9,6 +9,9 @@ Toda resposta de `/v1/auth/*` sai com `Cache-Control: no-store`. Mensagens são 
 Sem `AUTH_PEPPER`/`AUTH_JWT_SECRET` válidos (≥32 caracteres, entropia de gerador, **diferentes entre si**) todas as
 rotas respondem `503 auth_unavailable`. Corpo inválido: `400 invalid_body` (ou `invalid_email`, `invalid_password`,
 `invalid_phone`). Limite por IP em memória (padrão 30/15 min): `429` do rate limit.
+Pista do bcrypt cheia (sem vaga e sem lugar na fila): `503 server_busy` + `Retry-After: 3` e `error.retryAfterSeconds: 3`, em
+login, `register`, `verify-email` e `reset-password` (e no login do admin). A recusa acontece antes de gravar qualquer coisa
+(`src/routes/auth-http.ts:40-44`, `src/lib/bcrypt-pool.ts:62`). O app deve mostrar "tente de novo em instantes", não queda.
 
 > **Revisão S1 rodada 2 + idade/aceite (21/11/2026) — o que muda para o app** (a Lyra/os apps precisam ajustar):
 > 1. `POST /register` ganhou **três campos obrigatórios**: `birthDate` (`"AAAA-MM-DD"`, 18 anos completos) e o aceite
@@ -31,8 +34,8 @@ rotas respondem `503 auth_unavailable`. Corpo inválido: `400 invalid_body` (ou 
 > sem extensão. `GET /v1/legal/current` é público e responde com `Cache-Control: public, max-age=60`. Texto original do desenho, abaixo: A migração 0021 já existe; o
 > aceite passa a registrar a **versão exibida** e o **hash do texto**, e há reaceite quando a versão muda. O que muda para o app
 > está na seção "Aceite com versão exibida e reaceite" (fim do documento): `GET /v1/legal/current`, `termsVersion`/`privacyVersion`
-> no cadastro, `409 consent_outdated`, `consent` em `GET /me` e `POST /v1/auth/consents`. Até a Vega entregar, vale o que está
-> descrito abaixo (versão da configuração do servidor, sem `termsVersion`/`privacyVersion`).
+> no cadastro, `409 consent_outdated`, `consent` em `GET /me` e `POST /v1/auth/consents`. As variáveis `AUTH_TERMS_VERSION` e
+> `AUTH_PRIVACY_VERSION` foram removidas do código e do `.env.example`; o trecho "versão da configuração" abaixo é histórico (desenho original).
 
 ## Fluxo
 
@@ -51,12 +54,13 @@ Conta com e-mail não verificado **nunca** abre sessão (regra também no banco)
   deve guardá-la depois do cadastro. Erros: `400 invalid_birth_date` (ausente, formato errado, data impossível, futura ou
   anterior a 1900) e `403 underage` ("É preciso ter 18 anos ou mais para criar uma conta."). Nada é criado.
 - **Aceite** — `termsAccepted` e `privacyAccepted` têm de ser exatamente `true` (os dois). Ausentes, `false` ou de outro tipo:
-  `400 consent_required` e nada é criado. O servidor registra o aceite dos dois documentos (**Termos de Uso** e **Política de
-  Privacidade**) na **mesma transação** da conta, com a **versão vigente da configuração do servidor** (`AUTH_TERMS_VERSION` e
-  `AUTH_PRIVACY_VERSION`; o cliente **não** envia versão), o instante (relógio do banco) e o HMAC do IP. A trilha é só-acrescenta:
-  a API não altera nem apaga aceite. Enquanto as versões não estiverem configuradas (os textos ainda não existem) o cadastro
-  responde `503 consent_unavailable`; login, verificação e recuperação seguem funcionando.
-  **(Substituído pelo desenho B3, no fim deste documento: o cliente passa a enviar a versão que exibiu e a versão vigente sai do banco, não da configuração.)**
+  `400 consent_required` e nada é criado. Hoje (B3 implementado) o cadastro também exige **`termsVersion`** e **`privacyVersion`**: as versões que o app exibiu
+  (vindas de `GET /v1/legal/current`). Se não forem as vigentes do perfil, `409 consent_outdated` com `error.current` e nada é
+  criado; sem versão publicada para o perfil, `503 consent_unavailable`. O aceite dos dois documentos (**Termos de Uso** e
+  **Política de Privacidade**) é gravado na **mesma transação** da conta, com `audience`, hash do texto e instante do relógio do
+  banco. Quem preenche `audience` e hash é o banco; a API não grava versão de variável de ambiente
+  (`src/services/identity-service.ts:150`, `src/routes/auth-route.ts:86-89`). A trilha é só-acrescenta. Detalhes na seção B3, no fim deste documento.
+- `503 server_busy` + `Retry-After: 3` — pista do bcrypt cheia (ver a nota do topo). Nada foi criado.
 - `201` → `{ account: { id, publicId, fullName, accountType }, verification: { required: true, emailSent: boolean, resendAfterSeconds: 60 } }`.
   **Nenhum token.** `emailSent:false` = a conta existe mas o e-mail não saiu (SMTP indisponível): o app oferece
   "reenviar código" (`/resend-verification`). Não é erro HTTP.
@@ -90,6 +94,13 @@ e-mail dela — verificar uma conta que não controla. Agora o código só verif
   pendente e não diz qual dos dois estava errado). Dica de tela: "confira o código e a senha que você escolheu no cadastro; se o
   e-mail não foi você que cadastrou, cadastre-se de novo (isso substitui o cadastro pendente)".
 - `429 code_locked` — tentativas esgotadas: o código morreu, peça outro.
+- `429 too_many_attempts` + `Retry-After` e `error.retryAfterSeconds: 900` — **11ª conferência do par em 15 min**. O par é
+  (finalidade `verify_email` + tipo da conta + alvo, e-mail canônico ou ID público + balde de IP). Limites:
+  `AUTH_CODE_CHECK_MAX_PER_PAIR` = 10 e `AUTH_CODE_CHECK_WINDOW_MINUTES` = 15 (`src/lib/auth-config.ts:60-61`). Toda tentativa
+  conta, inclusive a certa; a recusada não grava nada. Código em `src/services/account-recovery-service.ts:80-89` e `:174`;
+  `src/routes/auth-recovery-route.ts:42`. **`retryAfterSeconds` é a janela inteira (900 s), não o tempo exato até liberar**:
+  a liberação real depende de quando a tentativa mais antiga sai da janela (a confirmar: não medido).
+- `503 server_busy` + `Retry-After: 3` — pista do bcrypt cheia, recusada antes da conferência (ver a nota do topo).
 - `400 code_expired` — expirado, inexistente, já usado **ou conta desconhecida** (indistinguíveis de propósito): peça outro.
 
 ## POST `/v1/auth/resend-verification`
@@ -113,6 +124,10 @@ Troca a senha e **revoga todas as sessões** (refresh e access tokens caem na ho
 (sem código, senha nem link; em segundo plano — falha do envio não desfaz a troca). Erros iguais aos de `/verify-email`
 (`invalid_code`+`attemptsLeft`, `code_locked`, `code_expired`) e `400 invalid_password`, mais:
 
+- `429 too_many_attempts` + `Retry-After` e `error.retryAfterSeconds: 900` — **11ª conferência do par em 15 min** (finalidade
+  `password_reset` + tipo + e-mail canônico + balde de IP; mesmos limites de `verify-email`, `src/services/account-recovery-service.ts:200`).
+  Vale antes de o código ser comparado: nem o código certo entra até a janela passar. Mesma ressalva: `retryAfterSeconds` é a janela cheia.
+- `503 server_busy` + `Retry-After: 3` — pista do bcrypt cheia (ver a nota do topo).
 - `429 reset_locked` + `Retry-After: 86400` e `error.retryAfterSeconds` — **teto cumulativo (I-7)**: as falhas de código de redefinição da
   conta **somam entre os códigos** das últimas 24 h; com 10 falhas (`AUTH_RESET_MAX_FAILURES_PER_DAY`) **nem o código certo vale** e
   nenhum código novo é emitido, até as falhas saírem da janela (rolante de 24 h). Pedir outro código não adianta: o app deve
@@ -123,7 +138,9 @@ Troca a senha e **revoga todas as sessões** (refresh e access tokens caem na ho
 `{ "accountType", "identifier" (e-mail ou ID público), "password", "device"? { installationId, platform, label?, appVersion? } }`
 
 - `200` → `{ account, accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt }`.
-- `401 invalid_credentials` — e-mail/ID inexistente, senha errada, tipo errado ou conta bloqueada: **mesma resposta**.
+- `503 server_busy` + `Retry-After: 3` — pista do bcrypt cheia. Recusada **antes** de reservar o par: não conta como falha
+  (`src/services/identity-service.ts:277`, comentário de B-1, rodada 3b). Ver a nota do topo.
+- `401 invalid_credentials` — e-mail/ID inexistente, senha errada, tipo errado ou conta bloqueada **pela operação** (status da conta, não a espera por tentativas, descrita abaixo): **mesma resposta**.
 - `403 email_not_verified` — senha CERTA, e-mail pendente; **sem sessão** (só quem acertou a senha vê isto). O app leva à tela
   do código e oferece `/resend-verification`.
 - `429 too_many_attempts` + `Retry-After` e `error.retryAfterSeconds` — **espera progressiva por par (decisão do dono, I-6)**. A conta
@@ -149,6 +166,9 @@ Troca a senha e **revoga todas as sessões** (refresh e access tokens caem na ho
 
 ## Operação
 
+- **Login do admin** (`POST /v1/admin/auth/login`, fora deste contrato): também responde `503 server_busy` + `Retry-After: 3` quando a
+  pista do bcrypt está cheia (o erro escapa da rota e cai no handler global, `src/app.ts:106-111`). A tabela de erros do admin está em
+  `docs/contrato-admin-2fa.md`, seção 4.
 - **E-mail:** `buildApp({ mail })` recebe um `MailPort` (`src/lib/mail-port.ts`). Em produção usa
   `createSmtpMailer` (`src/services/mailer.ts`, SMTP do painel/ambiente, lido a cada envio). Falha de envio nunca vira erro
   HTTP: no cadastro aparece como `emailSent:false`; nas rotas "iguais" é só log (`auth_mail_send_failed`, com nome/código do erro).
@@ -162,9 +182,11 @@ Troca a senha e **revoga todas as sessões** (refresh e access tokens caem na ho
 - **Variáveis** (todas opcionais, ver `apps/api/.env.example`): `AUTH_LOGIN_DELAY_BASE_SECONDS` (1) e `AUTH_LOGIN_DELAY_MAX_SECONDS` (900) —
   substituem `AUTH_LOGIN_MAX_FAILURES`, `AUTH_LOGIN_IDENTIFIER_CEILING` e `AUTH_LOGIN_WINDOW_MINUTES`, que não existem mais; `AUTH_REGISTER_*`,
   `AUTH_CODE_REQUEST_*`, `AUTH_EMAIL_CODE_*`, `AUTH_EMAIL_GLOBAL_MAX_PER_HOUR` (100), `AUTH_RESET_MAX_FAILURES_PER_DAY` (10).
-  **Sem valor padrão:** `AUTH_TERMS_VERSION` e `AUTH_PRIVACY_VERSION` (a versão vigente dos Termos e da Política; formato `[A-Za-z0-9][A-Za-z0-9._:+-]{0,63}`).
-  A API não inventa versão: sem as duas, o cadastro fica em `503 consent_unavailable`. **A B3 as aposenta:** a versão vigente passa a ser a
-  da tabela `legal_document_versions` (migração 0021), publicada pelo operador; as duas variáveis saem do código e do ambiente.
+  `AUTH_CODE_CHECK_MAX_PER_PAIR` (10) e `AUTH_CODE_CHECK_WINDOW_MINUTES` (15): o limite de conferências do par (verify-email e reset). `AUTH_BCRYPT_CONCURRENCY`,
+  `AUTH_BCRYPT_QUEUE_MAX` (8, de 0 a 64) e `AUTH_BCRYPT_MAX_PER_ORIGIN` (de 1 a 8): a pista do bcrypt (`src/lib/bcrypt-pool.ts:396-400`).
+  **Removidas (B3):** `AUTH_TERMS_VERSION` e `AUTH_PRIVACY_VERSION` não existem mais no código nem no `.env.example`
+  (`apps/api/.env.example:99`). A versão vigente vem da tabela `legal_document_versions` (migração 0021), publicada pelo operador com o
+  script `legal:publish` (`apps/api/package.json:21`; argumentos a confirmar em `apps/api/scripts/publish-legal.mjs`). Sem versão publicada, `503 consent_unavailable`.
 - **Risco residual (I-6, aceito pelo dono):** sem bloqueio por conta, um atacante com muitos IPs faz ~13 tentativas na 1ª hora **por IP** contra uma
   conta (a conta acima). Para mitigar mais: CAPTCHA a partir de certa contagem e alerta de "muitas falhas distribuídas" (decisão do dono).
 - **Aceite e substituição de conta (resolvido, migração 0020):** o aceite é só-acrescenta para a API (sem UPDATE/DELETE). No recadastro a conta
@@ -229,7 +251,8 @@ Regra (está em `legal_pending_for_account`; a API não a reimplementa):
   nenhuma ainda (o banco está na 0009 e a identidade dos apps nasce na 0010), então **não há dado a migrar**; em banco de desenvolvimento nada é apagado nem inventado.
 - Sem versão publicada para o perfil, não há pendência (e o cadastro responde 503).
 
-Sinal e rota (a implementar pela Vega antes do S7):
+Sinal e rota (implementados em `d75b9b9`: `POST /v1/auth/consents` em `src/routes/auth-consent-route.ts:24`; `consent` em `/me`).
+O preHandler `requireCurrentConsent` existe (`src/hooks/require-current-consent.ts`), mas nenhuma rota o usa ainda (verificado por grep em `apps/api/src`: só aparece no próprio hook e num comentário em `src/app.ts:47`). Texto original do desenho:
 
 - **`GET /v1/auth/me`** passa a trazer `consent: { upToDate: boolean, pending: [ { document: "terms"|"privacy", version, sha256, publishedAt, url } ] }`
   (uma consulta a `legal_pending_for_account`; os dois documentos juntos, sem N+1). `pending` lista a versão **vigente** de cada documento pendente.
@@ -262,6 +285,7 @@ A Vega pode embrulhar isto num script (`legal:publish`) com a credencial de migr
 
 ### Migração 0021: efeito sobre o código atual
 
-O gatilho do aceite passa a **exigir versão publicada** (fail-closed, de propósito). Enquanto a API continuar gravando a versão de `AUTH_TERMS_VERSION`/`AUTH_PRIVACY_VERSION`, o cadastro
-só funciona se essa mesma versão existir no catálogo e for a vigente — senão o INSERT do aceite falha (`23503`). O teste de matriz de privilégios (`runtime-role.test.ts`) passa a exigir
-a linha `legal_document_versions: []` (a API só lê). A Vega adapta cadastro, `/me`, `consents`, a leitura de `legal_current_versions` e os fixtures (publicar versão com o dono antes de cadastrar).
+Estado atual (B3 implementado): o gatilho do aceite **exige versão publicada** (fail-closed, de propósito), e a API grava as versões
+que o cliente enviou, já confirmadas como vigentes. Não há mais gravação por `AUTH_TERMS_VERSION`/`AUTH_PRIVACY_VERSION`. Se a versão
+não for a vigente, o banco recusa (`23503`/`23514`) e a API responde `409 consent_outdated`. O teste de matriz de privilégios (`apps/api/test/runtime-role.test.ts:52`) exige
+`legal_document_versions: []` (a API só lê; INSERT, UPDATE, DELETE e TRUNCATE são negados nas linhas 142-145). Cadastro, `/me`, `consents` e os fixtures já foram adaptados (commit `d75b9b9`, API); os testes de fixture precisam de versão publicada antes do cadastro.

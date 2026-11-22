@@ -4,6 +4,11 @@ Autor: Apolo · 18/11/2026 · etapa 1.7 do PLANO.md · referência: `docs/direca
 
 **Status: auditoria. Nada foi corrigido.** As correções saem daqui e outra missão aplica.
 
+> **Nota de 22/11/2026:** os caminhos das telas foram atualizados para os grupos do Expo Router (`(auth)`, `(app)`, `(dev)`),
+> em `apps/passenger/app/` e `apps/driver/app/`, conforme o commit `79f41d8` (A1) e `0fe8883`. Os números de linha são da data da
+> auditoria e **não foram rechecados**. Alguns achados sobre `glow` não batem mais com o código (a confirmar): `(auth)/login.tsx` e
+> `(auth)/cadastro.tsx` não têm `glow`, e `apps/driver/app/(app)/index.tsx` também não (a confirmar se foi intencional).
+
 ## Como foi medido
 
 - Passageiro servido em `localhost:8125` (Expo Web). Motorista servido por mim em `localhost:8131`.
@@ -99,7 +104,7 @@ Medido e conforme à especificação. Não mexa nisto:
 
 | # | Divergência | Grav. | Correção |
 |---|---|---|---|
-| C1 | Selo de mock quebra título de seção ("Forma de pagamento" em 390; "Categoria e preço" em 320) | média | `apps/passenger/app/confirmacao.tsx:63` e `:82`: o `MockBadge` sai da linha do título e vai para a linha de baixo (`alignSelf:'flex-start'`, `marginTop: spacing['1']`). Regra geral: **selo de mock nunca divide linha com título de seção**, vale para todas as telas |
+| C1 | Selo de mock quebra título de seção ("Forma de pagamento" em 390; "Categoria e preço" em 320) | média | `apps/passenger/app/(app)/confirmacao.tsx:63` e `:82`: o `MockBadge` sai da linha do título e vai para a linha de baixo (`alignSelf:'flex-start'`, `marginTop: spacing['1']`). Regra geral: **selo de mock nunca divide linha com título de seção**, vale para todas as telas |
 | C2 | Cards de rota e categoria chapados (`#111B2A`) | baixa | `confirmacao.tsx:118-128` (`card`): envolver com `SurfaceRaised` (já existe em `packages/ui/src/SurfaceRaised.tsx`) ou trocar o fundo para `gradient.surface.raised` |
 | C3 | Título trunca em 320 | média | Resolvido por D1 |
 | C4 | Ícone de carro amarelo na linha da categoria | baixa | `textSecondary`. Na confirmação, o amarelo é do CTA "Solicitar" |
@@ -120,7 +125,7 @@ Medido e conforme à especificação. Não mexa nisto:
 
 | # | Divergência | Grav. | Correção |
 |---|---|---|---|
-| L1 | Sem brilho de topo | média | `apps/passenger/app/login.tsx:44`: `<AppShell scroll glow …>` |
+| L1 | Sem brilho de topo | média | `apps/passenger/app/(auth)/login.tsx:44`: `<AppShell scroll glow …>` |
 | L2 | CTA abaixo da dobra em 320×568 | média | Lockup compacto quando a altura < 640 (mesma regra do §6 para o onboarding: 52% da largura, máx. 120 de altura). Previsão: o CTA termina em y ≈ 540 |
 | L3 | "Mostrar" (dentro do campo de senha) em amarelo | baixa | `PasswordInput.tsx`: `textSecondary` semibold. É controle de campo, não ação da tela. "Recuperar acesso" continua amarelo |
 
@@ -131,7 +136,7 @@ Medido e conforme à especificação. Não mexa nisto:
 | # | Divergência | Grav. | Correção |
 |---|---|---|---|
 | R1 | Botões sociais legados | média | `apps/passenger/src/components/auth/SocialSignInSection.tsx`: usar `SecondaryButton` (gradiente overlay + borda iluminada) no estado desabilitado. Manter o selo "login social pendente de decisão" |
-| R2 | Sem brilho de topo | média | `apps/passenger/app/cadastro.tsx:43`: `glow` |
+| R2 | Sem brilho de topo | média | `apps/passenger/app/(auth)/cadastro.tsx:43`: `glow` |
 | R3 | "Mostrar" amarelo | baixa | Resolvido por L3 |
 
 ### `/concluida`: 4,5
@@ -140,7 +145,7 @@ Medido e conforme à especificação. Não mexa nisto:
 
 | # | Divergência | Grav. | Correção |
 |---|---|---|---|
-| F1 | 3 cards legados | **alta** | `apps/passenger/app/concluida.tsx:154-163` (`fareCard`), `:170-177` (`receiptCard`), `:179-187` (`ratingCard`): envolver em `SurfaceRaised` ou aplicar `gradient.surface.raised` + `edgeTop`/`edgeBottom`. `divider` (`:178`) em `edgeBottom` |
+| F1 | 3 cards legados | **alta** | `apps/passenger/app/(app)/concluida.tsx:154-163` (`fareCard`), `:170-177` (`receiptCard`), `:179-187` (`ratingCard`): envolver em `SurfaceRaised` ou aplicar `gradient.surface.raised` + `edgeTop`/`edgeBottom`. `divider` (`:178`) em `edgeBottom` |
 | F2 | Título desalinhado (x 72) por causa da caixa de 44 pt reservada para a seta, que não existe | média | `packages/ui/src/ScreenHeader.tsx:22-23`: sem `onBack`, não renderizar o `View` vazio. Previsão: o título vai para x 20. Corrige também `/a-caminho` e `/em-andamento` |
 | F3 | Estrelas em glifo "★/☆" do sistema | média | `packages/ui/src/StarRating.tsx:51,70`: `Star` do lucide. Vazia: `textMuted`, traço 1,75. Cheia: `fill` e `color` `brand.yellow`. 32 pt na avaliação, 14 pt no card do motorista. Aqui o amarelo é correto, porque a estrela **é** a ação de avaliar |
 | F4 | Sem brilho de topo | baixa | `concluida.tsx:60`: `glow` |
@@ -152,7 +157,7 @@ Medido e conforme à especificação. Não mexa nisto:
 
 | # | Divergência | Grav. | Correção |
 |---|---|---|---|
-| A1 | Cards legados (motorista e ETA) | **alta** | `apps/passenger/src/components/assignedDriver/DriverInfoCard.tsx:47-56` e `apps/passenger/app/a-caminho.tsx:115-124` (`etaCard`): `gradient.surface.raised` + `edgeTop`/`edgeBottom`. Padding 16 (hoje 12; os outros cards do app usam 16) |
+| A1 | Cards legados (motorista e ETA) | **alta** | `apps/passenger/src/components/assignedDriver/DriverInfoCard.tsx:47-56` e `apps/passenger/app/(app)/a-caminho.tsx:115-124` (`etaCard`): `gradient.surface.raised` + `edgeTop`/`edgeBottom`. Padding 16 (hoje 12; os outros cards do app usam 16) |
 | A2 | `StatusBadge` cheio (`#6EA8FF` com texto navy) | **alta** | **No design system**, `packages/ui/src/StatusBadge.tsx:20-24`: trocar todas as variantes para **tintadas**: fundo = cor a 14% sobre `surface`, borda 1 px a 40%, texto e glifo na própria cor. Contraste previsto: success `#22C55E` sobre `#0F2A1E` ≈ 6,7:1 (o §2.1 mediu 6,74). Info: confirmar com medição antes de aplicar. Se `#6EA8FF` tintado ficar ciano demais ao lado do navy, usar `textSecondary` para "encontrado" e success para "chegou" |
 | A3 | "Cancelar corrida" em vermelho cheio | **alta** | `packages/ui/src/ButtonCore.tsx:111-119` (variante danger): fundo `rgba(208,42,56,.10)`, borda 1 px `dangerFill`, texto `danger`. Afeta `/buscando` também. É regra do §3.1, não opinião. **Confirmar contraste do texto `danger` sobre o composto** (previsão > 4,5:1 sobre `#1A1A26`, medir) |
 | A4 | Título desalinhado (x 72) | média | Resolvido por F2 |
@@ -172,8 +177,8 @@ Medido e conforme à especificação. Não mexa nisto:
 | M4 | Cards legados: status, mapa, oferta, atalhos | **alta** | `OnlineToggle`, `DriverMapPreview`, `NewRideOfferCard` (`card`), `QuickActionsRow`: superfície raised + borda iluminada. **Lido no código às 16h20, não medido:** `OnlineToggle` e `QuickActionsRow` já passaram a usar `SurfaceRaised`, e `NewRideOfferCard` ganhou halo. A frente paralela pode já ter fechado este item; os números de linha deste bloco valem para o código de 16h03. No card de oferta, a borda amarela de 1 px vira o tratamento de **selecionado** (2 pt + `glow.selected`), porque a oferta é o item em foco |
 | M5 | Selo "Nova corrida" amarelo cheio (fica dentro de um card que já tem borda amarela) | média | `NewRideOfferCard.tsx:144`: chip tintado (`tint.yellowSoft`, texto amarelo). O destaque fica com a borda do card |
 | M6 | "Recusar" 52 pt ao lado de "Aceitar" 56 pt, desalinhados na base | média | Mesma altura nos dois (56). Em `ButtonCore`, aceitar `size="prominent"` também na variante secundária, ou `minHeight` igual no par |
-| M7 | Ícones amarelos em métricas (carteira, estrela) e nos 3 atalhos | média | `DailySummarySection.tsx:40,59` e `apps/driver/app/index.tsx:26-28`: `textSecondary` (regra do §3.1: ícone de lista em `text.secondary`). A estrela da avaliação pode continuar amarela, por semântica |
-| M8 | Sem brilho de topo | média | `apps/driver/app/index.tsx:74`: `glow`. O mapa começa em y 292; o brilho cobre até 420 e já convive com o mapa no início do passageiro, sem conflito medido lá |
+| M7 | Ícones amarelos em métricas (carteira, estrela) e nos 3 atalhos | média | `DailySummarySection.tsx:40,59` e `apps/driver/app/(app)/index.tsx:26-28`: `textSecondary` (regra do §3.1: ícone de lista em `text.secondary`). A estrela da avaliação pode continuar amarela, por semântica |
+| M8 | Sem brilho de topo | média | `apps/driver/app/(app)/index.tsx:74`: `glow`. O mapa começa em y 292; o brilho cobre até 420 e já convive com o mapa no início do passageiro, sem conflito medido lá |
 | M9 | Mapa placeholder de linhas chapadas (`#2D3A4C`), não o asset | média | Pode já estar resolvido pela frente paralela (`DriverMapPreview.tsx` agora importa `MapPreviewBackground variant="motorista"`). **Reauditar** |
 | M10 | Truncamento em 320: "Ajuda e contato", "Você está online e…" | baixa | Atalhos: subtítulo `numberOfLines={2}`. Status: texto embaixo do toggle em < 360, não ao lado |
 | M11 | "São Paulo - SP" no motorista; o passageiro e o asset de mapa são Natal | baixa | Dado de mock, não estética. Alinhar para "Natal - RN" (coerência de demo) |
@@ -186,7 +191,7 @@ Medido e conforme à especificação. Não mexa nisto:
 |---|---|---|---|
 | S1 | Disco amarelo cheio como animação | **alta** | `apps/passenger/src/components/search/SearchingPulse.tsx:69-76`: núcleo em `surface.raised` com borda 2 pt `brand.yellow` e ícone de carro amarelo (o `vehicle.iconBoxSelected` do §4 serve de base). Anel pulsante em `brand.yellow` só como **traço** de 2 pt (sem preenchimento), opacidade 0,45→0 como hoje. Amarelo vira linha, não bloco |
 | S2 | Botão vermelho cheio | **alta** | Resolvido por A3 |
-| S3 | Sem brilho e sem âncora visual | média | `apps/passenger/app/buscando.tsx:56`: `<AppShell glow>`. Card `surface.raised` abaixo do título com destino e categoria ("Vuum Econômico · R$ 23,90"), que dá ao usuário o que conferir enquanto espera |
+| S3 | Sem brilho e sem âncora visual | média | `apps/passenger/app/(app)/buscando.tsx:56`: `<AppShell glow>`. Card `surface.raised` abaixo do título com destino e categoria ("Vuum Econômico · R$ 23,90"), que dá ao usuário o que conferir enquanto espera |
 | S4 | Selo de mock solto no topo, sem cabeçalho | baixa | Logo horizontal pequeno (30 pt, §2.1) no topo, com o selo abaixo do título |
 
 ### `/em-andamento`: 3
@@ -219,11 +224,11 @@ Mesma lógica do §9. Cada linha diz o que corrige e em quantas telas, para dele
 | 3 | `ScreenHeader`: sem `onBack` não reserva caixa; sem `rightSlot` não reserva caixa; seta em `ChevronLeft` | DS `ScreenHeader.tsx:20-35` | a-caminho, em-andamento, concluída (alinhamento); destino, confirmação, catálogo (truncamento em 320) | baixo | média |
 | 4 | Variante danger em contorno + fundo 10% | DS `ButtonCore.tsx:111-119` | buscando, a-caminho | baixo | alta |
 | 5 | `StatusBadge` tintado em todas as variantes | DS `StatusBadge.tsx:20-24` | a-caminho (e toda tela futura com status) | baixo | alta |
-| 6 | `glow` no `AppShell` | `login.tsx:44`, `cadastro.tsx:43`, `buscando.tsx:56`, `concluida.tsx:60`, `apps/driver/app/index.tsx:74` (a-caminho/em-andamento só se não ganharem mapa, item 13) | 5–7 telas | 1 prop cada | média |
+| 6 | `glow` no `AppShell` | `login.tsx:44`, `cadastro.tsx:43`, `buscando.tsx:56`, `concluida.tsx:60`, `apps/driver/app/(app)/index.tsx:74` (a-caminho/em-andamento só se não ganharem mapa, item 13) | 5–7 telas | 1 prop cada | média |
 | 7 | Cards legados → `SurfaceRaised`/borda iluminada | `DriverInfoCard.tsx:47`, `a-caminho.tsx:115`, `concluida.tsx:154,170,179`, `confirmacao.tsx:118`, `HomeMapPreview.tsx:84`, `MetricCard.tsx:80` (DS), `OnlineToggle.tsx:80`, `DriverMapPreview.tsx:83`, `NewRideOfferCard.tsx:132`, `QuickActionsRow.tsx:47`, `SocialSignInSection.tsx` | a-caminho, em-andamento, concluída, confirmação, início, cadastro, motorista | médio (troca de estilo, 12 pontos) | alta |
 | 8 | Valor em dinheiro truncado: grade 2×2 abaixo de 430 | `DailySummarySection.tsx:33` | motorista | baixo | alta |
 | 9 | Selo do mapa sobre o botão de localizar | `HomeMapPreview.tsx:92` | início | baixo | alta |
-| 10 | Amarelo fora de ação: títulos do promo, ícones de lista/métrica, "Mostrar", selo "Nova corrida", ícone da categoria na confirmação | `SafetyPromoBanner.tsx:72`, `DailySummarySection.tsx:40`, `apps/driver/app/index.tsx:26-28`, `PasswordInput.tsx`, `NewRideOfferCard.tsx:144`, `confirmacao.tsx` | início, login, cadastro, confirmação, motorista | baixo | média |
+| 10 | Amarelo fora de ação: títulos do promo, ícones de lista/métrica, "Mostrar", selo "Nova corrida", ícone da categoria na confirmação | `SafetyPromoBanner.tsx:72`, `DailySummarySection.tsx:40`, `apps/driver/app/(app)/index.tsx:26-28`, `PasswordInput.tsx`, `NewRideOfferCard.tsx:144`, `confirmacao.tsx` | início, login, cadastro, confirmação, motorista | baixo | média |
 | 11 | Pulso da busca: amarelo vira traço, núcleo em superfície | `SearchingPulse.tsx:69-76` | buscando | baixo | alta |
 | 12 | Selo de mock nunca divide linha com título; juntar selos redundantes | `confirmacao.tsx:63,82`, `a-caminho.tsx:79,90`, home "Escolha sua viagem" em 320 | confirmação, a-caminho, início | baixo | média |
 | 13 | Mapa como protagonista em a-caminho e em-andamento (faixa de mapa + bottom sheet) | `a-caminho.tsx`, `em-andamento.tsx`, reuso de `MapPreviewBackground` | a-caminho, em-andamento | **alto** | alta |

@@ -248,7 +248,7 @@ não só cor.
   recusar."
 - **Avaliação dos dois lados.** "Ao final da corrida, o passageiro avalia você, e você
   avalia o passageiro." **[confirmar]**
-- Nota: só a avaliação **do passageiro** existe no protótipo (`apps/passenger/app/concluida.tsx`).
+- Nota: só a avaliação **do passageiro** existe no protótipo (`apps/passenger/app/(app)/concluida.tsx`).
   O motorista avaliar o passageiro é padrão do setor, mas não foi desenhado. Sem o "sim"
   do dono, este item sai inteiro.
 
