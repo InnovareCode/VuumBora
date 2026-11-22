@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@vuumbora/tokens';
 import { textStyle } from './typography';
+import { FOCUS_RING_WIDTH, useKeyboardFocusRing } from './useFocusRing';
 
 export interface BottomTabBarItem {
   readonly key: string;
@@ -26,34 +27,66 @@ export const BottomTabBar = memo(function BottomTabBar({ items, activeKey, testI
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.root, { paddingBottom: Math.max(insets.bottom, theme.spacing['2']) }]} testID={testID}>
-      {items.map((item) => {
-        const active = item.key === activeKey;
-        const color = active ? theme.role.ctaBackground : theme.role.textMuted;
-        return (
-          <Pressable
-            key={item.key}
-            onPress={item.onPress}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={item.accessibilityLabel ?? item.label}
-            style={styles.tab}
-          >
-            <View style={styles.iconSlot}>
-              {item.icon({ active, color })}
-              {item.badgeCount && item.badgeCount > 0 ? (
-                <View style={styles.badge} accessibilityLabel={`${item.badgeCount} não lidas`}>
-                  <Text style={styles.badgeText}>{item.badgeCount > 9 ? '9+' : item.badgeCount}</Text>
-                </View>
-              ) : null}
-            </View>
-            <Text style={[styles.label, { color }]} numberOfLines={1}>
-              {item.label}
-            </Text>
-            {active ? <View style={styles.activeMark} /> : null}
-          </Pressable>
-        );
-      })}
+      {items.map((item) => (
+        <TabButton key={item.key} item={item} active={item.key === activeKey} />
+      ))}
     </View>
+  );
+});
+
+// Anel de foco da aba: um contorno 2pt DENTRO da caixa, recuado 2pt da borda, desenhado por uma camada própria por CIMA de
+// tudo (último filho). Não é o `outline` do `Pressable` como nos outros alvos, por duas coisas que moram nas bordas da aba e
+// que um contorno do próprio `Pressable` não cobre: a marca amarela da aba ATIVA (3pt colada na base, mesma cor do anel) e o
+// contador de não-lidas (círculo vermelho no canto de cima). Por baixo deles o anel sumia nesses trechos (medido: 64% e 88% da
+// borda); por cima, e recuado, é contínuo. Dentro da caixa, e não fora: as abas dividem a largura toda e a barra encosta na base.
+const FOCUS_INSET = 2;
+const FOCUS_RING_LAYER = {
+  position: 'absolute',
+  top: FOCUS_INSET,
+  right: FOCUS_INSET,
+  bottom: FOCUS_INSET,
+  left: FOCUS_INSET,
+  borderWidth: FOCUS_RING_WIDTH,
+  borderColor: theme.role.ctaBackground,
+  borderRadius: theme.radius.md,
+  pointerEvents: 'none',
+} as const;
+// A camada substitui o contorno padrão do navegador (que ficaria por baixo dela, em dobro, no Chromium). Largura 0, e não
+// `outlineStyle: 'none'`, que o tipo de estilo do RN não aceita.
+const NO_BROWSER_OUTLINE = { outlineStyle: 'solid', outlineWidth: 0 } as const;
+
+interface TabButtonProps {
+  readonly item: BottomTabBarItem;
+  readonly active: boolean;
+}
+
+/** Uma aba. Componente à parte: cada uma tem o próprio estado de foco de teclado, e trocar o foco não renderiza as outras. */
+const TabButton = memo(function TabButton({ item, active }: TabButtonProps) {
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
+  const color = active ? theme.role.ctaBackground : theme.role.textMuted;
+  return (
+    <Pressable
+      {...focusProps}
+      onPress={item.onPress}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={item.accessibilityLabel ?? item.label}
+      style={[styles.tab, focusVisible && NO_BROWSER_OUTLINE]}
+    >
+      <View style={styles.iconSlot}>
+        {item.icon({ active, color })}
+        {item.badgeCount && item.badgeCount > 0 ? (
+          <View style={styles.badge} accessibilityLabel={`${item.badgeCount} não lidas`}>
+            <Text style={styles.badgeText}>{item.badgeCount > 9 ? '9+' : item.badgeCount}</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text style={[styles.label, { color }]} numberOfLines={1}>
+        {item.label}
+      </Text>
+      {active ? <View style={styles.activeMark} /> : null}
+      {focusVisible ? <View style={FOCUS_RING_LAYER} /> : null}
+    </Pressable>
   );
 });
 

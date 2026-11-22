@@ -3,14 +3,16 @@
 const fs = require('fs');
 const path = require('path');
 const { getDefaultConfig } = require('expo/metro-config');
+const expoEnv = require('@expo/env');
 
 // Carrega o .env da RAIZ do monorepo (fonte única de token, docs/mapbox.md) — o
 // @expo/env embutido no CLI só olha para `__dirname` (este app), nunca sobe
 // diretórios, então sem isto EXPO_PUBLIC_MAPBOX_TOKEN chega vazio no bundle.
 // Não sobrescreve variável já definida no ambiente (mesma regra do próprio Expo).
+// Isto vale para `EXPO_PUBLIC_*` e afins; as VUUMBORA_* do perfil de build NÃO vêm daqui (ver `buildEnvFrom`).
 // Pendência: registrar esta decisão em docs/decisions.md (D-11, fora da fronteira
 // do Vulcano — pedir à Nova/Atlas).
-require('@expo/env').load(path.resolve(__dirname, '../..'));
+expoEnv.load(path.resolve(__dirname, '../..'));
 
 // ───────────────────────────────────────────────────────────────────────────────────────────────
 // Perfil de build — VUUMBORA_BUILD_PROFILE = development | preview | production.
@@ -33,6 +35,11 @@ require('@expo/env').load(path.resolve(__dirname, '../..'));
 //     não interativa isto ABORTA e pede o perfil explícito — mesma política de apps/admin/vite.config.ts.
 //   • `preview` (distribuição interna) NÃO esconde telas de dev nem exige identidade real; uma build interna
 //     que rode com NODE_ENV=production precisa declarar `VUUMBORA_BUILD_PROFILE=preview` para não cair em production.
+//
+// De ONDE a decisão lê: só do AMBIENTE REAL do processo (eas.json, CI, o terminal de quem roda o build) — o perfil é
+// decisão de quem constrói, não de um arquivo que pode ter ficado na máquina. Qualquer `VUUMBORA_*` vindo de `.env*`
+// (o da raiz, que o `load()` acima carrega, ou o deste app, que o Expo CLI carrega ANTES de ler este arquivo) é
+// IGNORADO, com aviso e sem imprimir o valor. Ver `buildEnvFrom`.
 // ───────────────────────────────────────────────────────────────────────────────────────────────
 const BUILD_PROFILES = ['development', 'preview', 'production'];
 
@@ -41,6 +48,50 @@ const DEV_ROUTE_GROUP = '(dev)';
 
 function filled(value) {
   return value === undefined || value === '' ? undefined : value;
+}
+
+const BUILD_ENV_PREFIX = 'VUUMBORA_';
+
+/**
+ * O ambiente que a decisão do perfil e o escape podem ler: uma cópia de `env` em que cada `VUUMBORA_*` vale o que tinha
+ * ANTES de qualquer `.env` ser carregado (`getOriginalEnvValue` do `@expo/env`, que guarda o valor original de toda chave
+ * que um arquivo `.env*` tocou — tanto as que o CLI carregou antes deste arquivo quanto as do `load()` acima). Chave que só
+ * existe por causa de arquivo some da cópia. As outras variáveis (`NODE_ENV`, `EAS_BUILD_PROFILE`...) passam como estão.
+ *
+ * Sem `getOriginalEnvValue` (versão do `@expo/env` que não a tem) ABORTA: sem ela não há como separar ambiente de arquivo, e
+ * a guarda de loja não pode ficar mais fraca em silêncio — mesma política de falhar fechado do resto deste arquivo.
+ *
+ * `warn` recebe os NOMES das chaves ignoradas, nunca os valores. Chaves em caixa alta (Windows não diferencia caixa).
+ */
+function buildEnvFrom(env, getOriginalEnvValue, warn) {
+  if (typeof getOriginalEnvValue !== 'function') {
+    throw new Error(
+      'A versão instalada de @expo/env não tem getOriginalEnvValue. Sem ela não dá para separar o ambiente real do que veio ' +
+        'de um arquivo .env, e o perfil de build não pode aceitar VUUMBORA_* de arquivo. Atualize `buildEnvFrom` ' +
+        '(apps/passenger/metro.config.js e apps/driver/metro.config.js, idênticos) antes de atualizar o Expo.',
+    );
+  }
+  const trusted = {};
+  const ignored = [];
+  for (const key of Object.keys(env)) {
+    if (!key.toUpperCase().startsWith(BUILD_ENV_PREFIX)) {
+      trusted[key] = env[key];
+      continue;
+    }
+    const original = getOriginalEnvValue(key);
+    if (original === undefined) {
+      if (filled(env[key]) !== undefined) ignored.push(key.toUpperCase());
+      continue;
+    }
+    trusted[key.toUpperCase()] = original;
+  }
+  if (ignored.length > 0) {
+    warn(
+      `[vuumbora] ATENÇÃO: ${ignored.sort().join(', ')} veio de um arquivo .env e foi IGNORADA. O perfil de build e o escape ` +
+        'só valem se vierem do AMBIENTE do processo (eas.json, CI ou o terminal que roda o build), nunca de arquivo.',
+    );
+  }
+  return trusted;
 }
 
 function resolveBuildProfile(env, interactive) {
@@ -141,12 +192,14 @@ function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const { profile, source } = resolveBuildProfile(process.env, Boolean(process.stdout.isTTY) && !process.env.CI);
+const buildEnv = buildEnvFrom(process.env, expoEnv.getOriginalEnvValue, (message) => console.warn(message));
+
+const { profile, source } = resolveBuildProfile(buildEnv, Boolean(process.stdout.isTTY) && !process.env.CI);
 
 const config = getDefaultConfig(__dirname);
 
 if (profile === 'production') {
-  assertIdentityIsNotMock(__dirname, process.env, (message) => console.warn(message));
+  assertIdentityIsNotMock(__dirname, buildEnv, (message) => console.warn(message));
 
   // `resolver.blockList` também alimenta o mapa de arquivos do Metro (createFileMap), que é de onde
   // o Expo Router monta a lista de rotas — por isso a rota some, não só o import. A convenção é a pasta

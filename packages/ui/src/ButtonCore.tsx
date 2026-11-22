@@ -26,6 +26,7 @@ import { theme, tokens, type BoxShadowValue } from '@vuumbora/tokens';
 import { withAlpha } from './colorAlpha';
 import { gradientColors, gradientLocations } from './gradient';
 import { glyphStyle, textStyle } from './typography';
+import { focusRingStyle, useKeyboardFocusRing } from './useFocusRing';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger';
 
@@ -37,6 +38,10 @@ const OVERLAY_LOCATIONS = gradientLocations(theme.gradient.surfaceOverlay);
 // Fundo tingido do botão "danger" (auditoria A3: "rgba(208,42,56,.10)") — calculado a
 // partir do token, nunca um HEX literal (ver colorAlpha.ts).
 const DANGER_TINT = withAlpha(theme.role.dangerFill, 0.1);
+
+// Anel de foco de teclado, FORA do botão com vão de 2pt: separa o botão do fundo escuro sem tocar no rótulo, na borda de
+// contorno nem no gradiente. O contorno padrão do navegador some no WebKit (1,08:1) — ver `useFocusRing.ts`.
+const FOCUS_RING = focusRingStyle('outside', theme.radius.md);
 
 // "Brilho" do CTA medido na referência: 1px claro em cima + 1px quente embaixo,
 // NUNCA halo (ver docs/direcao-de-arte.md §0/§4). `boxShadow` com `inset` é a única
@@ -148,6 +153,7 @@ export const ButtonCore = memo(function ButtonCore({
   testID,
 }: ButtonCoreProps) {
   const isInteractive = !disabled && !loading;
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
   const { height: windowHeight } = useWindowDimensions();
   // Direção de arte §6/§9 item 3: 56pt de altura para o CTA principal, 52 quando a
   // altura da janela aperta (< 640pt) — mesma régua usada para o onboarding.
@@ -164,7 +170,9 @@ export const ButtonCore = memo(function ButtonCore({
   return (
     <View>
       <Pressable
+        {...focusProps}
         onPress={handlePress}
+        style={focusVisible ? FOCUS_RING : undefined}
         disabled={!isInteractive}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel ?? label}

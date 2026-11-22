@@ -1,7 +1,7 @@
 import { memo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
-import { SurfaceRaised, theme, textStyle } from '@vuumbora/ui';
+import { SurfaceRaised, focusRingStyle, theme, textStyle, useKeyboardFocusRing } from '@vuumbora/ui';
 import { UnavailableNoticeBanner } from '../auth/UnavailableNoticeBanner';
 import { ToggleSwitch } from './ToggleSwitch';
 
@@ -45,6 +45,7 @@ export const ListMenuRow = memo(function ListMenuRow({
   testID,
 }: ListMenuRowProps) {
   const [noticeVisible, setNoticeVisible] = useState(false);
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
 
   function handlePress() {
     if (toggle) {
@@ -91,7 +92,9 @@ export const ListMenuRow = memo(function ListMenuRow({
     <View>
       {interactive ? (
         <Pressable
+          {...focusProps}
           onPress={handlePress}
+          style={focusVisible ? FOCUS_RING : undefined}
           accessibilityRole={toggle ? 'switch' : 'button'}
           accessibilityState={toggle ? { checked: toggle.value } : undefined}
           accessibilityLabel={rowLabel}
@@ -112,6 +115,9 @@ export const ListMenuRow = memo(function ListMenuRow({
     </View>
   );
 });
+
+// Anel de foco de teclado em volta da linha inteira (é ela o alvo, não só o interruptor), FORA dela, com o raio do cartão.
+const FOCUS_RING = focusRingStyle('outside', theme.radius.lg);
 
 const styles = StyleSheet.create({
   card: {

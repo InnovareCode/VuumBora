@@ -3,6 +3,7 @@ import { Platform, Pressable, StyleSheet, Text, View, type PressableInstance } f
 import { theme } from '@vuumbora/tokens';
 import { LinkButton } from './LinkButton';
 import { glyphStyle, textStyle } from './typography';
+import { focusRingStyle, useKeyboardFocusRing } from './useFocusRing';
 
 export interface ConsentCheckboxProps {
   /** A frase do aceite ("Li e aceito os Termos de Uso"). É o NOME acessível da caixa. */
@@ -47,6 +48,7 @@ export const ConsentCheckbox = memo(function ConsentCheckbox({
   linkTestID,
   checkboxRef,
 }: ConsentCheckboxProps) {
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
   // No web, o Pressable só trata a tecla Espaço em role `button`/`menuitem` (react-native-web, PressResponder): um
   // `role="checkbox"` só marcaria com Enter, e quem usa teclado espera Espaço. Medido no navegador.
   const spaceKeyProps =
@@ -66,6 +68,7 @@ export const ConsentCheckbox = memo(function ConsentCheckbox({
       <Pressable
         ref={checkboxRef}
         {...spaceKeyProps}
+        {...focusProps}
         onPress={() => onChange(!checked)}
         disabled={disabled}
         accessibilityRole="checkbox"
@@ -75,7 +78,7 @@ export const ConsentCheckbox = memo(function ConsentCheckbox({
         aria-checked={checked}
         aria-disabled={disabled}
         aria-invalid={error}
-        style={styles.row}
+        style={[styles.row, focusVisible && FOCUS_RING]}
         testID={testID}
       >
         <View
@@ -111,6 +114,10 @@ export const ConsentCheckbox = memo(function ConsentCheckbox({
 });
 
 const BOX_SIZE = theme.spacing['6'];
+
+// Anel em volta da LINHA inteira (caixa + frase: é ela o alvo, `role="checkbox"`), FORA dela: a caixa encosta na borda
+// esquerda da linha, então um anel de dentro cairia em cima da borda da caixa.
+const FOCUS_RING = focusRingStyle('outside', theme.radius.sm);
 
 const styles = StyleSheet.create({
   root: { width: '100%' },

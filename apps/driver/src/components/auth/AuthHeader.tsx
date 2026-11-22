@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
-import { BrandLogo, theme, textStyle } from '@vuumbora/ui';
+import { BrandLogo, focusRingStyle, theme, textStyle, useKeyboardFocusRing } from '@vuumbora/ui';
 
 export interface AuthHeaderProps {
   readonly title: string;
@@ -18,17 +18,7 @@ export interface AuthHeaderProps {
 export const AuthHeader = memo(function AuthHeader({ title, subtitle, onBack }: AuthHeaderProps) {
   return (
     <View style={styles.root}>
-      {onBack ? (
-        <Pressable
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel="Voltar"
-          hitSlop={8}
-          style={styles.backButton}
-        >
-          <ChevronLeft size={24} color={theme.role.textPrimary} strokeWidth={2} />
-        </Pressable>
-      ) : null}
+      {onBack ? <BackButton onPress={onBack} /> : null}
       <View style={styles.logoRow}>
         <BrandLogo variant="lockup" size="sm" />
       </View>
@@ -37,6 +27,27 @@ export const AuthHeader = memo(function AuthHeader({ title, subtitle, onBack }: 
       </Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
     </View>
+  );
+});
+
+// Dentro da caixa de 44pt: o ícone é pequeno e centrado, e o alvo encosta na borda da tela (um anel de fora seria cortado).
+// O contorno padrão do navegador some contra o fundo escuro no WebKit — ver `useFocusRing.ts` em @vuumbora/ui.
+const FOCUS_RING = focusRingStyle('inside', theme.radius.md);
+
+/** "Voltar": estado de foco próprio (componente à parte para o cabeçalho inteiro não renderizar a cada Tab). */
+const BackButton = memo(function BackButton({ onPress }: { readonly onPress: () => void }) {
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
+  return (
+    <Pressable
+      {...focusProps}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Voltar"
+      hitSlop={8}
+      style={[styles.backButton, focusVisible && FOCUS_RING]}
+    >
+      <ChevronLeft size={24} color={theme.role.textPrimary} strokeWidth={2} />
+    </Pressable>
   );
 });
 

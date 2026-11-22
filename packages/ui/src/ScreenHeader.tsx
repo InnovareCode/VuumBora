@@ -2,6 +2,7 @@ import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from '@vuumbora/tokens';
 import { glyphStyle, textStyle } from './typography';
+import { focusRingStyle, useKeyboardFocusRing } from './useFocusRing';
 
 export interface ScreenHeaderProps {
   readonly title: string;
@@ -15,11 +16,7 @@ export interface ScreenHeaderProps {
 export const ScreenHeader = memo(function ScreenHeader({ title, subtitle, onBack, rightSlot, testID }: ScreenHeaderProps) {
   return (
     <View style={styles.row} testID={testID}>
-      {onBack ? (
-        <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Voltar" hitSlop={8} style={styles.backButton}>
-          <Text style={styles.backGlyph}>‹</Text>
-        </Pressable>
-      ) : null}
+      {onBack ? <BackButton onPress={onBack} /> : null}
       <View style={styles.titleBlock}>
         <Text style={styles.title} numberOfLines={1}>
           {title}
@@ -32,6 +29,26 @@ export const ScreenHeader = memo(function ScreenHeader({ title, subtitle, onBack
       </View>
       <View style={styles.rightSlot}>{rightSlot}</View>
     </View>
+  );
+});
+
+// Dentro da caixa de 44pt: o glifo é pequeno e centrado, e o alvo encosta na borda da tela (um anel de fora seria cortado).
+const FOCUS_RING = focusRingStyle('inside', theme.radius.md);
+
+/** "Voltar": estado de foco próprio (componente à parte para o cabeçalho inteiro não renderizar a cada Tab). */
+const BackButton = memo(function BackButton({ onPress }: { readonly onPress: () => void }) {
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
+  return (
+    <Pressable
+      {...focusProps}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Voltar"
+      hitSlop={8}
+      style={[styles.backButton, focusVisible && FOCUS_RING]}
+    >
+      <Text style={styles.backGlyph}>‹</Text>
+    </Pressable>
   );
 });
 

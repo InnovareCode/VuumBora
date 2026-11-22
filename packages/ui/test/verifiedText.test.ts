@@ -6,6 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import { createHash, webcrypto } from 'node:crypto';
+import http from 'node:http';
 import { describe, it } from 'node:test';
 import {
   bytesToHex,
@@ -278,6 +279,330 @@ describe('rede, status, tamanho e prazo', () => {
     const { input } = request({ sha256Hex: async () => Promise.reject(new Error('Access to the WebCrypto API is restricted to secure origins')) });
     const result = await fetchVerifiedText(input);
     assert.deepEqual(result, { ok: false, reason: 'hash_unavailable' });
+  });
+});
+
+describe('corpo em fluxo, teto de bytes e prazo duro', () => {
+  const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+  interface StreamStats {
+    reads: number;
+    bytesRead: number;
+    cancelled: boolean;
+    arrayBufferCalls: number;
+  }
+
+  /**
+   * Um corpo em fluxo de mentira, mas com a mesma forma do `ReadableStream` do navegador: `getReader()`, `read()` que
+   * devolve `{ done, value }` e `cancel()` que encerra as leituras seguintes. `arrayBuffer()` faz o que o real faz: LÊ O
+   * FLUXO INTEIRO e só então devolve (é por isso que ele não serve para impor o teto).
+   */
+  function streamResponse(
+    next: (index: number) => Uint8Array | null | Promise<Uint8Array | null>,
+    extra: Partial<ResponseLike> = {},
+  ): { readonly response: ResponseLike; readonly stats: StreamStats } {
+    const stats: StreamStats = { reads: 0, bytesRead: 0, cancelled: false, arrayBufferCalls: 0 };
+    const pull = async (): Promise<{ done: boolean; value?: Uint8Array }> => {
+      if (stats.cancelled) return { done: true };
+      const chunk = await next(stats.reads);
+      if (stats.cancelled || chunk === null) return { done: true };
+      stats.reads += 1;
+      stats.bytesRead += chunk.byteLength;
+      return { done: false, value: chunk };
+    };
+    const response: ResponseLike = {
+      ok: true,
+      status: 200,
+      url: URL_OK,
+      headers: { get: () => null }, // sem Content-Length: o servidor não declara o tamanho
+      body: {
+        getReader: () => ({
+          read: pull,
+          cancel: async () => {
+            stats.cancelled = true;
+          },
+        }),
+      },
+      arrayBuffer: async () => {
+        stats.arrayBufferCalls += 1;
+        const parts: Uint8Array[] = [];
+        for (;;) {
+          const part = await pull();
+          if (part.done) break;
+          if (part.value !== undefined) parts.push(part.value);
+        }
+        const all = new Uint8Array(parts.reduce((sum, part) => sum + part.byteLength, 0));
+        let offset = 0;
+        for (const part of parts) {
+          all.set(part, offset);
+          offset += part.byteLength;
+        }
+        return all.buffer as ArrayBuffer;
+      },
+      ...extra,
+    };
+    return { response, stats };
+  }
+
+  const chunksOf = (bytes: Uint8Array, size: number): Uint8Array[] => {
+    const out: Uint8Array[] = [];
+    for (let offset = 0; offset < bytes.byteLength; offset += size) out.push(bytes.slice(offset, offset + size));
+    return out;
+  };
+
+  const MIB = 1024 * 1024;
+
+  it('corpo de 3 MiB SEM Content-Length: recusa com too_large e PARA de ler perto do teto (não bufferiza os 3 MiB)', async () => {
+    const chunk = new Uint8Array(64 * 1024).fill(97);
+    const totalChunks = 48; // 3 MiB
+    const { response, stats } = streamResponse((index) => (index < totalChunks ? chunk : null));
+    const { input } = request({ response }); // teto padrão: 1 MiB
+    assert.deepEqual(await fetchVerifiedText(input), { ok: false, reason: 'too_large' });
+    assert.equal(stats.arrayBufferCalls, 0, 'não usou arrayBuffer() (que só devolve depois de ler tudo)');
+    assert.ok(stats.bytesRead <= MIB + 64 * 1024, `leu ${stats.bytesRead} bytes: no máximo o teto + o bloco que estourou`);
+    assert.ok(stats.reads < totalChunks, `leu ${stats.reads} dos ${totalChunks} blocos: parou antes do fim`);
+    assert.equal(stats.cancelled, true, 'cancelou o fluxo');
+  });
+
+  it('corpo SEM FIM e sem Content-Length: too_large em vez de ocupar a memória até o prazo', async () => {
+    const chunk = new Uint8Array(4096).fill(98);
+    const { response, stats } = streamResponse(() => chunk); // nunca acaba
+    const { input } = request({ response, maxBytes: 20_000, timeoutMs: 5_000 });
+    const started = Date.now();
+    assert.deepEqual(await fetchVerifiedText(input), { ok: false, reason: 'too_large' });
+    assert.ok(Date.now() - started < 1_000, 'respondeu logo, sem esperar o prazo');
+    assert.ok(stats.bytesRead <= 20_000 + 4096);
+    assert.equal(stats.cancelled, true);
+  });
+
+  it('o teto é exato: tamanho == maxBytes passa, um byte a menos de teto recusa', async () => {
+    const exact = streamResponse((index) => chunksOf(TEXT_BYTES, 7)[index] ?? null);
+    assert.equal((await fetchVerifiedText(request({ response: exact.response, maxBytes: TEXT_BYTES.byteLength }).input)).ok, true);
+    const over = streamResponse((index) => chunksOf(TEXT_BYTES, 7)[index] ?? null);
+    assert.deepEqual(await fetchVerifiedText(request({ response: over.response, maxBytes: TEXT_BYTES.byteLength - 1 }).input), { ok: false, reason: 'too_large' });
+  });
+
+  it('em fluxo o texto íntegro continua conferindo: os blocos são juntados ANTES do hash e da decodificação (cortes no meio de "ç" e "ã")', async () => {
+    for (const size of [1, 2, 3, 5, 64]) {
+      const parts = chunksOf(TEXT_BYTES, size);
+      const { response, stats } = streamResponse((index) => parts[index] ?? null);
+      const result = await fetchVerifiedText(request({ response }).input);
+      assert.deepEqual(result, { ok: true, text: TEXT, sha256: TEXT_SHA, byteLength: TEXT_BYTES.byteLength }, `blocos de ${size} byte(s)`);
+      assert.equal(stats.arrayBufferCalls, 0);
+    }
+  });
+
+  it('em fluxo, um byte adulterado ainda dá hash_mismatch (o contador não substitui o hash)', async () => {
+    const tampered = TEXT_BYTES.slice();
+    tampered[3] = tampered[3]! ^ 0x01;
+    const parts = chunksOf(tampered, 9);
+    const { response } = streamResponse((index) => parts[index] ?? null);
+    assert.deepEqual(await fetchVerifiedText(request({ response }).input), { ok: false, reason: 'hash_mismatch' });
+  });
+
+  it('bloco que não é binário, ou leitura que falha no meio → network (nunca texto)', async () => {
+    const notBinary = streamResponse((index) => (index === 0 ? ('texto' as unknown as Uint8Array) : null));
+    assert.deepEqual(await fetchVerifiedText(request({ response: notBinary.response }).input), { ok: false, reason: 'network' });
+    const broken = streamResponse((index) => {
+      if (index === 0) return TEXT_BYTES.slice(0, 10);
+      throw new Error('conexão cortada');
+    });
+    assert.deepEqual(await fetchVerifiedText(request({ response: broken.response }).input), { ok: false, reason: 'network' });
+  });
+
+  it('`body` nulo ou sem getReader cai no arrayBuffer() (o fetch do React Native não tem fluxo) e o teto continua valendo depois de ler', async () => {
+    const nullBody = request({ response: reply(TEXT_BYTES, { body: null }) });
+    assert.equal((await fetchVerifiedText(nullBody.input)).ok, true);
+    const noReader = request({ response: reply(TEXT_BYTES, { body: {} }) });
+    assert.equal((await fetchVerifiedText(noReader.input)).ok, true);
+    const tooBig = request({ maxBytes: 20, response: reply(TEXT_BYTES, { body: null, contentLength: '10' }) });
+    assert.deepEqual(await fetchVerifiedText(tooBig.input), { ok: false, reason: 'too_large' });
+  });
+
+  it('fetch que IGNORA o aborto: o prazo vence a corrida e devolve timeout, sem esperar o fetch', async () => {
+    let aborted = false;
+    const { input } = request({
+      timeoutMs: 40,
+      createAbortController: () => ({ signal: 'sinal', abort: () => { aborted = true; } }),
+      // Ignora o sinal por completo e só responde depois de 600 ms.
+      response: () => sleep(600).then(() => reply(TEXT_BYTES)),
+    });
+    const started = Date.now();
+    const result = await fetchVerifiedText(input);
+    const elapsed = Date.now() - started;
+    assert.deepEqual(result, { ok: false, reason: 'timeout' });
+    assert.ok(elapsed < 400, `esperou ${elapsed} ms: o prazo era 40 ms e o fetch só responderia em 600 ms`);
+    assert.equal(aborted, true, 'o pedido também foi cancelado');
+  });
+
+  it('fetch que ignora o aborto e REJEITA depois que o prazo venceu: sem rejeição não tratada', async () => {
+    const unhandled: unknown[] = [];
+    const listener = (reason: unknown): void => { unhandled.push(reason); };
+    process.on('unhandledRejection', listener);
+    try {
+      const { input } = request({
+        timeoutMs: 20,
+        response: () => sleep(80).then(() => Promise.reject(new Error('conexão caiu tarde'))),
+      });
+      assert.deepEqual(await fetchVerifiedText(input), { ok: false, reason: 'timeout' });
+      await sleep(200); // dá tempo da rejeição tardia acontecer
+      assert.deepEqual(unhandled, []);
+    } finally {
+      process.off('unhandledRejection', listener);
+    }
+  });
+
+  it('corpo em fluxo que TRAVA (read() nunca volta): timeout dentro do prazo, e o fluxo é cancelado', async () => {
+    const { response, stats } = streamResponse(() => new Promise<Uint8Array | null>(() => undefined)); // pendura para sempre
+    const { input } = request({ response, timeoutMs: 40 });
+    const started = Date.now();
+    assert.deepEqual(await fetchVerifiedText(input), { ok: false, reason: 'timeout' });
+    assert.ok(Date.now() - started < 400);
+    assert.equal(stats.cancelled, true);
+  });
+
+  it('corpo em fluxo que continua pingando depois do prazo: a leitura PARA (não segue consumindo em segundo plano)', async () => {
+    const chunk = new Uint8Array(512).fill(99);
+    const { response, stats } = streamResponse(async () => {
+      await sleep(5);
+      return chunk;
+    });
+    const { input } = request({ response, timeoutMs: 40, maxBytes: 50 * MIB });
+    assert.deepEqual(await fetchVerifiedText(input), { ok: false, reason: 'timeout' });
+    const readsAtTimeout = stats.reads;
+    await sleep(120);
+    assert.ok(stats.reads - readsAtTimeout <= 1, `leu mais ${stats.reads - readsAtTimeout} blocos depois do prazo`);
+    assert.equal(stats.cancelled, true);
+  });
+
+  it('fetch que ignora o aborto e só responde DEPOIS do prazo, com corpo sem fim: a leitura nem começa', async () => {
+    const chunk = new Uint8Array(1024).fill(100);
+    const late = streamResponse(() => chunk); // nunca acaba
+    const { input } = request({
+      timeoutMs: 20,
+      maxBytes: 50 * MIB,
+      response: () => sleep(80).then(() => late.response), // só responde depois do prazo, ignorando o aborto
+    });
+    assert.deepEqual(await fetchVerifiedText(input), { ok: false, reason: 'timeout' });
+    await sleep(200); // a resposta tardia chega e a leitura abandonada teria tempo de rodar
+    assert.equal(late.stats.reads, 0, 'não leu nenhum bloco de uma resposta que chegou depois do prazo');
+    assert.equal(late.stats.cancelled, true, 'e cancelou o fluxo');
+  });
+
+  it('o temporizador do prazo é limpo em todo desfecho (nenhum Timeout fica pendurado depois de responder)', async () => {
+    const timeouts = (): number => process.getActiveResourcesInfo().filter((name) => name === 'Timeout').length;
+    const baseline = timeouts();
+    const parts = chunksOf(TEXT_BYTES, 16);
+    const ok = streamResponse((index) => parts[index] ?? null);
+    assert.equal((await fetchVerifiedText(request({ response: ok.response, timeoutMs: 60_000 }).input)).ok, true);
+    assert.equal(timeouts(), baseline, 'depois de um sucesso');
+    const big = streamResponse(() => new Uint8Array(4096));
+    assert.equal((await fetchVerifiedText(request({ response: big.response, timeoutMs: 60_000, maxBytes: 8192 }).input)).ok, false);
+    assert.equal(timeouts(), baseline, 'depois de too_large');
+    assert.deepEqual(await fetchVerifiedText(request({ response: async () => Promise.reject(new Error('offline')), timeoutMs: 60_000 }).input), { ok: false, reason: 'network' });
+    assert.equal(timeouts(), baseline, 'depois de falha de rede');
+  });
+
+  it('sem fluxo, arrayBuffer() que trava também fica sob o prazo', async () => {
+    const hung = reply(TEXT_BYTES, { arrayBuffer: () => new Promise<ArrayBuffer>(() => undefined) });
+    const { input } = request({ response: hung, timeoutMs: 40 });
+    const started = Date.now();
+    assert.deepEqual(await fetchVerifiedText(input), { ok: false, reason: 'timeout' });
+    assert.ok(Date.now() - started < 400);
+  });
+
+  it('dentro do prazo nada muda: o temporizador é limpo e o resultado é o de sempre', async () => {
+    const parts = chunksOf(TEXT_BYTES, 16);
+    const { response } = streamResponse(async (index) => {
+      await sleep(2);
+      return parts[index] ?? null;
+    });
+    const result = await fetchVerifiedText(request({ response, timeoutMs: 2_000 }).input);
+    assert.equal(result.ok, true);
+  });
+});
+
+describe('servidor HTTP e fetch REAIS (Node/undici: o mesmo ReadableStream do navegador)', () => {
+  const MIB = 1024 * 1024;
+  const TOTAL = 64 * MIB;
+  const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+  /** Servidor que responde em pedaços (Transfer-Encoding: chunked, SEM Content-Length) e para de escrever quando o cliente fecha. */
+  async function startChunkedServer(totalBytes: number): Promise<{ readonly url: string; readonly stats: { written: number; closed: boolean }; readonly stop: () => Promise<void> }> {
+    const stats = { written: 0, closed: false };
+    const server = http.createServer((_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'text/plain' });
+      const chunk = Buffer.alloc(64 * 1024, 97);
+      response.on('close', () => { stats.closed = true; });
+      const pump = (): void => {
+        while (!stats.closed && stats.written < totalBytes) {
+          stats.written += chunk.length;
+          if (!response.write(chunk)) {
+            response.once('drain', pump);
+            return;
+          }
+        }
+        if (!stats.closed) response.end();
+      };
+      pump();
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as { port: number };
+    return {
+      url: `http://127.0.0.1:${port}/texto`,
+      stats,
+      stop: () => new Promise<void>((resolve) => { server.closeAllConnections(); server.close(() => resolve()); }),
+    };
+  }
+
+  const realFetch: FetchLike = (url, init) => globalThis.fetch(url, init as unknown as RequestInit) as unknown as Promise<ResponseLike>;
+
+  it('64 MiB em pedaços e sem Content-Length: too_large, e o servidor vê a conexão fechar muito antes do fim (a leitura parou DE VERDADE)', async () => {
+    const server = await startChunkedServer(TOTAL);
+    try {
+      const result = await fetchVerifiedText({ url: server.url, expectedSha256: TEXT_SHA, allowHttp: true, fetch: realFetch, sha256Hex, maxBytes: MIB });
+      assert.deepEqual(result, { ok: false, reason: 'too_large' });
+      for (let waited = 0; !server.stats.closed && waited < 2_000; waited += 20) await sleep(20);
+      assert.equal(server.stats.closed, true, 'o servidor viu a conexão fechar');
+      assert.ok(server.stats.written < TOTAL / 2, `o servidor escreveu ${server.stats.written} dos ${TOTAL} bytes: o cliente não puxou o corpo inteiro`);
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it('o mesmo servidor, com um texto pequeno e íntegro: confere e entrega (o caminho feliz por rede de verdade)', async () => {
+    const server = http.createServer((_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+      response.write(TEXT_BYTES.slice(0, 20));
+      setTimeout(() => response.end(TEXT_BYTES.slice(20)), 10);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as { port: number };
+    try {
+      const result = await fetchVerifiedText({ url: `http://127.0.0.1:${port}/t`, expectedSha256: TEXT_SHA, allowHttp: true, fetch: realFetch, sha256Hex });
+      assert.deepEqual(result, { ok: true, text: TEXT, sha256: TEXT_SHA, byteLength: TEXT_BYTES.byteLength });
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('servidor que responde os cabeçalhos e nunca manda o corpo: timeout dentro do prazo, com o AbortController real', async () => {
+    const server = http.createServer((_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'text/plain' });
+      response.flushHeaders(); // e silêncio
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as { port: number };
+    try {
+      const started = Date.now();
+      const result = await fetchVerifiedText({ url: `http://127.0.0.1:${port}/t`, expectedSha256: TEXT_SHA, allowHttp: true, fetch: realFetch, sha256Hex, timeoutMs: 150 });
+      assert.deepEqual(result, { ok: false, reason: 'timeout' });
+      assert.ok(Date.now() - started < 1_500);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });
 

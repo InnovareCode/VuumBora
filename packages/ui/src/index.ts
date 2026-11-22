@@ -80,6 +80,9 @@ export type { ConsentCheckboxProps } from './ConsentCheckbox';
 export { LinkButton } from './LinkButton';
 export type { LinkButtonProps } from './LinkButton';
 
+export { useKeyboardFocusRing, focusRingStyle } from './useFocusRing';
+export type { FocusRingPlacement, KeyboardFocusRing } from './useFocusRing';
+
 export { InlineAlert } from './InlineAlert';
 export type { InlineAlertProps, InlineAlertTone } from './InlineAlert';
 

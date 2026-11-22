@@ -15,7 +15,12 @@
  *  - a ORIGEM permitida é a da `url` que veio na resposta da API (nenhum host fixo no app): uma resposta cuja URL FINAL
  *    (depois de redirecionamentos) saiu dessa origem é recusada, mesmo que o hash fosse bater;
  *  - sem cookie, sem credencial, sem cabeçalho de autorização: o texto é público;
- *  - tamanho máximo e prazo máximo (texto legal tem dezenas de KB; um servidor que manda MB ou fica calado não trava o app).
+ *  - tamanho máximo e prazo máximo (texto legal tem dezenas de KB; um servidor que manda MB ou fica calado não trava o app):
+ *      · o corpo é lido EM FLUXO quando a plataforma tem (`body.getReader()`, o caso do navegador), com contador de bytes:
+ *        passou do teto, a leitura PARA e o fluxo é cancelado, sem ter bufferizado o resto. Sem fluxo (o `fetch` do React
+ *        Native é o `whatwg-fetch`, sem `body`), só o `Content-Length` declarado e a conferência depois de ler protegem o teto;
+ *      · o prazo corre CONTRA o pedido inteiro (`fetch` + leitura) com `Promise.race`: um `fetch` que ignora o
+ *        `AbortSignal` não deixa a função pendurada além do prazo.
  */
 
 export const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/;
@@ -152,7 +157,15 @@ export interface ResponseLike {
   /** URL FINAL, depois de redirecionamentos (pode vir vazia em implementações que não a informam). */
   readonly url?: string;
   readonly headers?: { get(name: string): string | null };
+  /** Corpo em fluxo (`ReadableStream`), quando a implementação tem. Sem ele, o corpo é lido por `arrayBuffer()`. */
+  readonly body?: { getReader?(): ByteChunkReaderLike } | null;
   arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+/** O pedaço do `ReadableStreamDefaultReader` que usamos. Cada bloco é um `Uint8Array`. */
+export interface ByteChunkReaderLike {
+  read(): Promise<{ readonly done: boolean; readonly value?: unknown }>;
+  cancel?(reason?: unknown): unknown;
 }
 
 export interface FetchInit {
@@ -210,6 +223,133 @@ function defaultAbortController(): AbortControllerLike | null {
   return Ctor === undefined ? null : new Ctor();
 }
 
+/** Estado compartilhado entre o prazo (que para tudo) e a leitura (que precisa saber que parou). */
+interface TransferState {
+  stopped: boolean;
+  reader: ByteChunkReaderLike | undefined;
+}
+
+/** Cancelar o fluxo é "melhor esforço": o corpo pode já ter terminado, ou o leitor já ter sido liberado. */
+function cancelQuietly(reader: ByteChunkReaderLike | undefined): void {
+  try {
+    const pending = reader?.cancel?.();
+    if (pending !== null && typeof pending === 'object' && typeof (pending as Promise<unknown>).catch === 'function') {
+      (pending as Promise<unknown>).catch(() => undefined);
+    }
+  } catch {
+    // nada a fazer
+  }
+}
+
+function toBytes(chunk: unknown): Uint8Array {
+  if (chunk instanceof Uint8Array) return chunk;
+  if (ArrayBuffer.isView(chunk)) return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  if (chunk instanceof ArrayBuffer) return new Uint8Array(chunk);
+  throw new Error('bloco do corpo não é binário');
+}
+
+function concatChunks(chunks: readonly Uint8Array[], total: number): Uint8Array {
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+/**
+ * Lê o corpo até `maxBytes`. `null` = passou do teto. Em fluxo, a conta é feita bloco a bloco e a leitura PARA no bloco
+ * que estoura o teto (o resto nunca é bufferizado) — o que um `arrayBuffer()` não consegue: ele só devolve depois de ler
+ * tudo. Sem fluxo, cai no `arrayBuffer()` e confere o tamanho depois.
+ */
+async function readBodyWithin(response: ResponseLike, maxBytes: number, state: TransferState): Promise<Uint8Array | null> {
+  const body = response.body;
+  if (body === undefined || body === null || typeof body.getReader !== 'function') {
+    const buffer = await response.arrayBuffer();
+    return buffer.byteLength > maxBytes ? null : new Uint8Array(buffer);
+  }
+
+  const reader = body.getReader();
+  state.reader = reader;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    if (state.stopped) {
+      cancelQuietly(reader);
+      throw new Error('leitura interrompida pelo prazo');
+    }
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value === undefined) continue;
+    const chunk = toBytes(value);
+    total += chunk.byteLength;
+    if (total > maxBytes) {
+      cancelQuietly(reader);
+      return null;
+    }
+    chunks.push(chunk);
+  }
+  return concatChunks(chunks, total);
+}
+
+type Download = { readonly ok: true; readonly bytes: Uint8Array } | { readonly ok: false; readonly result: VerifiedTextResult };
+
+/**
+ * O pedido INTEIRO (`fetch` + leitura do corpo) corre contra o prazo com `Promise.race`. `abort()` sozinho não basta: um
+ * `fetch` que ignora o `AbortSignal` (ou um corpo que nunca termina) deixaria a função pendurada e a tela em "carregando"
+ * sem saída. Aqui o prazo vence a corrida, o fluxo é cancelado e o resultado é `timeout`, aconteça o que acontecer com o
+ * pedido por baixo.
+ */
+async function downloadWithinDeadline(request: VerifiedTextRequest, target: ParsedHttpUrl, maxBytes: number, timeoutMs: number): Promise<Download> {
+  const controller = request.createAbortController?.() ?? defaultAbortController();
+  const state: TransferState = { stopped: false, reader: undefined };
+  let timedOut = false;
+  let expire: () => void = () => undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    expire = () => reject(new Error('prazo esgotado'));
+  });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    state.stopped = true;
+    controller?.abort();
+    cancelQuietly(state.reader);
+    expire();
+  }, timeoutMs);
+
+  const transfer = (async (): Promise<Download> => {
+    const response = await request.fetch(request.url, {
+      method: 'GET',
+      credentials: 'omit',
+      headers: { Accept: 'text/plain, text/*;q=0.9, */*;q=0.1' },
+      ...(controller !== null ? { signal: controller.signal } : {}),
+    });
+    if (!response.ok) return { ok: false, result: fail('http_status', response.status) };
+
+    // A origem da URL FINAL tem de ser a da `url` publicada. Vazio = a implementação não informa: o hash decide.
+    if (response.url !== undefined && response.url !== '') {
+      const final = parseHttpUrl(response.url);
+      if (final === null || final.origin !== target.origin) return { ok: false, result: fail('redirected') };
+    }
+
+    const declared = Number(response.headers?.get('content-length') ?? Number.NaN);
+    if (Number.isFinite(declared) && declared > maxBytes) return { ok: false, result: fail('too_large') };
+
+    const bytes = await readBodyWithin(response, maxBytes, state);
+    return bytes === null ? { ok: false, result: fail('too_large') } : { ok: true, bytes };
+  })();
+
+  try {
+    // `Promise.race` assina as duas promessas: a rejeição tardia do pedido que perdeu a corrida (um `fetch` que ignora o
+    // aborto e cai depois) fica tratada ali, sem `catch` próprio (provado por teste: "sem rejeição não tratada").
+    return await Promise.race([transfer, deadline]);
+  } catch {
+    return { ok: false, result: fail(timedOut ? 'timeout' : 'network') };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchVerifiedText(request: VerifiedTextRequest): Promise<VerifiedTextResult> {
   const { url, expectedSha256, allowHttp } = request;
   const maxBytes = request.maxBytes ?? DEFAULT_MAX_TEXT_BYTES;
@@ -219,53 +359,19 @@ export async function fetchVerifiedText(request: VerifiedTextRequest): Promise<V
   const target = checkTextUrl(url, allowHttp);
   if (!target.ok) return fail(target.reason);
 
-  const controller = request.createAbortController?.() ?? defaultAbortController();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller?.abort();
-  }, timeoutMs);
+  const download = await downloadWithinDeadline(request, target.parsed, maxBytes, timeoutMs);
+  if (!download.ok) return download.result;
+  const bytes = download.bytes;
 
+  let actual: string;
   try {
-    let response: ResponseLike;
-    let buffer: ArrayBuffer;
-    try {
-      response = await request.fetch(url, {
-        method: 'GET',
-        credentials: 'omit',
-        headers: { Accept: 'text/plain, text/*;q=0.9, */*;q=0.1' },
-        ...(controller !== null ? { signal: controller.signal } : {}),
-      });
-      if (!response.ok) return fail('http_status', response.status);
-
-      // A origem da URL FINAL tem de ser a da `url` publicada. Vazio = a implementação não informa: o hash decide.
-      if (response.url !== undefined && response.url !== '') {
-        const final = parseHttpUrl(response.url);
-        if (final === null || final.origin !== target.parsed.origin) return fail('redirected');
-      }
-
-      const declared = Number(response.headers?.get('content-length') ?? Number.NaN);
-      if (Number.isFinite(declared) && declared > maxBytes) return fail('too_large');
-      buffer = await response.arrayBuffer();
-    } catch {
-      return fail(timedOut ? 'timeout' : 'network');
-    }
-
-    if (buffer.byteLength > maxBytes) return fail('too_large');
-    const bytes = new Uint8Array(buffer);
-
-    let actual: string;
-    try {
-      actual = await request.sha256Hex(bytes);
-    } catch {
-      return fail('hash_unavailable');
-    }
-    if (actual !== expectedSha256) return fail('hash_mismatch');
-
-    const text = decodeUtf8Strict(bytes);
-    if (text === null || text.trim() === '') return fail('invalid_text');
-    return { ok: true, text, sha256: actual, byteLength: bytes.byteLength };
-  } finally {
-    clearTimeout(timer);
+    actual = await request.sha256Hex(bytes);
+  } catch {
+    return fail('hash_unavailable');
   }
+  if (actual !== expectedSha256) return fail('hash_mismatch');
+
+  const text = decodeUtf8Strict(bytes);
+  if (text === null || text.trim() === '') return fail('invalid_text');
+  return { ok: true, text, sha256: actual, byteLength: bytes.byteLength };
 }
