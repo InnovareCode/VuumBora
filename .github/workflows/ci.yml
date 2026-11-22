@@ -44,6 +44,16 @@ jobs:
             printf '/// <reference types="expo/types" />\n' > "apps/$app/expo-env.d.ts"
           done
       - run: npm run check
+      # nginx.conf nunca foi executado nesta maquina de desenvolvimento (sem nginx nem Docker).
+      # Mesma imagem dos Dockerfiles; o arquivo entra onde eles o copiam. Pega erro de sintaxe e
+      # de diretiva antes de o Easypanel tentar subir o contêiner (M-4, revisao-seguranca-s1-rodada3).
+      - name: Validar nginx.conf do admin e do site (nginx -t)
+        run: |
+          set -eu
+          for app in admin site; do
+            echo "== nginx -t: apps/$app"
+            docker run --rm -v "$PWD/apps/$app/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine nginx -t
+          done
 
   api:
     name: api (build, migracoes e testes contra Postgres e Redis reais)

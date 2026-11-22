@@ -6,8 +6,10 @@ Os nomes de menu do Easypanel mudam entre versões: onde eu não tinha como
 confirmar o nome exato, escrevi "algo como". O que vale é o **teste de
 verificação** de cada passo, que não depende do nome do menu.
 
-Ordem recomendada: 1 → 2 → 3 → 4 → 5 → 6. O passo 2 (fechar o acesso por IP)
-só depois do 1 funcionar, senão você se tranca para fora do painel.
+Ordem recomendada: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8. O passo 3 (fechar o acesso
+por IP) só depois do 2 funcionar, senão você se tranca para fora do painel. O
+passo 7 só depois de republicar `vuumbora-admin` e `vuumbora-frontend` com o
+`nginx.conf` novo (HSTS e cabeçalhos do site entraram em 21/11/2026).
 
 ---
 
@@ -189,6 +191,173 @@ Depois, o teste que vale: entrar em `https://admin.vuumbora.com.br` e ver a list
 de candidaturas carregar (se o CORS estiver errado, o console do navegador mostra
 o bloqueio e a tela fica vazia).
 
+## 7. Cabeçalhos de segurança e HSTS em etapas — AÇÃO DO DONO
+
+Achado M-4 da Órion (`docs/revisao-seguranca-s1-rodada3.md`). O HTTPS termina no
+Traefik; o `nginx.conf` do admin e o do site mandam os cabeçalhos, e o Traefik os
+repassa. **Só se confere de fora, em produção**: ler o arquivo não prova o que
+chega ao navegador.
+
+No PowerShell do Windows, `curl` é apelido de outro comando: use `curl.exe` e
+troque `grep -i` por `Select-String`, ou rode tudo no Git Bash.
+
+### 7.1 Conferir os cabeçalhos que de fato chegam (depois de republicar os dois serviços)
+
+```
+curl -sI https://admin.vuumbora.com.br | grep -iE "strict-transport|content-security|x-frame|x-content-type|referrer|permissions|cache-control"
+curl -sI https://www.vuumbora.com.br   | grep -iE "strict-transport|content-security|x-frame|x-content-type|referrer|cache-control"
+```
+
+O que tem de aparecer:
+
+| Cabeçalho | admin | site |
+|---|---|---|
+| `strict-transport-security` | `max-age=300` | `max-age=300` |
+| `x-content-type-options` | `nosniff` | `nosniff` |
+| `x-frame-options` | `DENY` | `DENY` |
+| `referrer-policy` | `no-referrer` | `strict-origin-when-cross-origin` |
+| `content-security-policy` | presente (`... frame-ancestors 'none'`) | **ausente, de propósito** (ver 7.4) |
+| `permissions-policy` | presente | ausente (não foi pedido) |
+
+`strict-transport-security` tem de aparecer **uma vez só** (`... | grep -ic strict-transport`
+deve dar `1`). Duas vezes = o Traefik (ou a Cloudflare, se o HSTS dela estiver
+ligado) também está mandando: o navegador usa só a primeira cópia, e fica um
+valor que ninguém sabe qual é. Deixe um emissor só. Nenhuma linha = a imagem
+nova ainda não foi publicada.
+
+Confira também os caminhos onde um `nginx.conf` mal feito **perde** os cabeçalhos
+(`add_header` dentro de `location` descarta os do `server`; foi a armadilha
+corrigida neste mesmo arquivo):
+
+```
+curl -sI https://www.vuumbora.com.br/assets/css/style.css   | grep -iE "^HTTP|strict-transport|x-frame"   # 200 e os 2 cabeçalhos
+curl -sI https://www.vuumbora.com.br/nao-existe.js          | grep -iE "^HTTP|strict-transport|x-frame"   # 404 (nunca 200 com HTML) e os 2 cabeçalhos
+curl -sI https://admin.vuumbora.com.br/driver-applications  | grep -iE "^HTTP|strict-transport|content-security"  # 200 (rota do React) e os 2 cabeçalhos
+curl -sI https://admin.vuumbora.com.br/healthz              | grep -iE "^HTTP|strict-transport"           # 200 e o HSTS
+```
+
+Verificação humana: abra o site e o painel num navegador, com o console aberto
+(F12): não pode haver erro vermelho de "blocked"/"refused" a mais do que havia
+antes da publicação.
+
+### 7.2 Subir o HSTS por etapas
+
+O HSTS faz o navegador **recusar HTTP** no domínio pelo prazo (`max-age`) que ele
+recebeu, e **não há como desfazer de fora**: se o certificado vencer ou o HTTPS
+quebrar, quem já recebeu o cabeçalho fica sem acesso até o prazo acabar. Por isso
+ele nasceu com 5 minutos e sobe aos poucos:
+
+| Etapa | Valor | Quando subir para a próxima |
+|---|---|---|
+| 1 (já no código) | `max-age=300` (5 min) | passo 7.1 conferido, e uns dias usando site e painel sem erro de certificado |
+| 2 | `max-age=604800` (1 semana) | uma semana na etapa 1 sem incidente, e o monitor de certificado do passo 4 ativo |
+| 3 | `max-age=31536000` (1 ano) | pelo menos 2 semanas na etapa 2 e um ciclo de renovação do certificado observado |
+
+Para subir: troque o número na linha `add_header Strict-Transport-Security` de
+`apps/admin/nginx.conf` **e** de `apps/site/nginx.conf`, abra PR (o CI roda),
+republique os dois serviços e repita o 7.1. Cada navegador guarda o prazo **por
+domínio**: `admin.` e `www.` são independentes.
+
+Para recuar: publique `max-age=0` (o navegador esquece o HSTS na próxima visita
+por HTTPS). Quem ainda não visitou não foi afetado. No **seu** Chrome, se se
+trancar por teste: `chrome://net-internals/#hsts` > "Delete domain security
+policies".
+
+### 7.3 Por que ainda não tem `includeSubDomains` nem `preload`
+
+- **`includeSubDomains`**: o mesmo `nginx.conf` do site pode responder no domínio
+  raiz (`vuumbora.com.br`); ali a diretiva obrigaria **todos** os subdomínios
+  (`painel.`, `api.`, `admin.`, `www.` e qualquer outro, como um painel de e-mail
+  ou um teste sem certificado) a funcionar só por HTTPS durante o prazo inteiro,
+  sem exceção possível. Só ligue depois de listar todos os registros `A`/`CNAME`
+  no Registro.br e confirmar que cada um abre com HTTPS válido. No `admin.` ela
+  nem teria efeito (não existem subdomínios dele).
+- **`preload`**: coloca o domínio numa lista gravada **dentro dos navegadores**;
+  exige `includeSubDomains` e 1 ano, e sair da lista leva meses (depende de cada
+  versão de navegador). Não é decisão de pré-lançamento.
+
+### 7.4 Pendência: CSP do site (não entrou, de propósito)
+
+O site público ficou só com HSTS, `nosniff`, `Referrer-Policy` e proteção contra
+enquadramento: são os que não mudam o que a página carrega. A **CSP não entrou**
+porque o `index.html` usa fonte do Google Fonts, chama a API e tem vários
+atributos `style="..."` embutidos (as partículas animadas); uma CSP sem
+`'unsafe-inline'` para estilo os descartaria **sem erro de build**, e acertar
+isso exige medir no navegador com o conteúdo real. Fica como pendência de
+Lyra/Íris; quando entrar, leva `frame-ancestors 'none'` junto.
+
+## 8. Limite de requisições por IP na borda (Traefik) — DECISÃO + AÇÃO DO DONO
+
+Achados A-1 e M-1 da Órion. Antes de qualquer clique, o que isto **resolve e o que
+não resolve**, sem enfeite:
+
+- **Resolve:** enchente vinda de um IP ou de poucos, barrada **antes** de chegar
+  no processo Node da API (hoje o limite da API roda dentro dela, na memória).
+- **Não resolve A-1 por inteiro:** o ataque medido pela Órion usa ~70 IPs a
+  0,03 requisição por segundo cada, abaixo de qualquer limite por IP razoável. O
+  conserto de verdade (semáforo global para o `bcrypt`) é código da API.
+- **Não resolve M-1:** adivinhar a senha de **uma** conta com muitos IPs. O
+  conserto é código (lista de senhas comuns e detector de muitos IPs
+  errando a mesma conta).
+
+Cuidados antes de escolher os números:
+
+- Operadoras de celular dividem **um IP entre centenas de motoristas** (CGNAT).
+  Limite apertado por IP bloqueia gente honesta. Por isso o valor abaixo é
+  **frouxo de propósito**, mais folgado que o da própria API (100 por minuto por
+  IP): este só segura enchente, não adivinhação de senha.
+- Com CDN na frente (a Cloudflare serve o site), o IP que o Traefik enxerga é o
+  da CDN: sem ajustar, o limite vira um balde único para todo mundo. Na API, se
+  a Cloudflare passar a ficar na frente de `api.`, `TRUST_PROXY` muda de `1` para
+  `2` (`docs/publicar-o-backend.md`).
+- IPv6: quem tem uma faixa `/64` tem 18 quintilhões de endereços; limite "por
+  endereço" não vale nada contra ele. Confira se `api.` nem aceita IPv6:
+
+  ```
+  nslookup -type=AAAA api.vuumbora.com.br      # sem resposta de endereço = só IPv4, o problema não existe
+  ```
+
+  Se existir AAAA, use no Traefik a opção que agrupa IPv6 por faixa
+  (`ipStrategy.ipv6Subnet`, nas versões novas do Traefik v3; confirme na
+  documentação da **versão que o seu Easypanel usa**).
+
+Ponto de partida (exemplo no formato de configuração dinâmica do Traefik;
+**não testado**: esta máquina não tem Traefik e a equipe não acessa o seu
+servidor):
+
+```yaml
+http:
+  middlewares:
+    vuumbora-api-limite:
+      rateLimit:
+        average: 10      # requisições por segundo, por IP, em média
+        period: 1s
+        burst: 50        # rajada tolerada (abrir o app dispara várias de uma vez)
+```
+
+Onde isto entra no Easypanel **eu não consigo afirmar** (o menu muda entre
+versões e o Easypanel monta o Traefik por baixo): procure na documentação do
+Easypanel da sua versão como anexar um *middleware* do Traefik ao domínio do
+serviço `vuumbora-backend` (algo como configuração avançada do domínio ou
+arquivos de configuração do Traefik). Alternativa sem mexer no Traefik, se `api.`
+já passar pela Cloudflare: regra de **Rate limiting** dela para `api.vuumbora.com.br`.
+Se não achar o caminho em meia hora, **não improvise no servidor**: registre aqui
+e peça uma sessão à Vulcano com o painel aberto.
+
+Verificação (Git Bash/Linux/Mac). O alvo é o `/healthz` de propósito: a própria
+API **não** limita essa rota (`rateLimit: false` em `health-route.ts`), então um
+`429` ali só pode ter vindo da borda. **Nunca** teste contra `/v1/auth/login`: o
+atraso progressivo da API passaria a punir contas de verdade.
+
+```
+seq 1 300 | xargs -P 60 -I{} curl -s -o /dev/null -w "%{http_code}\n" https://api.vuumbora.com.br/healthz | sort | uniq -c
+```
+
+Esperado com o limite ativo: a maioria `200` e um bloco de `429`. Só `200`: o
+middleware não está valendo (ou o IP visto é o da CDN). Seu IP fica barrado por
+alguns segundos; é normal. O monitor externo (passo 4) não é afetado: pede a cada
+5 minutos.
+
 ---
 
 ## Checklist final
@@ -201,3 +370,6 @@ o bloqueio e a tela fica vazia).
 - [ ] `ADMIN_ALLOWED_ORIGINS` e `ADMIN_TOTP_ENCRYPTION_KEY` preenchidas, sem barra final
 - [ ] Backup ativado e **restaurado de verdade uma vez** (`docs/backup-e-restauracao.md`)
 - [ ] `BACKUP_PASSPHRASE` e `ADMIN_TOTP_ENCRYPTION_KEY` guardadas fora do Easypanel
+- [ ] Cabeçalhos conferidos com `curl -sI` em admin e site; `strict-transport-security` aparece **uma vez** (passo 7.1)
+- [ ] HSTS subindo por etapas (300 s → 1 semana → 1 ano), sem `includeSubDomains`/`preload` por enquanto (passo 7.2)
+- [ ] Limite por IP na borda decidido e testado, ou a pendência A-1/M-1 registrada como aberta (passo 8)
