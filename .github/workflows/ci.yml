@@ -133,7 +133,9 @@ jobs:
           if [ "$status" -ne 0 ]; then
             # Bloco "failing tests:" do relatorio (mensagem da asserção e valores medidos), em UMA anotacao.
             clean=$(sed 's/\x1b\[[0-9;]*m//g' api-test.log)
-            block=$(printf '%s\n' "$clean" | sed -n '/failing tests:/,$p' | head -60)
+            # O Node 22 do CI imprime TAP (o erro vem logo abaixo de cada "not ok"); o formato spec traz "failing tests:".
+            block=$(printf '%s\n' "$clean" | grep -a -A14 -E '^\s*not ok' | head -80)
+            [ -n "$block" ] || block=$(printf '%s\n' "$clean" | sed -n '/failing tests:/,$p' | head -60)
             [ -n "$block" ] || block=$(printf '%s\n' "$clean" | tail -40)
             echo "::error title=detalhe da falha::$(printf '%s' "$block" | sed ':a;N;$!ba;s/\n/%0A/g')"
             sed 's/\x1b\[[0-9;]*m//g' api-test.log | grep -E "✖|not ok" | sort -u | head -9 | while IFS= read -r line; do echo "::error::${line}"; done
