@@ -6,7 +6,9 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    # `fatia/**`: commit candidato de cada fatia (plano mestre, secao 4). A Iris valida o SHA da
+    # branch e so depois ele entra na main; o CI tem de rodar antes do merge, nao so depois.
+    branches: [main, 'fatia/**']
   schedule:
     # Segunda 07:00 UTC: reensaia backup/restauracao mesmo sem commit (o drill apodrece em silencio).
     - cron: '0 7 * * 1'
