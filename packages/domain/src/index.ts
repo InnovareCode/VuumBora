@@ -100,3 +100,7 @@ export type { CancelActor, TripTransitionResult } from './trip-lifecycle';
 /** Localização aproximada (bairro + ponto arredondado) — decisão do dono em 22/11/2026. */
 export { toApproximatePlace, toTripRange } from './geo';
 export type { ApproximatePlace } from './geo';
+
+/** Cálculo de tarifa — simulador do dono (decisão 7) e, depois, cotação real do M4. */
+export { calculateFare, resolvePlatformFeeTier, splitFare } from './fare';
+export type { FareRates, FareInput, FareBreakdown, PlatformFeeTier, DriverStanding, FareSplit } from './fare';

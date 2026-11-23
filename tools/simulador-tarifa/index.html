@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Simulador de Tarifa — VuumBora</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1c222b;
+    --border: #2a313c;
+    --text: #e6e9ef;
+    --muted: #93a0b2;
+    --accent: #f2b705;
+    --good: #3fbf6f;
+    --bad: #e2574c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    line-height: 1.45;
+  }
+  header {
+    padding: 24px 28px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0 0 6px; font-size: 22px; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; max-width: 900px; }
+  .exemplo-banner {
+    margin: 14px 28px 0;
+    padding: 10px 14px;
+    background: rgba(242, 183, 5, 0.12);
+    border: 1px solid rgba(242, 183, 5, 0.4);
+    border-radius: 8px;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  main {
+    padding: 20px 28px 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    max-width: 1400px;
+  }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+  section h2 {
+    margin: 0 0 4px;
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  section .hint { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+  .grid-rates {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 14px;
+  }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  input[type="number"], input[type="text"] {
+    width: 100%;
+    padding: 9px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: 14px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+  #resultTable th, #resultTable td { padding: 8px 9px; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+  tbody tr:hover { background: rgba(255,255,255,0.03); }
+  .tiers-table input { width: 90px; padding: 6px 8px; font-size: 13px; }
+  .tiers-table input.label { width: 150px; }
+  .tiers-table td { white-space: nowrap; }
+  .tier-remove {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--bad);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .add-tier {
+    margin-top: 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .add-tier:hover { border-color: var(--accent); }
+  .money { font-variant-numeric: tabular-nums; }
+  .price-cell { color: var(--text); font-weight: 600; }
+  .payout-cell { color: var(--good); font-weight: 600; }
+  .offer-cell { color: var(--muted); font-style: italic; }
+  .error-banner {
+    display: none;
+    margin: 0;
+    padding: 12px 14px;
+    background: rgba(226, 87, 76, 0.12);
+    border: 1px solid rgba(226, 87, 76, 0.45);
+    border-radius: 8px;
+    color: var(--bad);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .pico-row td { background: rgba(242, 183, 5, 0.06); }
+  select {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: 13px;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .legend span.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  footer { padding: 0 28px 40px; color: var(--muted); font-size: 12px; max-width: 900px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Simulador de Tarifa — VuumBora</h1>
+  <p>
+    Ferramenta para calibrar a decisão 7 (tarifa, taxa da plataforma e repasse ao motorista). Ajuste os
+    números abaixo e veja, para corridas típicas de Natal, quanto o passageiro paga e quanto cada motorista
+    recebe — em cada faixa da taxa da plataforma. O cálculo é o mesmo módulo que a API vai usar de verdade
+    quando a tarifa for implementada (não é uma conta solta deste arquivo).
+  </p>
+</header>
+
+<div class="exemplo-banner">
+  ⚠️ Todos os números pré-preenchidos (tarifa, taxa, cortes das faixas) são EXEMPLO — não são recomendação de
+  preço. O objetivo desta página é você experimentar valores até os números fazerem sentido para o negócio.
+</div>
+
+<main>
+
+  <div id="errorBanner" class="error-banner"></div>
+
+  <section>
+    <h2>1. Tarifa da categoria</h2>
+    <p class="hint">Valores em reais. "Valor mínimo" é o preço mais baixo que a corrida pode ter, mesmo em
+      trajeto muito curto.</p>
+    <div class="grid-rates">
+      <div>
+        <label for="baseReais">Tarifa base (R$)</label>
+        <input id="baseReais" type="number" step="0.01" min="0" value="5.00" />
+      </div>
+      <div>
+        <label for="perKmReais">Valor por km (R$)</label>
+        <input id="perKmReais" type="number" step="0.01" min="0" value="1.80" />
+      </div>
+      <div>
+        <label for="perMinuteReais">Valor por minuto (R$)</label>
+        <input id="perMinuteReais" type="number" step="0.01" min="0" value="0.35" />
+      </div>
+      <div>
+        <label for="minimumReais">Valor mínimo (R$)</label>
+        <input id="minimumReais" type="number" step="0.01" min="0" value="8.00" />
+      </div>
+      <div>
+        <label for="dynamicMultiplier">Multiplicador de dinâmica (horário de pico)</label>
+        <input id="dynamicMultiplier" type="number" step="0.05" min="1" value="1.30" />
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Faixas da taxa da plataforma (20% a 25%)</h2>
+    <p class="hint">Cada faixa define um percentual retido pela plataforma e os três critérios mínimos para o
+      motorista chegar nela (dias de plataforma, corridas concluídas, nota). É preciso haver UMA faixa com os
+      três critérios em 0 — é a faixa do motorista recém-aprovado.</p>
+    <table class="tiers-table">
+      <thead>
+        <tr>
+          <th>Faixa</th>
+          <th>Taxa (%)</th>
+          <th>Dias mínimos</th>
+          <th>Corridas mínimas</th>
+          <th>Nota mínima</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tiersBody"></tbody>
+    </table>
+    <button class="add-tier" id="addTier">+ adicionar faixa</button>
+  </section>
+
+  <section>
+    <h2>3. Resultado — preço da corrida x ganho do motorista</h2>
+    <p class="hint">
+      Quatro corridas típicas de Natal (as três primeiras em tarifa normal; a última é a corrida "Média", em
+      horário de pico, com o multiplicador acima aplicado). "Ganho na oferta" é o intervalo que o motorista
+      veria <strong>antes de aceitar</strong>: a oferta mostra distância e duração em faixa, nunca o valor
+      exato (decisão do dono de 22/11/2026) — compare a largura desse intervalo com o ganho exato ao lado:
+      se ficar estreito demais, o ganho mostrado na oferta já entrega a distância real, mesmo sem o app dizer
+      o km (lembrete da Nova, PP-12).
+    </p>
+    <div style="margin-bottom: 12px;">
+      <label for="tierForOffer" style="display:inline-block; margin-right:8px;">Faixa usada na coluna "ganho na oferta":</label>
+      <select id="tierForOffer"></select>
+    </div>
+    <div style="overflow-x:auto;" id="resultWrapper">
+      <table id="resultTable">
+        <thead id="resultHead"></thead>
+        <tbody id="resultBody"></tbody>
+      </table>
+    </div>
+    <p class="hint" id="scrollHint" style="display:none; margin-top: 8px;">
+      ⇆ Arraste a tabela para o lado para ver as colunas que não couberam na tela.
+    </p>
+    <div class="legend" id="legend"></div>
+  </section>
+
+</main>
+
+<footer>
+  Gerado a partir de <code>packages/domain/src/index.ts</code> (bundle em <code>domain.bundle.js</code>, via
+  <code>build.mjs</code>). Para abrir: dê duplo clique em <code>index.html</code> — não precisa de servidor
+  nem de internet.
+</footer>
+
+<script src="domain.bundle.js"></script>
+<script>
+(function () {
+  'use strict';
+  var D = window.VuumboraDomain;
+
+  // Corridas típicas de Natal (distância em km, duração em minutos). EXEMPLO — ajustar conforme a área
+  // de serviço real (F10) for medida.
+  var TRIPS = [
+    { id: 'curta', label: 'Curta (bairro)', distanceKm: 2.5, durationMinutes: 8, dynamic: false },
+    { id: 'media', label: 'Média', distanceKm: 7, durationMinutes: 18, dynamic: false },
+    { id: 'longa', label: 'Longa (aeroporto)', distanceKm: 22, durationMinutes: 35, dynamic: false },
+    { id: 'pico', label: 'Média — horário de pico', distanceKm: 7, durationMinutes: 18, dynamic: true },
+  ];
+
+  var DEFAULT_TIERS = [
+    { id: 't1', label: 'Novo', feePercent: 25, minDaysActive: 0, minCompletedTrips: 0, minRating: 0 },
+    { id: 't2', label: 'Intermediário', feePercent: 22.5, minDaysActive: 30, minCompletedTrips: 100, minRating: 4.6 },
+    { id: 't3', label: 'Veterano', feePercent: 20, minDaysActive: 90, minCompletedTrips: 500, minRating: 4.8 },
+  ];
+
+  var tiersBody = document.getElementById('tiersBody');
+  var errorBanner = document.getElementById('errorBanner');
+  var tierForOfferSelect = document.getElementById('tierForOffer');
+  var nextTierSeq = DEFAULT_TIERS.length + 1;
+
+  function brl(cents) {
+    var sign = cents < 0 ? '-' : '';
+    var abs = Math.abs(cents);
+    return sign + 'R$ ' + (abs / 100).toFixed(2).replace('.', ',');
+  }
+
+  function addTierRow(tier) {
+    var tr = document.createElement('tr');
+    tr.dataset.tierId = tier.id;
+    tr.innerHTML =
+      '<td><input class="label" type="text" value="' + tier.label + '"></td>' +
+      '<td><input class="fee" type="number" step="0.1" min="0" max="100" value="' + tier.feePercent + '"></td>' +
+      '<td><input class="days" type="number" step="1" min="0" value="' + tier.minDaysActive + '"></td>' +
+      '<td><input class="trips" type="number" step="1" min="0" value="' + tier.minCompletedTrips + '"></td>' +
+      '<td><input class="rating" type="number" step="0.1" min="0" max="5" value="' + tier.minRating + '"></td>' +
+      '<td><button class="tier-remove" type="button">remover</button></td>';
+    tr.querySelector('.tier-remove').addEventListener('click', function () {
+      tr.remove();
+      recompute();
+    });
+    tr.querySelectorAll('input').forEach(function (input) {
+      input.addEventListener('input', recompute);
+    });
+    tiersBody.appendChild(tr);
+  }
+
+  DEFAULT_TIERS.forEach(addTierRow);
+
+  document.getElementById('addTier').addEventListener('click', function () {
+    addTierRow({
+      id: 'extra' + nextTierSeq++,
+      label: 'Nova faixa',
+      feePercent: 23,
+      minDaysActive: 0,
+      minCompletedTrips: 0,
+      minRating: 0,
+    });
+    recompute();
+  });
+
+  function readTiers() {
+    var rows = Array.from(tiersBody.querySelectorAll('tr'));
+    return rows.map(function (tr) {
+      return {
+        id: tr.dataset.tierId,
+        label: tr.querySelector('.label').value || tr.dataset.tierId,
+        feePercent: parseFloat(tr.querySelector('.fee').value),
+        minDaysActive: parseFloat(tr.querySelector('.days').value),
+        minCompletedTrips: parseFloat(tr.querySelector('.trips').value),
+        minRating: parseFloat(tr.querySelector('.rating').value),
+      };
+    });
+  }
+
+  function readRates() {
+    return {
+      baseCents: Math.round(parseFloat(document.getElementById('baseReais').value) * 100),
+      perKmCents: Math.round(parseFloat(document.getElementById('perKmReais').value) * 100),
+      perMinuteCents: Math.round(parseFloat(document.getElementById('perMinuteReais').value) * 100),
+      minimumFareCents: Math.round(parseFloat(document.getElementById('minimumReais').value) * 100),
+    };
+  }
+
+  function readDynamicMultiplier() {
+    return parseFloat(document.getElementById('dynamicMultiplier').value);
+  }
+
+  /** Ganho que o motorista veria NA OFERTA: usa a faixa de distância/duração (PP-12), não o valor exato. */
+  function offerPayoutRange(rates, distanceKm, durationMinutes, multiplier, feePercent) {
+    var range = D.toTripRange(distanceKm * 1000, durationMinutes * 60);
+    var low = D.calculateFare(rates, {
+      distanceKm: range.distanceM.min / 1000,
+      durationMinutes: range.durationS.min / 60,
+      dynamicMultiplier: multiplier,
+    });
+    var high = D.calculateFare(rates, {
+      distanceKm: range.distanceM.max / 1000,
+      durationMinutes: range.durationS.max / 60,
+      dynamicMultiplier: multiplier,
+    });
+    var lowSplit = D.splitFare(low.totalCents, feePercent);
+    var highSplit = D.splitFare(high.totalCents, feePercent);
+    return { minCents: lowSplit.driverPayoutCents, maxCents: highSplit.driverPayoutCents };
+  }
+
+  function showError(message) {
+    if (!message) {
+      errorBanner.style.display = 'none';
+      errorBanner.textContent = '';
+      return;
+    }
+    errorBanner.style.display = 'block';
+    errorBanner.textContent = '⚠️ ' + message;
+  }
+
+  function recompute() {
+    var tiers = readTiers();
+    var rates = readRates();
+    var multiplier = readDynamicMultiplier();
+
+    // seletor da coluna "ganho na oferta"
+    var previousSelection = tierForOfferSelect.value;
+    tierForOfferSelect.innerHTML = tiers
+      .map(function (t) { return '<option value="' + t.id + '">' + t.label + ' (' + t.feePercent + '%)</option>'; })
+      .join('');
+    if (tiers.some(function (t) { return t.id === previousSelection; })) {
+      tierForOfferSelect.value = previousSelection;
+    }
+
+    var head = document.getElementById('resultHead');
+    var body = document.getElementById('resultBody');
+    var legend = document.getElementById('legend');
+
+    var headerCells = ['Corrida', 'Distância', 'Duração', 'Preço da corrida']
+      .concat(tiers.map(function (t) { return 'Ganho — ' + t.label; }))
+      .concat(['Ganho na oferta (intervalo)']);
+    head.innerHTML = '<tr>' + headerCells.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr>';
+
+    try {
+      var offerTierId = tierForOfferSelect.value;
+      var rowsHtml = TRIPS.map(function (trip) {
+        var tripMultiplier = trip.dynamic ? multiplier : 1;
+        var fare = D.calculateFare(rates, {
+          distanceKm: trip.distanceKm,
+          durationMinutes: trip.durationMinutes,
+          dynamicMultiplier: tripMultiplier,
+        });
+
+        var tierCells = tiers.map(function (t) {
+          var split = D.splitFare(fare.totalCents, t.feePercent);
+          return '<td class="money payout-cell">' + brl(split.driverPayoutCents) + '</td>';
+        }).join('');
+
+        var offerTier = tiers.find(function (t) { return t.id === offerTierId; }) || tiers[0];
+        var offerCell = '';
+        if (offerTier) {
+          var offerRange = offerPayoutRange(rates, trip.distanceKm, trip.durationMinutes, tripMultiplier, offerTier.feePercent);
+          offerCell = '<td class="money offer-cell">' + brl(offerRange.minCents) + ' – ' + brl(offerRange.maxCents) + '</td>';
+        } else {
+          offerCell = '<td class="money offer-cell">—</td>';
+        }
+
+        return (
+          '<tr class="' + (trip.dynamic ? 'pico-row' : '') + '">' +
+          '<td>' + trip.label + (trip.dynamic ? ' · ×' + tripMultiplier.toFixed(2) : '') + '</td>' +
+          '<td>' + trip.distanceKm.toLocaleString('pt-BR') + ' km</td>' +
+          '<td>' + trip.durationMinutes + ' min</td>' +
+          '<td class="money price-cell">' + brl(fare.totalCents) + (fare.minimumApplied ? ' (mínimo)' : '') + '</td>' +
+          tierCells +
+          offerCell +
+          '</tr>'
+        );
+      }).join('');
+
+      body.innerHTML = rowsHtml;
+      var wrapper = document.getElementById('resultWrapper');
+      var table = document.getElementById('resultTable');
+      document.getElementById('scrollHint').style.display =
+        table.scrollWidth > wrapper.clientWidth + 1 ? 'block' : 'none';
+      legend.innerHTML =
+        '<span><strong>' + tiers.length + '</strong> faixa(s) configurada(s)</span>' +
+        '<span>Tarifa base: ' + brl(rates.baseCents) + '</span>' +
+        '<span>Mínimo: ' + brl(rates.minimumFareCents) + '</span>';
+      showError(null);
+    } catch (err) {
+      body.innerHTML = '';
+      showError(err && err.message ? err.message : String(err));
+    }
+  }
+
+  [
+    'baseReais', 'perKmReais', 'perMinuteReais', 'minimumReais', 'dynamicMultiplier',
+  ].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', recompute);
+  });
+  tierForOfferSelect.addEventListener('change', recompute);
+
+  recompute();
+})();
+</script>
+
+</body>
+</html>
