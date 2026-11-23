@@ -1008,3 +1008,45 @@ manter Plus Jakarta Sans nos apps (tem algarismos tabulares para preço, tempo e
 
 **PP-1 — decidido pelo dono em 22/11/2026:** apps e painel com **Plus Jakarta Sans**; o site continua com **Poppins** ("no app
 diferente do site"). Vale para todas as fichas de tela e para o portão de qualidade (algarismos tabulares em todo número que muda).
+
+---
+
+## Decisões do dono em 22/11/2026 (noite), respondidas de uma vez
+
+O Atlas levantou tudo o que dependia do dono (plano mestre §6, fichas novas e conferências) e o dono decidiu na hora. Salvo
+indicação, ele seguiu a recomendação da equipe.
+
+### Corrida (destravam a onda 4)
+
+| # | Decisão | O que foi decidido |
+|---|---|---|
+| PP-11 | Emergência na corrida | **O botão SOS liga direto para o 190** até existir a central própria (`POST /v1/trips/:id/sos`, no S4). |
+| D-12 | Código de embarque | **Sim, PIN em todas as categorias.** O passageiro informa o código para a corrida começar. |
+| D-06 | Preço | **Fechado na cotação.** Só recalcula se o destino mudar. |
+| 15 | Cancelamento no lançamento | **Sem taxa no início.** A estrutura fica pronta, e os valores entram quando houver cobrança (gateway). |
+| D-15 | Horário de atendimento | **Todos os dias, das 7h às 22h.** Fora desse horário, o app diz quando a equipe volta. Emergência sempre aponta para o 190. Nunca escrever "24h". |
+| 11 | WhatsApp de suporte nos apps | **O mesmo número do site**, para os dois apps (atendido por pessoa de Natal). |
+
+### Publicação, apps e contas
+
+| # | Decisão | O que foi decidido |
+|---|---|---|
+| F05 | Data da publicação do backend | **Assim que o roteiro do Vulcano ficar pronto.** O dono executa a lista curta; o cadastro nasce fechado até os textos legais. |
+| DN-07 | Identificadores das lojas | **Confirmados: `com.vuumbora.passenger` e `com.vuumbora.driver`.** |
+| 17 | Contas | **O dono cria agora a conta Expo (organização) e a conta Google Play (empresa).** Apple continua ao fim. A equipe nunca cria conta nem digita senha por ele. |
+
+### Segurança, documentos e jurídico
+
+| # | Decisão | O que foi decidido |
+|---|---|---|
+| DN-05 | Risco residual do achado médio da rodada 3c (ataque distribuído degrada o login) | **Aceito para a publicação fechada**, com os números medidos no relatório privado. Reavaliar antes de abrir o cadastro ao público. |
+| D-13 | Onde guardar documentos e backups | **No Brasil, cifrado**, com link de acesso que expira em 5 minutos. |
+| 9 | Verificação de documentos | **Revisão humana no painel** (papel "Revisor de documentos"), prazo publicado ao motorista e motivos de recusa numa lista fechada. |
+| D-08 / D-09 | Motorista mulher, Pet e Entrega | **Ocultas até o parecer jurídico.** Nascem prontas e desligadas. |
+| D-11 | Seguro APP | **Decidir com o advogado e o corretor.** É obrigatório antes do beta. |
+
+### Tarifa e gateway
+
+| # | Decisão | O que foi decidido |
+|---|---|---|
+| 7 e D-03 | Tarifa (base, km, minuto, mínimo, dinâmica e faixas da taxa) e gateway | **A equipe prepara, e o dono decide com os números na mão:** um simulador de tarifa e uma comparação de gateways com o custo do Pix numa corrida de R$ 15 a 30. Lembrete da Nova (PP-12): com tarifa pública e ganho exato na oferta, dá para estimar o km; refazer essa conta quando a tarifa sair. |
