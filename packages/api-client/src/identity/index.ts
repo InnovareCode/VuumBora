@@ -34,6 +34,8 @@ export type {
   AuthenticatedSession,
   ConsentStatus,
   CurrentLegal,
+  DeleteAccountInput,
+  DeleteAccountOutput,
   DeviceInfo,
   DevicePlatform,
   ForgotPasswordInput,

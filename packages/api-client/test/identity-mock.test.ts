@@ -56,6 +56,7 @@ function fresh(options: { now?: () => number; legal?: MockLegalVersions } = {}):
     logout: wrap(raw.logout),
     logoutAll: wrap(raw.logoutAll),
     me: wrap(raw.me),
+    deleteAccount: wrap(raw.deleteAccount),
   };
 }
 
@@ -312,6 +313,51 @@ describe('mock — login, tokens e sessão', () => {
     await verified(api);
     expectError(await api.login({ identifier: EMAIL, password: PASSWORD }, { installationId: 'curto', platform: 'android' }), { kind: 'validation', code: 'invalid_body' });
     expectError(await api.login({ identifier: EMAIL, password: PASSWORD }, { installationId: 'install-12345678', platform: 'windows' as 'ios' }), { code: 'invalid_body' });
+  });
+});
+
+describe('mock — exclusão de conta (delete-account)', () => {
+  test('senha errada: 403 wrong_password (não 401 — não colide com "token inválido"), a conta e a sessão continuam vivas', async () => {
+    const api = fresh();
+    await verified(api);
+    const login = await api.login({ identifier: EMAIL, password: PASSWORD }, DEVICE);
+    assert.ok(login.ok);
+    expectError(await api.deleteAccount(login.data.accessToken, { password: 'senha-errada' }), { kind: 'forbidden', code: 'wrong_password' });
+    assert.ok((await api.me(login.data.accessToken)).ok, 'a sessão não foi tocada por uma senha errada');
+    assert.ok((await api.login({ identifier: EMAIL, password: PASSWORD }, DEVICE)).ok, 'a conta continua existindo');
+  });
+
+  test('senha certa: anonimiza a conta, revoga TODAS as sessões (não só a usada) e libera o e-mail', async () => {
+    const api = fresh();
+    await verified(api);
+    const sessionA = await api.login({ identifier: EMAIL, password: PASSWORD }, DEVICE);
+    const sessionB = await api.login({ identifier: EMAIL, password: PASSWORD }, DEVICE);
+    assert.ok(sessionA.ok && sessionB.ok);
+
+    const result = await api.deleteAccount(sessionA.data.accessToken, { password: PASSWORD });
+    assert.ok(result.ok);
+    if (result.ok) assert.deepEqual(result.data, { accountDeleted: true });
+
+    expectError(await api.me(sessionA.data.accessToken), { code: 'unauthorized' });
+    expectError(await api.me(sessionB.data.accessToken), { code: 'unauthorized' }); // TODAS as sessões são revogadas, não só a usada
+    expectError(await api.login({ identifier: EMAIL, password: PASSWORD }, DEVICE), { kind: 'unauthorized', code: 'invalid_credentials' });
+
+    // e-mail livre para recadastro — mesma garantia do servidor ("some da unicidade").
+    const again = await api.register({ ...REGISTER, fullName: 'Ana Souza Dois' });
+    assert.ok(again.ok);
+  });
+
+  test('sem sessão válida: 401 unauthorized', async () => {
+    const api = fresh();
+    expectError(await api.deleteAccount('token-que-nao-existe', { password: PASSWORD }), { kind: 'unauthorized', code: 'unauthorized' });
+  });
+
+  test('corpo sem senha: 400 invalid_body', async () => {
+    const api = fresh();
+    await verified(api);
+    const login = await api.login({ identifier: EMAIL, password: PASSWORD }, DEVICE);
+    assert.ok(login.ok);
+    expectError(await api.deleteAccount(login.data.accessToken, {} as { password: string }), { kind: 'validation', code: 'invalid_body' });
   });
 });
 

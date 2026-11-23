@@ -30,6 +30,7 @@ import type {
   AuthenticatedSession,
   ConsentStatus,
   CurrentLegal,
+  DeleteAccountOutput,
   IdentityApi,
   LegalDocumentName,
   LegalDocumentView,
@@ -109,6 +110,12 @@ interface MockAccount {
   resetFailures: number;
   /** Última versão aceita de cada documento (a do cadastro, ou a do último reaceite). */
   accepted: { terms: string; privacy: string };
+  /**
+   * `POST /delete-account` (item 3 das pendências jurídicas): a conta foi anonimizada. Tratada como
+   * inexistente por `findByIdentifier` — libera o e-mail para recadastro e não revela, num login
+   * depois, se a conta chegou a existir.
+   */
+  deleted: boolean;
 }
 
 interface Family {
@@ -176,10 +183,12 @@ export function createMockIdentityApi(accountType: AccountType, options: MockIde
   const outdated = (): Outcome<never> =>
     reject(409, 'consent_outdated', 'Os Termos ou a Política mudaram. Leia a versão atual e aceite de novo.', { current: currentLegal() });
 
+  /** Conta excluída (`deleted`) nunca é encontrada — é assim que o e-mail fica livre para recadastro. */
   function findByIdentifier(identifier: string): MockAccount | undefined {
     const trimmed = identifier.trim();
     const wanted = trimmed.includes('@') ? trimmed.toLowerCase() : trimmed.toUpperCase();
     for (const account of accounts.values()) {
+      if (account.deleted) continue;
       if (trimmed.includes('@') ? account.email === wanted : account.publicId === wanted) return account;
     }
     return undefined;
@@ -319,6 +328,7 @@ export function createMockIdentityApi(accountType: AccountType, options: MockIde
       reset: null,
       resetFailures: 0,
       accepted: { terms: termsVersion, privacy: privacyVersion },
+      deleted: false,
     };
     accounts.set(account.id, account);
     return accept({
@@ -454,6 +464,28 @@ export function createMockIdentityApi(accountType: AccountType, options: MockIde
     return accept(consentOf(account));
   }
 
+  /**
+   * `POST /delete-account`: reautentica por senha e, só se ela confere, anonimiza a conta (marca
+   * `deleted`, libera o e-mail — `findByIdentifier` passa a ignorá-la) e revoga TODAS as sessões,
+   * não só a usada. **O que este mock NÃO reproduz** (mesma lacuna documentada no topo do arquivo):
+   * a espera progressiva própria do par conta+IP (`429 too_many_attempts`) e o `503` da pista de
+   * bcrypt — aqui só o caminho de senha certa/errada.
+   *
+   * **`403`, não `401` (decisão do Atlas em 22/11/2026, conferência PP-12 da Nova,
+   * `docs/contratos/conferencia-pp12-nova.md`):** `401` tem o MESMO `kind: 'unauthorized'` de "token
+   * de acesso inválido" — `SessionManager.run()` trataria a senha errada como sessão vencida, renovaria
+   * o token e repetiria a chamada sozinho (a senha errada seria conferida duas vezes). `403` sai do
+   * caminho do refresh automático, igual `email_not_verified` no login.
+   */
+  function deleteAccount(account: MockAccount, raw: Record<string, unknown>): Outcome<DeleteAccountOutput> {
+    const { password } = raw;
+    if (!isString(password) || password.length < 1 || password.length > 256) return INVALID_BODY();
+    if (password !== account.password) return reject(403, 'wrong_password', 'Senha incorreta.');
+    account.deleted = true;
+    revokeAccount(account.id);
+    return accept({ accountDeleted: true });
+  }
+
   // ---- invólucro: latência + conversão para Result ----
 
   async function respond<T>(operation: () => Outcome<T>): Promise<Result<T>> {
@@ -489,6 +521,11 @@ export function createMockIdentityApi(accountType: AccountType, options: MockIde
       respond(() => {
         const auth = authenticate(accessToken);
         return auth.ok ? acceptConsents(auth.data, asBody(input)) : auth;
+      }),
+    deleteAccount: (accessToken, input) =>
+      respond(() => {
+        const auth = authenticate(accessToken);
+        return auth.ok ? deleteAccount(auth.data, asBody(input)) : auth;
       }),
   };
 }

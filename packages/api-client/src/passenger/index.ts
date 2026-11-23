@@ -12,6 +12,8 @@ export type {
   CategoryAvailability,
   CategoryQuote,
   PassengerRidePort,
+  PassengerTripHistoryEntry,
+  PassengerTripHistoryInput,
   PassengerTripSnapshot,
   PlacesPort,
   Quote,

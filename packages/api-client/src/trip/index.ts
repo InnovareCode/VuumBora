@@ -3,7 +3,7 @@
  * corrida (status base, eventos de tempo real, idempotência). Nenhum perfil importa o subcaminho
  * do outro: o que é comum mora aqui.
  */
-export type { CancelActor, TripBaseSnapshot, TripEvent, TripRealtimePort } from './types';
+export type { CancelActor, TripBaseSnapshot, TripEvent, TripHistoryPage, TripRealtimePort } from './types';
 export { createTripStore, DRIVER_ASSIGNED_STATUSES } from './mock-store';
 export type { TripStore, TripStoreRecord } from './mock-store';
 export { createIdempotencyCache, fingerprint } from './idempotency';

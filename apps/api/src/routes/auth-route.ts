@@ -217,7 +217,12 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
       }
       if (result.kind === 'wrong_password') {
         request.log.info({ event: 'auth_delete_account_failed' });
-        return fail(reply, 401, 'wrong_password', 'Senha incorreta.');
+        // 403 (não 401, decisão do Atlas em 22/11/2026, conferência PP-12 da Nova): 401 colidia com "token de acesso
+        // inválido" no cliente — o SessionManager renovava a sessão e repetia a chamada, a senha errada era
+        // conferida duas vezes, e a repetição automática chegava dentro da espera progressiva do par conta+IP,
+        // virando `429 too_many_attempts` em vez de "senha incorreta". Mesmo desenho de `403 email_not_verified`
+        // (acima) e do painel admin.
+        return fail(reply, 403, 'wrong_password', 'Senha incorreta.');
       }
       if (result.kind === 'account_missing') return fail(reply, 401, 'unauthorized', 'Sessão inválida ou expirada.');
       request.log.info({ event: 'auth_account_deleted', accountId: request.authAccount!.accountId });

@@ -147,6 +147,22 @@ describe('adaptador http — o que vai no fio', () => {
     assert.equal(result.origin, 'real');
   });
 
+  test('deleteAccount manda só a senha no corpo, com Bearer, e reconhece { accountDeleted: true }', async () => {
+    server.script('POST /v1/auth/delete-account', okReply({ accountDeleted: true }));
+    const result = await adapter().deleteAccount('token-abc', { password: PASSWORD });
+    assert.ok(result.ok);
+    if (result.ok) assert.deepEqual(result.data, { accountDeleted: true });
+    const request = server.last('POST', '/v1/auth/delete-account');
+    assert.deepEqual(request?.body, { password: PASSWORD });
+    assert.equal(request?.headers['authorization'], 'Bearer token-abc');
+  });
+
+  test('deleteAccount com senha errada: 403 wrong_password (não 401 — não colide com "token inválido" no adaptador)', async () => {
+    server.script('POST /v1/auth/delete-account', { status: 403, body: { ok: false, error: { code: 'wrong_password', message: 'Senha incorreta.' } } });
+    const result = await adapter().deleteAccount('token-abc', { password: 'errada' });
+    assert.ok(!result.ok && result.error.kind === 'forbidden' && result.error.code === 'wrong_password');
+  });
+
   test('configuração inválida falha na montagem, não na primeira chamada', () => {
     const base = { accountType: 'passenger', appVersion: APP_VERSION } as const;
     for (const baseUrl of ['não é url', 'ftp://exemplo.com', 'http://exemplo.com/?a=1', 'http://exemplo.com/#x']) {
@@ -575,6 +591,29 @@ describe('IdentityClient sobre http — sessão e renovação de ponta a ponta',
     assert.ok((await identity.login({ identifier: EMAIL, password: PASSWORD })).ok);
     const result = await identity.logoutAll();
     assert.ok(result.ok && result.data.revokedSessions === 1);
+    assert.deepEqual(identity.session.getState(), { status: 'signed_out', reason: 'user' });
+  });
+
+  test('deleteAccount: sucesso encerra a sessão local (o servidor já revogou todas); senha errada (403) é UMA chamada só, sem renovar, com a sessão aberta', async () => {
+    const identity = client();
+    assert.ok((await identity.login({ identifier: EMAIL, password: PASSWORD })).ok);
+
+    // 403 (não 401 — decisão do Atlas em 22/11/2026, conferência PP-12 da Nova,
+    // `docs/contratos/conferencia-pp12-nova.md`): com 401 o `wrong_password` tinha o MESMO `kind` de
+    // "token de acesso inválido", e `session.run()` renovava a sessão e repetia a chamada sozinho —
+    // a senha errada era conferida duas vezes, e a repetição caía dentro da espera progressiva do
+    // servidor, virando `429 too_many_attempts` em vez de "senha incorreta". Com 403, uma chamada só.
+    server.requests.length = 0;
+    server.script('POST /v1/auth/delete-account', { status: 403, body: { ok: false, error: { code: 'wrong_password', message: 'x' } } }, { once: true });
+    const wrong = await identity.deleteAccount({ password: 'errada-errada' });
+    assert.ok(!wrong.ok && wrong.error.kind === 'forbidden' && wrong.error.code === 'wrong_password');
+    assert.equal(identity.session.getState().status, 'signed_in', 'senha errada não encerra a sessão');
+    assert.deepEqual(server.requests.map((r) => `${r.method} ${r.path}`), ['POST /v1/auth/delete-account'], 'uma chamada só — nenhum /refresh');
+    server.clearScripts();
+
+    server.script('POST /v1/auth/delete-account', { status: 200, body: { ok: true, data: { accountDeleted: true } } }, { once: true });
+    const result = await identity.deleteAccount({ password: PASSWORD });
+    assert.ok(result.ok && result.data.accountDeleted);
     assert.deepEqual(identity.session.getState(), { status: 'signed_out', reason: 'user' });
   });
 

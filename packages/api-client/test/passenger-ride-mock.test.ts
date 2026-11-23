@@ -366,3 +366,141 @@ describe('control + subscribe — a progressão que substitui o setTimeout do si
     assert.deepEqual(result, { ok: true, state: 'cancelled' });
   });
 });
+
+describe('history — PP-12, item 3 (período no histórico do passageiro)', () => {
+  test('corrida concluída entra no histórico, com origem/destino completos e o motorista atribuído', async () => {
+    const mock = fresh();
+    const { tripId } = await quotedAndRequested(mock);
+    mock.control.advance(tripId, 'searching_driver');
+    mock.control.advance(tripId, 'driver_assigned', 'd1');
+    mock.control.setDriverSummary(tripId, { driverId: 'd1', firstName: 'Ana', plate: 'ABC1D23', vehicleModel: 'Onix', vehicleColor: 'Prata' });
+    mock.control.advance(tripId, 'driver_en_route');
+    mock.control.advance(tripId, 'driver_arrived');
+    mock.control.advance(tripId, 'in_progress');
+    mock.control.advance(tripId, 'completed');
+
+    const page = await mock.port.history({});
+    assert.ok(page.ok);
+    if (!page.ok) return;
+    const entry = page.data.items[0];
+    assert.ok(entry);
+    assert.equal(entry!.tripId, tripId);
+    assert.equal(entry!.status, 'completed');
+    assert.deepEqual(entry!.origin, ORIGIN);
+    assert.deepEqual(entry!.destination, DESTINATION);
+    assert.equal(typeof entry!.distanceM, 'number');
+    assert.equal(typeof entry!.durationS, 'number');
+    assert.ok(entry!.fare, 'P2: completed mostra o valor final cobrado');
+    assert.equal(entry!.fare?.currency, 'BRL');
+    assert.equal(entry!.driver?.vehicleModel, 'Onix');
+    assert.equal(page.data.nextCursor, undefined);
+  });
+
+  test('corrida ainda em andamento NÃO entra no histórico (só terminal)', async () => {
+    const mock = fresh();
+    const { tripId } = await quotedAndRequested(mock);
+    mock.control.advance(tripId, 'searching_driver');
+    const page = await mock.port.history({});
+    assert.ok(page.ok);
+    if (page.ok) assert.deepEqual(page.data.items, []);
+  });
+
+  test('corrida cancelada também entra no histórico, mas P2: sem fare — nunca cobrou nada', async () => {
+    const mock = fresh();
+    const { tripId } = await quotedAndRequested(mock);
+    await mock.port.cancel(tripId, { reason: 'other' }, 'cancel-hist-1');
+    const page = await mock.port.history({});
+    assert.ok(page.ok);
+    if (page.ok) {
+      assert.equal(page.data.items[0]?.status, 'cancelled');
+      assert.equal(page.data.items[0]?.fare, undefined);
+      assert.equal(page.data.items[0]?.cancellationFee, undefined, 'ainda em aberto (decisão 15/M6)');
+    }
+  });
+
+  test('corrida que FALHOU por falta de motorista também não mostra fare', async () => {
+    const mock = fresh();
+    const { tripId } = await quotedAndRequested(mock);
+    mock.control.advance(tripId, 'searching_driver');
+    const result = mock.control.advance(tripId, 'failed');
+    assert.ok(result.ok);
+    const page = await mock.port.history({});
+    assert.ok(page.ok);
+    if (page.ok) {
+      assert.equal(page.data.items[0]?.status, 'failed');
+      assert.equal(page.data.items[0]?.fare, undefined);
+    }
+  });
+
+  test('corrida cancelada pelo SISTEMA antes de ter motorista também não mostra fare (cenário H2b da sonda da Nova)', async () => {
+    const mock = fresh();
+    const { tripId } = await quotedAndRequested(mock);
+    mock.control.advance(tripId, 'searching_driver');
+    const result = mock.control.cancel(tripId, 'system');
+    assert.ok(result.ok);
+    const page = await mock.port.history({});
+    assert.ok(page.ok);
+    if (page.ok) {
+      assert.equal(page.data.items[0]?.status, 'cancelled');
+      assert.equal(page.data.items[0]?.fare, undefined);
+    }
+  });
+
+  test('período (from/to) filtra por requestedAt; from depois de to é 400 validation', async () => {
+    const mock = fresh(Date.UTC(2026, 10, 22, 12, 0, 0));
+    const { tripId } = await quotedAndRequested(mock);
+    await mock.port.cancel(tripId, {}, 'cancel-hist-2');
+
+    const inRange = await mock.port.history({ from: '2026-11-22T00:00:00Z', to: '2026-11-23T00:00:00Z' });
+    assert.ok(inRange.ok);
+    if (inRange.ok) assert.equal(inRange.data.items.length, 1);
+
+    const outOfRange = await mock.port.history({ from: '2099-01-01T00:00:00Z' });
+    assert.ok(outOfRange.ok);
+    if (outOfRange.ok) assert.deepEqual(outOfRange.data.items, []);
+
+    const badDate = await mock.port.history({ from: 'não-é-uma-data' });
+    assert.equal(badDate.ok, false);
+    if (!badDate.ok) assert.deepEqual(badDate.error, { kind: 'validation', fields: { from: 'Data inicial inválida.' } });
+
+    const invalidRange = await mock.port.history({ from: '2099-01-01T00:00:00Z', to: '2000-01-01T00:00:00Z' });
+    assert.equal(invalidRange.ok, false);
+    if (!invalidRange.ok) assert.equal(invalidRange.error.kind, 'validation');
+  });
+
+  test('paginação por cursor: limit respeitado e nextCursor leva à página seguinte', async () => {
+    const mock = fresh();
+    // quotedAndRequested() usa uma idempotencyKey FIXA ('key-setup') — para 3 corridas no MESMO
+    // mock, cada uma precisa da própria chave (como em "4b) R6", acima), senão a 2ª bate em
+    // idempotency_key_reused por reaproveitar a chave com um quoteId diferente.
+    for (let i = 0; i < 3; i += 1) {
+      const quoteResult = await mock.port.quote({ origin: ORIGIN, destination: DESTINATION });
+      assert.ok(quoteResult.ok);
+      if (!quoteResult.ok) return;
+      const category = firstCategory(quoteResult.data);
+      const requestResult = await mock.port.request({ quoteId: category.quoteId, paymentMethodId: 'pm_1' }, `req-page-${i}`);
+      assert.ok(requestResult.ok);
+      if (!requestResult.ok) return;
+      await mock.port.cancel(requestResult.data.tripId, {}, `cancel-page-${i}`);
+    }
+    const firstPage = await mock.port.history({ limit: 2 });
+    assert.ok(firstPage.ok);
+    if (!firstPage.ok) return;
+    assert.equal(firstPage.data.items.length, 2);
+    assert.ok(firstPage.data.nextCursor, 'há uma 3ª viagem — tem próxima página');
+
+    const secondPage = await mock.port.history({ limit: 2, cursor: firstPage.data.nextCursor });
+    assert.ok(secondPage.ok);
+    if (secondPage.ok) {
+      assert.equal(secondPage.data.items.length, 1);
+      assert.equal(secondPage.data.nextCursor, undefined, 'sem mais páginas');
+    }
+  });
+
+  test('limit nunca passa do teto (50), mesmo pedindo mais', async () => {
+    const mock = fresh();
+    const page = await mock.port.history({ limit: 500 });
+    assert.ok(page.ok); // sem viagens ainda — o teto é aplicado, não lançado
+    if (page.ok) assert.deepEqual(page.data.items, []);
+  });
+});

@@ -23,7 +23,7 @@
  * atribuído (A3). `pickupDistanceM`/`pickupEtaS` vão arredondados (100 m / 1 min) — recomendação da
  * Nova: exatos estreitariam demais o quadrado aproximado do embarque.
  */
-import { cancelTrip, toApproximatePlace, transitionTrip } from '@vuumbora/domain';
+import { cancelTrip, toApproximatePlace, toTripRange, TRIP_TRANSITIONS, transitionTrip } from '@vuumbora/domain';
 import type { Money, Place, TripId, TripStatus } from '@vuumbora/domain';
 import type { DriverPhase, RideOffer, VerificationStatus } from '@vuumbora/domain/driver';
 import type { Result } from '../index';
@@ -39,7 +39,7 @@ import {
   succeed,
   validation,
 } from '../trip/result';
-import type { TripEvent } from '../trip/types';
+import type { TripEvent, TripHistoryPage } from '../trip/types';
 import type {
   DeclineReason,
   DriverAvailabilityInput,
@@ -47,6 +47,9 @@ import type {
   DriverJourneyPort,
   DriverLocationPort,
   DriverOfferPort,
+  DriverTripHistoryEntry,
+  DriverTripHistoryInput,
+  DriverTripHistoryPort,
   DriverTripPort,
   DriverTripSnapshot,
   LocationFix,
@@ -56,13 +59,23 @@ import type {
 const DEFAULT_OFFER_TTL_MS = 15 * 1000; // §5.4: proposta de 15 s
 const DEFAULT_PICKUP_DISTANCE_M = 1200;
 const DEFAULT_PICKUP_ETA_S = 240;
+/** Padrão da viagem (embarque → destino) só para a oferta ter o que arredondar em faixa (PP-12). */
+const DEFAULT_TRIP_DISTANCE_M = 5200;
+const DEFAULT_TRIP_DURATION_S = 900;
 const START_CODE_ATTEMPTS = 5;
 const PICKUP_DISTANCE_STEP_M = 100;
 const PICKUP_ETA_STEP_S = 60;
+const DEFAULT_HISTORY_LIMIT = 20;
+const MAX_HISTORY_LIMIT = 50;
 
 /** Arredonda para o múltiplo mais próximo de `step` — nunca o valor exato na oferta (recomendação da Nova). */
 function roundToStep(value: number, step: number): number {
   return Math.round(value / step) * step;
+}
+
+/** Terminal = sem saída na máquina de estados do servidor (completed, cancelled, failed). */
+function isTerminalStatus(status: TripStatus): boolean {
+  return TRIP_TRANSITIONS[status].length === 0;
 }
 
 interface TripInfo {
@@ -71,6 +84,9 @@ interface TripInfo {
   readonly categoryId: string;
   readonly estimatedPayout: Money;
   readonly passengerFirstName?: string;
+  /** Exatos — só para a história e a faixa da oferta; nunca aparecem direto numa resposta. */
+  readonly tripDistanceM: number;
+  readonly tripDurationS: number;
 }
 
 interface OfferRecord {
@@ -91,6 +107,14 @@ export interface OfferInput {
   /** Padrão 1200 m / 240 s — só para a oferta mostrar algo; não é cálculo real (fora do escopo do mock). */
   readonly pickupDistanceM?: number;
   readonly pickupEtaS?: number;
+  /**
+   * Distância/duração EXATAS da viagem (embarque → destino) — padrão 5200 m / 900 s. Nunca saem
+   * exatas: a oferta as arredonda em faixa (`RideOffer.tripDistanceM`/`tripDurationS`, PP-12); o
+   * histórico (`DriverTripHistoryPort`) as guarda como estão, porque depois da corrida já não
+   * revelam localização nenhuma.
+   */
+  readonly tripDistanceM?: number;
+  readonly tripDurationS?: number;
   /** Padrão 15 s (§5.4). */
   readonly ttlMs?: number;
   /** Para aparecer em `DriverTripSnapshot.passenger` depois do aceite. */
@@ -130,6 +154,8 @@ export interface MockDriverRide {
   readonly tripPort: DriverTripPort;
   readonly journeyPort: DriverJourneyPort;
   readonly locationPort: DriverLocationPort;
+  /** Histórico de corridas DESTE motorista (acréscimo PP-12, item 3). */
+  readonly historyPort: DriverTripHistoryPort;
   readonly control: MockDriverRideControl;
 }
 
@@ -157,6 +183,52 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
   const startCache = createIdempotencyCache<Result<DriverTripSnapshot>>();
   const completeCache = createIdempotencyCache<Result<DriverTripSnapshot>>();
 
+  // ---- histórico (item 3, PP-12): rascunho desde o aceite, fechado quando a corrida termina ----
+  const historyDrafts = new Map<TripId, { readonly assignedAtMs: number }>();
+  /** Mais recente primeiro — como `historyPort.history()` devolve a página (mock em memória). */
+  const historyEntries: DriverTripHistoryEntry[] = [];
+
+  /**
+   * P1 (achado da conferência da Nova sobre a PP-12, `docs/contratos/conferencia-pp12-nova.md`):
+   * só grava a entrada se, no estado FINAL, a corrida ainda está atribuída a ESTE motorista — mesma
+   * regra de visibilidade do R1 da F08. Sem essa checagem, um motorista que devolveu a corrida
+   * (voltou para a busca) continuava "escutando" o `tripId` por baixo (o watcher só se desliga num
+   * estado terminal) e, quando OUTRO motorista a concluía, herdava a entrada — com o `payout` e a
+   * categoria do PRÓPRIO rascunho dele, de uma corrida que não foi dele. `historyDrafts.delete` e
+   * `stop()` correm SEMPRE (mesmo sem gravar): é o que evita duplicata se este motorista aceitou o
+   * MESMO `tripId` mais de uma vez (devolveu e foi oferecido de novo) — o 1º watcher a ver o estado
+   * terminal apaga o rascunho; o(s) outro(s) encontram `draft` vazio e não gravam de novo.
+   */
+  function watchForHistory(tripId: TripId): void {
+    const stop = store.subscribe(tripId, (event) => {
+      if (event.type !== 'status' || !isTerminalStatus(event.status)) return;
+      const draft = historyDrafts.get(tripId);
+      const info = tripInfoById.get(tripId);
+      const stillAssignedToMe = store.get(tripId)?.assignedDriverId === driverId;
+      if (draft && info && stillAssignedToMe) {
+        historyEntries.unshift({
+          tripId,
+          status: event.status,
+          assignedAt: new Date(draft.assignedAtMs).toISOString(),
+          endedAt: new Date(clock()).toISOString(),
+          // PP-14: só bairro dos dois, nunca endereço nem ponto exato — mesma função da oferta.
+          pickup: toApproximatePlace(info.pickup),
+          destination: toApproximatePlace(info.destination),
+          categoryId: info.categoryId,
+          distanceM: info.tripDistanceM,
+          durationS: info.tripDurationS,
+          // P2 (mesma conferência): dinheiro só em completed — "ganho numa corrida cancelada" espera
+          // a decisão 15; mostrar o estimado hoje seria dinheiro na frente do motorista sem cobertura.
+          ...(event.status === 'completed' ? { payout: info.estimatedPayout } : {}),
+          // P3 (mesma conferência): sem o nome do passageiro — a M12 pede bairro, horário, distância,
+          // categoria e valor; nome guardado por meses é dado pessoal de outra pessoa sem uso aqui.
+        });
+      }
+      historyDrafts.delete(tripId);
+      stop();
+    });
+  }
+
   function emitOfferEvent(event: OfferEvent): void {
     for (const handler of offerSubscribers) handler(event);
   }
@@ -164,11 +236,15 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
   function offer(input: OfferInput): RideOffer {
     const tripId = input.tripId ?? (nextId() as TripId);
     if (!store.get(tripId)) store.create(tripId, 'searching_driver');
+    const tripDistanceM = input.tripDistanceM ?? DEFAULT_TRIP_DISTANCE_M;
+    const tripDurationS = input.tripDurationS ?? DEFAULT_TRIP_DURATION_S;
     tripInfoById.set(tripId, {
       pickup: input.pickup,
       destination: input.destination,
       categoryId: input.categoryId,
       estimatedPayout: input.estimatedPayout,
+      tripDistanceM,
+      tripDurationS,
       ...(input.passengerFirstName !== undefined ? { passengerFirstName: input.passengerFirstName } : {}),
     });
 
@@ -187,6 +263,7 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
       emitOfferEvent({ type: 'offer.revoked', offerId, reason: event.status === 'driver_assigned' ? 'taken' : 'cancelled' });
     });
 
+    const tripRange = toTripRange(tripDistanceM, tripDurationS);
     const rideOffer: RideOffer = {
       offerId,
       tripId,
@@ -198,6 +275,9 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
       pickupEtaS: roundToStep(input.pickupEtaS ?? DEFAULT_PICKUP_ETA_S, PICKUP_ETA_STEP_S),
       destination: toApproximatePlace(input.destination),
       categoryId: input.categoryId,
+      // PP-12: distância/duração da viagem (embarque → destino) em FAIXA — nunca o valor exato.
+      tripDistanceM: tripRange.distanceM,
+      tripDurationS: tripRange.durationS,
     };
     emitOfferEvent({ type: 'offer.created', offer: rideOffer });
     return rideOffer;
@@ -235,6 +315,8 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
       record.stopWatching();
       store.setStatus(record.tripId, outcome.state, driverId);
       store.setStatus(record.tripId, 'driver_en_route'); // sistema: automático no aceite, o app não chama nada (C1)
+      historyDrafts.set(record.tripId, { assignedAtMs: clock() });
+      watchForHistory(record.tripId);
       return succeed({ tripId: record.tripId });
     })();
 
@@ -407,6 +489,35 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
     return succeed(undefined);
   }
 
+  async function history(input: DriverTripHistoryInput): Promise<Result<TripHistoryPage<DriverTripHistoryEntry>>> {
+    if (input.from !== undefined && Number.isNaN(Date.parse(input.from))) return failWith(validation({ from: 'Data inicial inválida.' }));
+    if (input.to !== undefined && Number.isNaN(Date.parse(input.to))) return failWith(validation({ to: 'Data final inválida.' }));
+    const fromMs = input.from !== undefined ? Date.parse(input.from) : undefined;
+    const toMs = input.to !== undefined ? Date.parse(input.to) : undefined;
+    if (fromMs !== undefined && toMs !== undefined && fromMs > toMs) {
+      return failWith(validation({ from: 'Período inválido: data inicial depois da data final.' }));
+    }
+    const limit = Math.min(MAX_HISTORY_LIMIT, Math.max(1, input.limit ?? DEFAULT_HISTORY_LIMIT));
+
+    const filtered = historyEntries.filter((entry) => {
+      const endedMs = Date.parse(entry.endedAt);
+      if (fromMs !== undefined && endedMs < fromMs) return false;
+      if (toMs !== undefined && endedMs > toMs) return false;
+      return true;
+    });
+
+    let startIndex = 0;
+    if (input.cursor !== undefined) {
+      const at = filtered.findIndex((entry) => entry.tripId === input.cursor);
+      startIndex = at === -1 ? filtered.length : at + 1;
+    }
+    const items = filtered.slice(startIndex, startIndex + limit);
+    const hasMore = startIndex + limit < filtered.length;
+    const lastItem = items[items.length - 1];
+    const nextCursor = hasMore && lastItem ? lastItem.tripId : undefined;
+    return succeed({ items, ...(nextCursor !== undefined ? { nextCursor } : {}) });
+  }
+
   const control: MockDriverRideControl = {
     offer,
     takeOffer(offerId) {
@@ -441,6 +552,7 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
     tripPort: { status, subscribe, arrived, start, complete, cancel },
     journeyPort: { verification, setAvailability },
     locationPort: { sendLocations },
+    historyPort: { history },
     control,
   };
 }

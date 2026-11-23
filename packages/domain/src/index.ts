@@ -25,6 +25,22 @@ export interface Money {
 }
 
 /**
+ * Faixa — nunca o valor exato. Mesmo princípio de `ApproximatePlace` (ver `geo.ts`), para números:
+ * usada quando um dado precisa aparecer ANTES de um compromisso (ex.: distância/duração da viagem
+ * na oferta ao motorista, PP-12) sem revelar mais do que o necessário. `[min, max)`: o valor real
+ * está entre os dois, nunca é igual a `max`.
+ *
+ * Chamado `NumericRange`, não `Range` (achado da conferência da Nova sobre a PP-12,
+ * `docs/contratos/conferencia-pp12-nova.md`): `Range` é um tipo global do DOM (`lib.dom.d.ts`) — um
+ * arquivo que compila com a lib DOM (ex. o painel admin) e esquece de importar este tipo pegaria o
+ * do navegador, calado, em vez de um erro de compilação.
+ */
+export interface NumericRange {
+  readonly min: number;
+  readonly max: number;
+}
+
+/**
  * Origem do dado exibido. Todo dado de demonstração carrega `mock` até a tela —
  * a UI é obrigada a sinalizar (DESIGN_SYSTEM_MESTRE §9/§10).
  */
@@ -82,5 +98,9 @@ export {
 export type { CancelActor, TripTransitionResult } from './trip-lifecycle';
 
 /** Localização aproximada (bairro + ponto arredondado) — decisão do dono em 22/11/2026. */
-export { toApproximatePlace } from './geo';
+export { toApproximatePlace, toTripRange } from './geo';
 export type { ApproximatePlace } from './geo';
+
+/** Cálculo de tarifa — simulador do dono (decisão 7) e, depois, cotação real do M4. */
+export { calculateFare, resolvePlatformFeeTier, splitFare } from './fare';
+export type { FareRates, FareInput, FareBreakdown, PlatformFeeTier, DriverStanding, FareSplit } from './fare';
