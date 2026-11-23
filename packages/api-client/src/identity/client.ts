@@ -19,6 +19,8 @@ import type {
   AccountWithConsent,
   ConsentStatus,
   CurrentLegal,
+  DeleteAccountInput,
+  DeleteAccountOutput,
   DevicePlatform,
   ForgotPasswordInput,
   IdentityApi,
@@ -95,6 +97,12 @@ export interface IdentityClient {
    * exibiu; versão que não é a vigente = `conflict` / `consent_outdated` com `error.current`. Idempotente.
    */
   acceptConsents(input: AcceptConsentsInput): Promise<Result<ConsentStatus>>;
+  /**
+   * Exclusão de conta: reautentica por senha (401 → renova e repete uma vez) e, se confirmada,
+   * encerra a sessão local — o servidor já revogou TODAS as sessões, não só esta. `401
+   * wrong_password` deixa a conta e a sessão intactas (a tela pode deixar a pessoa tentar de novo).
+   */
+  deleteAccount(input: DeleteAccountInput): Promise<Result<DeleteAccountOutput>>;
 }
 
 const UNKNOWN_APP_VERSION = 'unknown';
@@ -196,5 +204,12 @@ export function createIdentityClient(config: IdentityClientConfig): IdentityClie
     me: () => controller.run((accessToken) => api.me(accessToken)),
 
     acceptConsents: (input) => controller.run((accessToken) => api.acceptConsents(accessToken, input)),
+
+    async deleteAccount(input) {
+      const result = await controller.run((accessToken) => api.deleteAccount(accessToken, input));
+      if (!result.ok) return result;
+      await controller.endLocal('user'); // o servidor já revogou TODAS as sessões, inclusive esta
+      return result;
+    },
   };
 }

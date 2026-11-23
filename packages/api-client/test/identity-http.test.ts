@@ -147,6 +147,22 @@ describe('adaptador http — o que vai no fio', () => {
     assert.equal(result.origin, 'real');
   });
 
+  test('deleteAccount manda só a senha no corpo, com Bearer, e reconhece { accountDeleted: true }', async () => {
+    server.script('POST /v1/auth/delete-account', okReply({ accountDeleted: true }));
+    const result = await adapter().deleteAccount('token-abc', { password: PASSWORD });
+    assert.ok(result.ok);
+    if (result.ok) assert.deepEqual(result.data, { accountDeleted: true });
+    const request = server.last('POST', '/v1/auth/delete-account');
+    assert.deepEqual(request?.body, { password: PASSWORD });
+    assert.equal(request?.headers['authorization'], 'Bearer token-abc');
+  });
+
+  test('deleteAccount com senha errada: 401 wrong_password', async () => {
+    server.script('POST /v1/auth/delete-account', { status: 401, body: { ok: false, error: { code: 'wrong_password', message: 'Senha incorreta.' } } });
+    const result = await adapter().deleteAccount('token-abc', { password: 'errada' });
+    assert.ok(!result.ok && result.error.kind === 'unauthorized' && result.error.code === 'wrong_password');
+  });
+
   test('configuração inválida falha na montagem, não na primeira chamada', () => {
     const base = { accountType: 'passenger', appVersion: APP_VERSION } as const;
     for (const baseUrl of ['não é url', 'ftp://exemplo.com', 'http://exemplo.com/?a=1', 'http://exemplo.com/#x']) {
@@ -575,6 +591,27 @@ describe('IdentityClient sobre http — sessão e renovação de ponta a ponta',
     assert.ok((await identity.login({ identifier: EMAIL, password: PASSWORD })).ok);
     const result = await identity.logoutAll();
     assert.ok(result.ok && result.data.revokedSessions === 1);
+    assert.deepEqual(identity.session.getState(), { status: 'signed_out', reason: 'user' });
+  });
+
+  test('deleteAccount: sucesso encerra a sessão local (o servidor já revogou todas); senha errada mantém a sessão', async () => {
+    const identity = client();
+    assert.ok((await identity.login({ identifier: EMAIL, password: PASSWORD })).ok);
+
+    // Nota (achado de contrato): `wrong_password` é 401, igual a "token de acesso inválido" — o
+    // `kind` não distingue os dois. `session.run()` trata TODO 401 como "renova e repete uma vez"
+    // (genérico, para qualquer porta autenticada), então a senha errada paga um `/refresh` extra
+    // (sem efeito prático: a sessão segue a mesma, e o servidor real responderia `wrong_password`
+    // de novo na repetição). Script PERSISTENTE (sem `once`) para a 2ª chamada ver a mesma coisa.
+    server.script('POST /v1/auth/delete-account', { status: 401, body: { ok: false, error: { code: 'wrong_password', message: 'x' } } });
+    const wrong = await identity.deleteAccount({ password: 'errada-errada' });
+    assert.ok(!wrong.ok && wrong.error.code === 'wrong_password');
+    assert.equal(identity.session.getState().status, 'signed_in', 'senha errada não encerra a sessão');
+    server.clearScripts();
+
+    server.script('POST /v1/auth/delete-account', { status: 200, body: { ok: true, data: { accountDeleted: true } } }, { once: true });
+    const result = await identity.deleteAccount({ password: PASSWORD });
+    assert.ok(result.ok && result.data.accountDeleted);
     assert.deepEqual(identity.session.getState(), { status: 'signed_out', reason: 'user' });
   });
 

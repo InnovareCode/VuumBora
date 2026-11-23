@@ -56,3 +56,13 @@ export interface TripRealtimePort {
   /** Devolve a função de cancelamento (unsubscribe). Chamar duas vezes é inofensivo. */
   subscribe(tripId: TripId, onEvent: (event: TripEvent) => void): () => void;
 }
+
+/**
+ * Página de histórico por cursor — comum aos dois perfis (`PassengerRidePort.history`,
+ * `DriverTripHistoryPort.history`, acréscimo PP-12, item 3). `nextCursor` ausente = não há próxima
+ * página. Nunca existe um método que devolva a lista inteira sem paginação.
+ */
+export interface TripHistoryPage<T> {
+  readonly items: readonly T[];
+  readonly nextCursor?: string;
+}

@@ -24,6 +24,7 @@ import type {
   AccountType,
   AccountWithConsent,
   ConsentStatus,
+  DeleteAccountOutput,
   IdentityApi,
   RegisterOutput,
   ResendOutput,
@@ -272,6 +273,14 @@ export function createIdentityHttpAdapter(options: IdentityHttpOptions): Identit
           ...(input.privacyVersion !== undefined ? { privacyVersion: input.privacyVersion } : {}),
         },
         (data) => (isRecord(data) ? parseConsentStatus(data['consent']) : null),
+        accessToken,
+      ),
+
+    deleteAccount: (accessToken, input) =>
+      post<DeleteAccountOutput>(
+        '/v1/auth/delete-account',
+        { password: input.password },
+        (data) => (isRecord(data) && data['accountDeleted'] === true ? ({ accountDeleted: true } as const) : null),
         accessToken,
       ),
   };

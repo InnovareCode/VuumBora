@@ -16,7 +16,7 @@
 import type { Money, Place, TripId, TripStatus } from '@vuumbora/domain';
 import type { FareEstimate } from '@vuumbora/domain/passenger';
 import type { Result } from '../index';
-import type { TripBaseSnapshot, TripRealtimePort } from '../trip/types';
+import type { TripBaseSnapshot, TripHistoryPage, TripRealtimePort } from '../trip/types';
 
 /** §5.3: oferta pequena = espera maior. NÃO bloqueia o pedido — só avisa antes (ver B1). */
 export type CategoryAvailability = 'high' | 'low' | 'none';
@@ -59,6 +59,18 @@ export interface TripDriverSummary {
   readonly driverId: string;
   readonly firstName: string;
   readonly plate: string;
+  /**
+   * Modelo e cor do veículo — acréscimo PP-12 (decisão do dono em 22/11/2026,
+   * `docs/fichas-de-tela/README.md`): sem eles o passageiro não reconhece o carro na rua, e isso é
+   * segurança, não estética (o plano já previa os dois, `plano-sistema-arquitetura.md:615`).
+   * OPCIONAIS aqui (não no servidor, que sempre os envia) só para não quebrar quem já constrói este
+   * tipo sem eles hoje (ex.: `apps/passenger/src/sim/rideSimulator.ts`) — a tela trata ausência como
+   * "dado indisponível", nunca como "sem veículo".
+   */
+  readonly vehicleModel?: string;
+  readonly vehicleColor?: string;
+  /** Nota média do motorista (1 a 5). Ausente = motorista sem avaliação ainda (recém-aprovado). */
+  readonly rating?: number;
 }
 
 /**
@@ -67,6 +79,33 @@ export interface TripDriverSummary {
  * antigo.
  */
 export interface PassengerTripSnapshot extends TripBaseSnapshot {
+  readonly driver?: TripDriverSummary;
+}
+
+/** `GET /v1/trips?cursor`, página de histórico. Nunca "todas de uma vez" — paginação sempre. */
+export interface PassengerTripHistoryInput {
+  readonly cursor?: string;
+  /** Padrão 20, teto 50 — nunca o histórico inteiro de uma só vez. */
+  readonly limit?: number;
+  /** Período (ISO 8601 com offset), ambos opcionais, filtra por `requestedAt`. `from` depois de `to` é `400 validation`. */
+  readonly from?: string;
+  readonly to?: string;
+}
+
+/** Uma viagem já terminada do histórico do passageiro — acréscimo PP-12 (período) + item 3 do pedido. */
+export interface PassengerTripHistoryEntry {
+  readonly tripId: TripId;
+  /** Sempre terminal: `completed`, `cancelled` ou `failed`. */
+  readonly status: TripStatus;
+  readonly requestedAt: string;
+  readonly endedAt: string;
+  readonly origin: Place;
+  readonly destination: Place;
+  readonly categoryId: string;
+  readonly distanceM: number;
+  readonly durationS: number;
+  readonly fare: Money;
+  /** Só presente se a corrida teve motorista atribuído (mesma regra do snapshot, B4). */
   readonly driver?: TripDriverSummary;
 }
 
@@ -87,6 +126,11 @@ export interface PassengerRidePort extends TripRealtimePort {
     input: { readonly reason?: CancelReason },
     idempotencyKey: string,
   ): Promise<Result<{ readonly status: TripStatus; readonly cancellationFee?: Money }>>;
+  /**
+   * Histórico de viagens (`GET /v1/trips?cursor`), com período (item 3 do acréscimo PP-12).
+   * `400 validation` em `from`/`to` inválidos ou `from` depois de `to`.
+   */
+  history(input: PassengerTripHistoryInput): Promise<Result<TripHistoryPage<PassengerTripHistoryEntry>>>;
 }
 
 export interface PlacesPort {

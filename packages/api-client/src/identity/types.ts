@@ -147,6 +147,15 @@ export interface ResendOutput {
   readonly resendAfterSeconds: number;
 }
 
+/** `POST /v1/auth/delete-account` — reautentica por senha antes de anonimizar a conta. */
+export interface DeleteAccountInput {
+  readonly password: string;
+}
+
+export interface DeleteAccountOutput {
+  readonly accountDeleted: true;
+}
+
 /**
  * A porta SEM ESTADO de sessão: as rotas do contrato + `GET /me`, `GET /legal/current` e `POST /consents`, com os
  * tokens passados por quem chama. Dois adaptadores com a mesma forma de erro: `http` (origin `real`) e `mock`
@@ -169,4 +178,12 @@ export interface IdentityApi {
   me(accessToken: string): Promise<Result<AccountWithConsent>>;
   /** Idempotente (reaceitar a mesma versão não duplica). Tudo ou nada: uma versão que não é a vigente = `409`. */
   acceptConsents(accessToken: string, input: AcceptConsentsInput): Promise<Result<ConsentStatus>>;
+  /**
+   * Exclusão de conta (`docs/contrato-identidade-apps.md`, item 3 das pendências jurídicas).
+   * Reautentica por senha (gasta bcrypt no servidor, mesma classe de limite do login/cadastro); só
+   * se ela confere, a conta é anonimizada e TODAS as sessões são revogadas (não só a usada).
+   * `401 wrong_password` (conta e sessões continuam vivas) ou `401 unauthorized` (sem sessão
+   * válida); `429 too_many_attempts` com espera própria (par conta+IP, isolada do login).
+   */
+  deleteAccount(accessToken: string, input: DeleteAccountInput): Promise<Result<DeleteAccountOutput>>;
 }

@@ -55,6 +55,29 @@ describe('control.offer — embarque E destino só o bairro (decisão do dono, 2
     assert.equal(snapshot, undefined, 'antes do aceite, nem este motorista vê o DriverTripSnapshot (A3)');
   });
 
+  test('PP-12: tripDistanceM/tripDurationS vêm em FAIXA — nunca o valor exato', () => {
+    const mock = fresh();
+    const offer = mock.control.offer({
+      pickup: PICKUP,
+      destination: DESTINATION,
+      categoryId: 'vuumbora',
+      estimatedPayout: PAYOUT,
+      tripDistanceM: 5200,
+      tripDurationS: 900,
+    });
+    assert.deepEqual(offer.tripDistanceM, { min: 5000, max: 6000 });
+    assert.deepEqual(offer.tripDurationS, { min: 900, max: 1200 });
+    assert.ok(offer.tripDistanceM.min <= 5200 && 5200 < offer.tripDistanceM.max);
+    assert.ok(offer.tripDurationS.min <= 900 && 900 < offer.tripDurationS.max);
+  });
+
+  test('PP-12: sem tripDistanceM/tripDurationS na entrada, usa o padrão (5200 m / 900 s) — a faixa nunca falta', () => {
+    const mock = fresh();
+    const offer = mock.control.offer({ pickup: PICKUP, destination: DESTINATION, categoryId: 'vuumbora', estimatedPayout: PAYOUT });
+    assert.deepEqual(offer.tripDistanceM, { min: 5000, max: 6000 });
+    assert.deepEqual(offer.tripDurationS, { min: 900, max: 1200 });
+  });
+
   test('pickupDistanceM arredonda a 100 m e pickupEtaS a 1 min (recomendação da Nova na reconferência)', () => {
     const mock = fresh();
     const offer = mock.control.offer({
@@ -108,6 +131,8 @@ describe('accept', () => {
         pickupEtaS: 120,
         destination: { neighborhood: 'Lagoa Nova', approximatePoint: { latitude: -5.8, longitude: -35.2 } },
         categoryId: 'vuumbora',
+        tripDistanceM: { min: 5000, max: 6000 },
+        tripDurationS: { min: 900, max: 1200 },
       },
       'k1',
     );
@@ -168,6 +193,8 @@ describe('decline', () => {
         pickupEtaS: 120,
         destination: { neighborhood: 'Lagoa Nova', approximatePoint: { latitude: -5.8, longitude: -35.2 } },
         categoryId: 'vuumbora',
+        tripDistanceM: { min: 5000, max: 6000 },
+        tripDurationS: { min: 900, max: 1200 },
       },
       { reason: 'too_far' },
     );
@@ -695,5 +722,108 @@ describe('cenários da sonda da Nova (permanentes) — store compartilhada, dois
     const driverView = await drv.tripPort.status(tripId);
     assert.ok(driverView.ok, 'R1: status() do motorista atribuído não vira 404 depois do cancelamento do passageiro');
     if (driverView.ok) assert.equal(driverView.data.status, 'cancelled');
+  });
+});
+
+describe('historyPort.history — PP-12, item 3 (porta que não existia)', () => {
+  test('corrida concluída entra no histórico só com bairro — nunca endereço nem ponto exato (PP-14)', async () => {
+    const mock = fresh();
+    const offer = mock.control.offer({
+      pickup: PICKUP,
+      destination: DESTINATION,
+      categoryId: 'vuumbora',
+      estimatedPayout: PAYOUT,
+      tripDistanceM: 4000,
+      tripDurationS: 600,
+      passengerFirstName: 'Marina',
+    });
+    const accepted = await mock.offerPort.accept(offer, 'acc-hist-1');
+    assert.ok(accepted.ok);
+    if (!accepted.ok) return;
+    await mock.tripPort.arrived(offer.tripId, 'arr-1');
+    await mock.tripPort.start(offer.tripId, {}, 'start-1');
+    await mock.tripPort.complete(offer.tripId, {}, 'complete-1');
+
+    const page = await mock.historyPort.history({});
+    assert.ok(page.ok);
+    if (!page.ok) return;
+    const entry = page.data.items[0];
+    assert.ok(entry);
+    assert.equal(entry!.tripId, offer.tripId);
+    assert.equal(entry!.status, 'completed');
+    assert.equal(entry!.pickup.neighborhood, 'Tirol');
+    assert.equal(entry!.destination.neighborhood, 'Lagoa Nova');
+    assert.ok(!('address' in entry!.pickup), 'PP-14: nunca endereço exato no histórico do motorista');
+    assert.ok(!('address' in entry!.destination));
+    assert.equal(entry!.distanceM, 4000);
+    assert.equal(entry!.durationS, 600);
+    assert.deepEqual(entry!.payout, PAYOUT);
+    assert.equal(entry!.passenger?.firstName, 'Marina');
+    assert.equal(page.data.nextCursor, undefined, 'só uma viagem: sem próxima página');
+  });
+
+  test('corrida cancelada (pelo passageiro, com o motorista atribuído — R1) também entra no histórico', async () => {
+    // R1: só o passageiro cancelando mata a corrida (cancelled) com o motorista ainda atribuído —
+    // o PRÓPRIO motorista cancelando de driver_en_route volta para a busca (não é terminal, ver o
+    // teste seguinte). Por isso aqui precisa dos dois lados na MESMA store, como em "6) R1" acima.
+    const store = createTripStore(() => 0);
+    const passenger = createMockPassengerRidePort({ store, clock: () => 0 });
+    const drv = createMockDriverRidePort({ store, clock: () => 0, driverId: 'hist-driver' });
+
+    const quote = await passenger.port.quote({ origin: PICKUP, destination: DESTINATION });
+    assert.ok(quote.ok);
+    if (!quote.ok) return;
+    const category = (quote.data as Quote).categories[0];
+    const requested = await passenger.port.request({ quoteId: category!.quoteId, paymentMethodId: 'pm' }, 'req-hist-2');
+    assert.ok(requested.ok);
+    if (!requested.ok) return;
+    const tripId = requested.data.tripId;
+    passenger.control.advance(tripId, 'searching_driver');
+
+    const offer = drv.control.offer({ tripId, pickup: PICKUP, destination: DESTINATION, categoryId: 'vuumbora', estimatedPayout: PAYOUT });
+    await drv.offerPort.accept(offer, 'acc-hist-2');
+    await passenger.port.cancel(tripId, {}, 'cancel-hist-2'); // mata a corrida (R1) — o motorista continua atribuído
+
+    const page = await drv.historyPort.history({});
+    assert.ok(page.ok);
+    if (page.ok) assert.equal(page.data.items[0]?.status, 'cancelled');
+  });
+
+  test('motorista que recusa (volta para a busca) NÃO entra no histórico — a corrida não terminou para ele', async () => {
+    const mock = fresh();
+    const offer = mock.control.offer({ pickup: PICKUP, destination: DESTINATION, categoryId: 'vuumbora', estimatedPayout: PAYOUT });
+    await mock.offerPort.accept(offer, 'acc-hist-3');
+    await mock.tripPort.cancel(offer.tripId, {}, 'cancel-hist-3'); // driver_en_route -> volta para searching_driver
+
+    const page = await mock.historyPort.history({});
+    assert.ok(page.ok);
+    if (page.ok) assert.deepEqual(page.data.items, []);
+  });
+
+  test('período (from/to) filtra por endedAt; from depois de to é 400 validation', async () => {
+    const mock = fresh(Date.UTC(2026, 10, 22, 12, 0, 0));
+    const offer = mock.control.offer({ pickup: PICKUP, destination: DESTINATION, categoryId: 'vuumbora', estimatedPayout: PAYOUT });
+    await mock.offerPort.accept(offer, 'acc-hist-4');
+    await mock.tripPort.arrived(offer.tripId, 'arr-4');
+    await mock.tripPort.cancel(offer.tripId, { reason: 'other' }, 'cancel-hist-4b'); // de driver_arrived: mata a corrida (terminal)
+
+    const inRange = await mock.historyPort.history({ from: '2026-11-22T00:00:00Z', to: '2026-11-23T00:00:00Z' });
+    assert.ok(inRange.ok);
+    if (inRange.ok) assert.equal(inRange.data.items.length, 1, 'a viagem terminada cai dentro do período');
+
+    const future = await mock.historyPort.history({ from: '2099-01-01T00:00:00Z' });
+    assert.ok(future.ok);
+    if (future.ok) assert.deepEqual(future.data.items, [], 'fora do período, a página vem vazia');
+
+    const invalidRange = await mock.historyPort.history({ from: '2099-01-01T00:00:00Z', to: '2000-01-01T00:00:00Z' });
+    assert.equal(invalidRange.ok, false);
+    if (!invalidRange.ok) assert.equal(invalidRange.error.kind, 'validation');
+  });
+
+  test('limit é respeitado e nunca passa do teto (50)', async () => {
+    const mock = fresh();
+    const page = await mock.historyPort.history({ limit: 500 });
+    assert.ok(page.ok); // sem viagens ainda, mas o teto não pode lançar nem devolver além do que existe
+    if (page.ok) assert.deepEqual(page.data.items, []);
   });
 });

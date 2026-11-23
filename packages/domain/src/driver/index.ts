@@ -2,7 +2,7 @@
  * @vuumbora/domain/driver — regras e fases do MOTORISTA.
  * Nunca importar a partir de apps/passenger.
  */
-import type { ApproximatePlace, IsoDateTime, Money, TripId } from '../index';
+import type { ApproximatePlace, IsoDateTime, Money, Range, TripId } from '../index';
 
 /** Fases de jornada do motorista (DESIGN_SYSTEM_MESTRE §8). */
 export type DriverPhase =
@@ -43,6 +43,14 @@ export interface RideOffer {
   readonly pickupEtaS: number;
   readonly destination: ApproximatePlace;
   readonly categoryId: string;
+  /**
+   * Distância e duração da viagem (embarque até destino) em FAIXA — acréscimo PP-12 (decisão do
+   * dono em 22/11/2026, `docs/fichas-de-tela/README.md`): calculadas por `toTripRange` (`../geo`) a
+   * partir dos valores exatos, que nunca aparecem aqui — mesmo princípio de `pickup`/`destination`
+   * (bairro, nunca endereço exato).
+   */
+  readonly tripDistanceM: Range;
+  readonly tripDurationS: Range;
 }
 
 /** Regra (MOTORISTA.md): não permitir ficar online antes de cadastro e documentação aprovados. */

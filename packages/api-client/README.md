@@ -45,7 +45,7 @@ const identity = createIdentityClient({
 
 - **Telas usam `IdentityClient`**: `legalCurrent`, `register`, `verifyEmail`, `resendVerification`, `forgotPassword`,
   `resetPassword`, `login` (grava a sessão e devolve **só a conta**; os tokens nunca saem), `logout`, `logoutAll`, `me`
-  (a conta + `consent`), `acceptConsents`.
+  (a conta + `consent`), `acceptConsents`, `deleteAccount`.
   `accountType` entra sozinho em todo corpo; campos que o contrato não pede (ex.: `confirmPassword`) não são enviados.
 - **Termos de Uso e Política de Privacidade — o aceite prova o que a pessoa VIU (M-2)**:
   - `legalCurrent()` (sem sessão; o perfil é o `accountType` do app) devolve os dois documentos vigentes:
@@ -65,6 +65,16 @@ const identity = createIdentityClient({
     vez), é idempotente e devolve o `consent` novo. Versão que não é a vigente = o mesmo `409` com `error.current`.
   - O `mock` acompanha: catálogo em `mock.legal` (padrão `mock-1`), `409` com `current`, `consent` em `me`, reaceite.
     `sha256` (zeros) e `url` (`.invalid`) do mock são fictícios.
+- **Exclusão de conta** (`deleteAccount({ password })`, item 3 das pendências jurídicas,
+  `docs/contrato-identidade-apps.md`): reautentica por senha pela sessão atual (401 → renova e repete uma vez) e, se
+  confirmada, encerra a sessão LOCAL — o servidor já revogou TODAS as sessões da conta, não só esta. `401
+  wrong_password` deixa a conta e a sessão intactas (a tela pode deixar tentar de novo); `401 unauthorized` é sem
+  sessão válida. **Achado de contrato:** `wrong_password` é `401`, o MESMO status de "token de acesso inválido" — o
+  `kind` não distingue os dois, então uma senha errada aciona o `refresh` automático do `SessionManager` (genérico
+  para qualquer porta autenticada) antes de devolver o erro: um `/refresh` a mais, sem efeito prático (a sessão segue
+  a mesma e o servidor responde `wrong_password` de novo na repetição), mas vale saber que a tentativa gasta um
+  round-trip extra — e, no servidor real, bcrypt a mais. Ainda não existe tela nos apps que chame isto (gap conhecido,
+  `docs/veredito-iris-s1-passada-8.md`).
 - **Estado de sessão**: `identity.session.getState()` / `subscribe()` / `restore()` →
   `unknown` (lendo o cofre) | `signed_in` | `signed_out` com `reason` `none | user | session_expired`. O objeto é estável
   enquanto nada muda (serve a `useSyncExternalStore`); rotação de token não notifica.
@@ -157,11 +167,16 @@ já filtra) ou `idempotency_key_reused` (achado A4, ver "Idempotência", abaixo)
 `tripId`/`status`/`seq` são a base comum (`TripBaseSnapshot`, `@vuumbora/api-client/trip`); o resto é
 **diferente por perfil** (achado B4, para o S4 não misturar dado que só um lado pode ver — ex.: o código de
 embarque, D-12):
-- `PassengerTripSnapshot.driver?: { driverId, firstName, plate }` — só enquanto a corrida TEM motorista
-  atribuído; some depois de uma volta para a busca (achado A2 — nunca mostra o motorista antigo). **R2
-  (reconferência):** o mock resolve o resumo pelo `assignedDriverId` ATUAL da store (não por um valor
-  guardado à parte do `tripId`) — é assim que o resumo de um motorista que já saiu nunca "é herdado" pelo
-  motorista seguinte, mesmo que ninguém tenha lido o snapshot no meio da troca.
+- `PassengerTripSnapshot.driver?: { driverId, firstName, plate, vehicleModel?, vehicleColor?, rating? }` — só
+  enquanto a corrida TEM motorista atribuído; some depois de uma volta para a busca (achado A2 — nunca mostra o
+  motorista antigo). **R2 (reconferência):** o mock resolve o resumo pelo `assignedDriverId` ATUAL da store (não por
+  um valor guardado à parte do `tripId`) — é assim que o resumo de um motorista que já saiu nunca "é herdado" pelo
+  motorista seguinte, mesmo que ninguém tenha lido o snapshot no meio da troca. **PP-12 (acréscimo, decisão do dono em
+  22/11/2026):** `vehicleModel` e `vehicleColor` — sem eles o passageiro não reconhece o carro na rua, e isso é
+  segurança, não estética (`plano-sistema-arquitetura.md:615`); `rating` é a nota média do motorista (1 a 5), ausente
+  num motorista sem avaliação ainda. Os três são **opcionais no tipo** (o servidor real sempre os envia) só para não
+  quebrar quem já constrói `TripDriverSummary` sem eles hoje (`apps/passenger/src/sim/rideSimulator.ts`) — a tela
+  trata ausência como "dado indisponível", nunca como "motorista sem carro".
 - `DriverTripSnapshot`: `pickup`/`destination` **completos** (`Place`, endereço e ponto exatos — só porque
   o motorista já foi atribuído), `categoryId`, `estimatedPayout`, `passenger?: { firstName }`.
 
@@ -223,6 +238,13 @@ motorista atribuído.
 exato quando ele era, por acaso, o próprio endereço (mock sem bairro, ou um geocodificador real que não
 devolve bairro).
 
+**Distância e duração da viagem na oferta, em FAIXA — acréscimo PP-12 (decisão do dono em 22/11/2026,
+`docs/fichas-de-tela/README.md`):** `RideOffer.tripDistanceM`/`tripDurationS` (`@vuumbora/domain/driver`) são
+`Range` (`{ min, max }`, `@vuumbora/domain`) em passos de 1 km / 5 min, calculados por `toTripRange`
+(`@vuumbora/domain/geo`) — nunca o valor exato, pelo mesmo motivo de `pickup`/`destination` só levarem o bairro: o
+par exato estreitaria de volta o quadrado aproximado. No mock, `control.offer({ tripDistanceM?, tripDurationS? })`
+aceita os valores EXATOS (padrão 5200 m / 900 s) e devolve a faixa já calculada em `RideOffer`.
+
 ### Visibilidade do motorista — achado A3, revisado por R1
 
 `DriverTripPort` (status, eventos, `arrived`/`start`/`complete`/`cancel`) só responde para o motorista
@@ -280,6 +302,32 @@ estado atual e entrega um `status` com ele antes de voltar a repassar o canal; a
 sozinha. A porta só repassa eventos de estado com `seq` ESTRITAMENTE crescente e descarta ela mesma
 qualquer duplicado. Sem `Result`: é um stream — "WS avisa, REST é a verdade"; corrida inexistente, ou não
 mais visível a quem assina (A3), não entrega nada.
+
+### Histórico — `PassengerRidePort.history` / `DriverTripHistoryPort.history` (acréscimo PP-12, item 3)
+
+Porta de histórico do motorista (que **não existia** no contrato) e período (`from`/`to`) no histórico do
+passageiro — decisão do dono em 22/11/2026 (`docs/fichas-de-tela/README.md`). As duas devolvem
+`TripHistoryPage<T>` (`@vuumbora/api-client/trip`: `{ items, nextCursor? }`) por cursor — **nunca** a lista
+inteira de uma vez: `limit` tem padrão 20 e teto 50 (o mock aplica o teto, não lança). `cursor` é o
+`tripId` do último item da página anterior. `from`/`to` (ISO 8601 com offset, ambos opcionais) filtram por
+data — `from` depois de `to`, ou qualquer um que não seja uma data válida, é `400 validation`.
+
+- `PassengerRidePort.history({ cursor?, limit?, from?, to? })` → `PassengerTripHistoryEntry[]`: viagens
+  TERMINAIS do passageiro (`completed`, `cancelled`, `failed`), com `origin`/`destination` COMPLETOS (é a
+  viagem dele), `distanceM`/`durationS`/`fare` exatos e `driver?` (mesmo `TripDriverSummary` enriquecido do
+  snapshot, PP-12) quando a corrida teve motorista atribuído. Filtra por `requestedAt`.
+- `DriverTripHistoryPort.history({ cursor?, limit?, from?, to? })` → `DriverTripHistoryEntry[]`: viagens
+  TERMINAIS deste motorista (`completed`, `cancelled`). **PP-14 (decisão do dono, com revisão do Órion
+  pendente quando a rota existir): `pickup`/`destination` são `ApproximatePlace` — só bairro, nunca
+  endereço nem ponto exato, mesmo tempo depois da corrida** (minimização LGPD: o endereço exato serviu
+  durante a corrida; guardado por meses, é o endereço de casa de outra pessoa). `distanceM`/`durationS`
+  exatos continuam — não revelam localização nenhuma depois do fato. Filtra por `endedAt`. Exposta em
+  `MockDriverRide.historyPort` (ao lado de `offerPort`/`tripPort`/`journeyPort`/`locationPort`).
+
+No mock, uma corrida só entra no histórico quando chega a um estado TERMINAL de verdade — o motorista
+voltando para a busca (`driver_en_route` → `searching_driver`, cancelamento DELE mesmo antes de
+`driver_arrived`) não é terminal e não aparece; o passageiro cancelando com o motorista atribuído (R1) é
+terminal e aparece nos dois históricos.
 
 ### Idempotência — achado A4, revisado por R6
 

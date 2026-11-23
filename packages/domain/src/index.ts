@@ -25,6 +25,16 @@ export interface Money {
 }
 
 /**
+ * Faixa — nunca o valor exato. Mesmo princípio de `ApproximatePlace` (ver `geo.ts`), para números:
+ * usada quando um dado precisa aparecer ANTES de um compromisso (ex.: distância/duração da viagem
+ * na oferta ao motorista, PP-12) sem revelar mais do que o necessário.
+ */
+export interface Range {
+  readonly min: number;
+  readonly max: number;
+}
+
+/**
  * Origem do dado exibido. Todo dado de demonstração carrega `mock` até a tela —
  * a UI é obrigada a sinalizar (DESIGN_SYSTEM_MESTRE §9/§10).
  */
@@ -82,5 +92,5 @@ export {
 export type { CancelActor, TripTransitionResult } from './trip-lifecycle';
 
 /** Localização aproximada (bairro + ponto arredondado) — decisão do dono em 22/11/2026. */
-export { toApproximatePlace } from './geo';
+export { toApproximatePlace, toTripRange } from './geo';
 export type { ApproximatePlace } from './geo';

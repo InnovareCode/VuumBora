@@ -18,17 +18,19 @@
  * `availability: 'none'` É aceito: se nenhum motorista aparecer no tempo máximo, a corrida termina
  * em `failed` (achado B1 da conferência).
  */
-import { cancelTrip, transitionTrip } from '@vuumbora/domain';
-import type { GeoPoint, Place, TripId, TripStatus, TripTransitionResult } from '@vuumbora/domain';
+import { cancelTrip, TRIP_TRANSITIONS, transitionTrip } from '@vuumbora/domain';
+import type { GeoPoint, Money, Place, TripId, TripStatus, TripTransitionResult } from '@vuumbora/domain';
 import { createIdempotencyCache, fingerprint } from '../trip/idempotency';
 import { createTripStore, DRIVER_ASSIGNED_STATUSES, type TripStore } from '../trip/mock-store';
-import { cancelConflict, failWith, notFound, quoteConflict, requestConflict, succeed } from '../trip/result';
-import type { CancelActor, TripEvent } from '../trip/types';
+import { cancelConflict, failWith, notFound, quoteConflict, requestConflict, succeed, validation } from '../trip/result';
+import type { CancelActor, TripEvent, TripHistoryPage } from '../trip/types';
 import type {
   CancelReason,
   CategoryAvailability,
   CategoryQuote,
   PassengerRidePort,
+  PassengerTripHistoryEntry,
+  PassengerTripHistoryInput,
   PassengerTripSnapshot,
   Quote,
   QuoteInput,
@@ -109,6 +111,14 @@ function fareOf(amountCents: number): CategoryQuote['estimate'] {
   return { kind: 'estimate', total: { amountCents, currency: 'BRL' } };
 }
 
+const DEFAULT_HISTORY_LIMIT = 20;
+const MAX_HISTORY_LIMIT = 50;
+
+/** Terminal = sem saída na máquina de estados do servidor (completed, cancelled, failed). */
+function isTerminalStatus(status: TripStatus): boolean {
+  return TRIP_TRANSITIONS[status].length === 0;
+}
+
 export function createMockPassengerRidePort(options: MockPassengerRideOptions = {}): MockPassengerRide {
   const clock = options.clock ?? Date.now;
   const quoteTtlMs = options.quoteTtlMs ?? DEFAULT_QUOTE_TTL_MS;
@@ -119,12 +129,55 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
 
   const fixtureById = new Map(fixtures.map((f) => [f.categoryId, f] as const));
   const enabledOverrides = new Map<string, boolean>();
-  const quotesById = new Map<string, { readonly categoryId: string; readonly expiresAtMs: number }>();
+  const quotesById = new Map<
+    string,
+    { readonly categoryId: string; readonly expiresAtMs: number; readonly origin: Place; readonly destination: Place }
+  >();
   /** Por `driverId` (R2) — NUNCA por `tripId`: ver o porquê no JSDoc de `MockPassengerRideControl.setDriverSummary`. */
   const driverSummaries = new Map<string, TripDriverSummary>();
 
   const requestCache = createIdempotencyCache<Result<{ readonly tripId: TripId; readonly status: TripStatus }>>();
   const cancelCache = createIdempotencyCache<Result<{ readonly status: TripStatus }>>();
+
+  // ---- histórico (item 3, PP-12): rascunho por tripId desde o pedido, fechado quando a corrida termina ----
+  interface HistoryDraft {
+    readonly requestedAtMs: number;
+    readonly origin: Place;
+    readonly destination: Place;
+    readonly categoryId: string;
+    readonly distanceM: number;
+    readonly durationS: number;
+    readonly fare: Money;
+  }
+  const historyDrafts = new Map<TripId, HistoryDraft>();
+  /** Mais recente primeiro — é como `history()` devolve a página (sem paginação real de banco). */
+  const historyEntries: PassengerTripHistoryEntry[] = [];
+
+  function watchForHistory(tripId: TripId): void {
+    const stop = store.subscribe(tripId, (event) => {
+      if (event.type !== 'status' || !isTerminalStatus(event.status)) return;
+      const draft = historyDrafts.get(tripId);
+      if (draft) {
+        const record = store.get(tripId);
+        const driver = record ? driverSummaryFor(record) : undefined;
+        historyEntries.unshift({
+          tripId,
+          status: event.status,
+          requestedAt: new Date(draft.requestedAtMs).toISOString(),
+          endedAt: new Date(clock()).toISOString(),
+          origin: draft.origin,
+          destination: draft.destination,
+          categoryId: draft.categoryId,
+          distanceM: draft.distanceM,
+          durationS: draft.durationS,
+          fare: draft.fare,
+          ...(driver ? { driver } : {}),
+        });
+        historyDrafts.delete(tripId);
+      }
+      stop();
+    });
+  }
 
   function isEnabled(categoryId: string): boolean {
     return enabledOverrides.get(categoryId) ?? fixtureById.get(categoryId)?.enabled ?? false;
@@ -140,7 +193,7 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
       if (fixture.kind !== kind || !isEnabled(fixture.categoryId)) continue; // B1: desligada não aparece
       const quoteId = nextId();
       const expiresAtMs = clock() + quoteTtlMs;
-      quotesById.set(quoteId, { categoryId: fixture.categoryId, expiresAtMs });
+      quotesById.set(quoteId, { categoryId: fixture.categoryId, expiresAtMs, origin: input.origin, destination: input.destination });
       categories.push({
         categoryId: fixture.categoryId,
         quoteId,
@@ -171,6 +224,19 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
 
       const tripId = nextId() as TripId;
       store.create(tripId, 'requested'); // B2: fica em requested (Pix antes da corrida, S5) — não avança sozinho
+      const fixture = fixtureById.get(found.categoryId);
+      if (fixture) {
+        historyDrafts.set(tripId, {
+          requestedAtMs: clock(),
+          origin: found.origin,
+          destination: found.destination,
+          categoryId: found.categoryId,
+          distanceM: fixture.distanceM,
+          durationS: fixture.durationS,
+          fare: fareOf(fixture.amountCents).total,
+        });
+        watchForHistory(tripId);
+      }
       return succeed({ tripId, status: 'requested' as TripStatus });
     })();
 
@@ -234,6 +300,36 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
     return store.subscribe(tripId, onEvent);
   }
 
+  async function history(input: PassengerTripHistoryInput): Promise<Result<TripHistoryPage<PassengerTripHistoryEntry>>> {
+    if (input.from !== undefined && Number.isNaN(Date.parse(input.from))) return failWith(validation({ from: 'Data inicial inválida.' }));
+    if (input.to !== undefined && Number.isNaN(Date.parse(input.to))) return failWith(validation({ to: 'Data final inválida.' }));
+    const fromMs = input.from !== undefined ? Date.parse(input.from) : undefined;
+    const toMs = input.to !== undefined ? Date.parse(input.to) : undefined;
+    if (fromMs !== undefined && toMs !== undefined && fromMs > toMs) {
+      return failWith(validation({ from: 'Período inválido: data inicial depois da data final.' }));
+    }
+    const limit = Math.min(MAX_HISTORY_LIMIT, Math.max(1, input.limit ?? DEFAULT_HISTORY_LIMIT));
+
+    const filtered = historyEntries.filter((entry) => {
+      const requestedMs = Date.parse(entry.requestedAt);
+      if (fromMs !== undefined && requestedMs < fromMs) return false;
+      if (toMs !== undefined && requestedMs > toMs) return false;
+      return true;
+    });
+
+    // Cursor opaco: o tripId do último item da página anterior (só vale para este mock em memória).
+    let startIndex = 0;
+    if (input.cursor !== undefined) {
+      const at = filtered.findIndex((entry) => entry.tripId === input.cursor);
+      startIndex = at === -1 ? filtered.length : at + 1;
+    }
+    const items = filtered.slice(startIndex, startIndex + limit);
+    const hasMore = startIndex + limit < filtered.length;
+    const lastItem = items[items.length - 1];
+    const nextCursor = hasMore && lastItem ? lastItem.tripId : undefined;
+    return succeed({ items, ...(nextCursor !== undefined ? { nextCursor } : {}) });
+  }
+
   const control: MockPassengerRideControl = {
     advance(tripId, to, assignedDriverId) {
       const record = store.get(tripId);
@@ -268,5 +364,5 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
     },
   };
 
-  return { port: { quote, request, status, cancel, subscribe }, control };
+  return { port: { quote, request, status, cancel, subscribe, history }, control };
 }

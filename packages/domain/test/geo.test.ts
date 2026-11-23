@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { toApproximatePlace } from '../src/geo';
+import { toApproximatePlace, toTripRange } from '../src/geo';
 import type { Place } from '../src/index';
 
 describe('toApproximatePlace', () => {
@@ -33,5 +33,21 @@ describe('toApproximatePlace', () => {
     assert.notEqual(approx.neighborhood, place.label);
     assert.notEqual(approx.neighborhood, place.address);
     assert.equal(approx.neighborhood, 'Bairro não informado');
+  });
+});
+
+describe('toTripRange (PP-12)', () => {
+  test('nunca devolve o valor exato: cada faixa é um intervalo de 1 km / 5 min que o contém', () => {
+    const range = toTripRange(5200, 900);
+    assert.deepEqual(range.distanceM, { min: 5000, max: 6000 });
+    assert.deepEqual(range.durationS, { min: 900, max: 1200 });
+    assert.ok(range.distanceM.min <= 5200 && 5200 < range.distanceM.max);
+    assert.ok(range.durationS.min <= 900 && 900 < range.durationS.max);
+  });
+
+  test('nunca fica negativo com valores pequenos', () => {
+    const range = toTripRange(50, 10);
+    assert.deepEqual(range.distanceM, { min: 0, max: 1000 });
+    assert.deepEqual(range.durationS, { min: 0, max: 300 });
   });
 });

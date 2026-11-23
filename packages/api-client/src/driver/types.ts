@@ -12,10 +12,10 @@
  *   (`docs/decisoes-do-dono.md`, "Complemento: o embarque na oferta é só o bairro" e "Complemento:
  *   o destino na oferta também é só o bairro").
  */
-import type { GeoPoint, Money, Place, TripId, TripStatus } from '@vuumbora/domain';
+import type { ApproximatePlace, GeoPoint, Money, Place, TripId, TripStatus } from '@vuumbora/domain';
 import type { DriverPhase, RideOffer, VerificationStatus } from '@vuumbora/domain/driver';
 import type { Result } from '../index';
-import type { TripBaseSnapshot, TripRealtimePort } from '../trip/types';
+import type { TripBaseSnapshot, TripHistoryPage, TripRealtimePort } from '../trip/types';
 
 /** C3: liga/desliga, com posição — obrigatória ao ligar (o despacho filtra por posição < 30 s, §5.4). */
 export interface DriverAvailabilityInput {
@@ -93,6 +93,47 @@ export interface DriverTripPort extends TripRealtimePort {
    * ou `idempotency_key_reused`.
    */
   cancel(tripId: TripId, input: { readonly reason?: DriverCancelReason }, idempotencyKey: string): Promise<Result<{ readonly status: TripStatus }>>;
+}
+
+/**
+ * Histórico de corridas do motorista — acréscimo PP-12, item 3 (decisão do dono em 22/11/2026,
+ * `docs/fichas-de-tela/README.md`): porta que hoje não existe no contrato. `GET /v1/driver/trips?cursor`.
+ */
+export interface DriverTripHistoryInput {
+  readonly cursor?: string;
+  /** Padrão 20, teto 50 — nunca o histórico inteiro de uma só vez. */
+  readonly limit?: number;
+  /** Período (ISO 8601 com offset), ambos opcionais, filtra por `endedAt`. `from` depois de `to` é `400 validation`. */
+  readonly from?: string;
+  readonly to?: string;
+}
+
+/**
+ * Uma viagem já terminada do histórico do motorista. **PP-14: só bairro dos dois — nunca endereço
+ * nem ponto exato, mesmo tempo depois da corrida** (minimização, LGPD: o endereço exato serviu
+ * durante a corrida; guardado por meses, é o endereço de casa de outra pessoa). Por isso `pickup`/
+ * `destination` são `ApproximatePlace`, igual à oferta antes do aceite — nunca o `Place` completo
+ * que `DriverTripSnapshot` usa durante a corrida.
+ */
+export interface DriverTripHistoryEntry {
+  readonly tripId: TripId;
+  /** Sempre terminal: `completed` ou `cancelled`. */
+  readonly status: TripStatus;
+  /** ISO 8601 — quando este motorista foi atribuído (não há "pedido" do lado dele). */
+  readonly assignedAt: string;
+  readonly endedAt: string;
+  readonly pickup: ApproximatePlace;
+  readonly destination: ApproximatePlace;
+  readonly categoryId: string;
+  readonly distanceM: number;
+  readonly durationS: number;
+  readonly payout: Money;
+  readonly passenger?: { readonly firstName: string };
+}
+
+export interface DriverTripHistoryPort {
+  /** `400 validation` em `from`/`to` inválidos ou `from` depois de `to`. */
+  history(input: DriverTripHistoryInput): Promise<Result<TripHistoryPage<DriverTripHistoryEntry>>>;
 }
 
 /** Posição enviada pelo motorista (C4). `mocked` é o sinal de GPS falso (§5.10), gravado desde o 1º dia. */
