@@ -150,3 +150,76 @@ Tab para frente, não Shift+Tab (ver pendências).
 Capturas, sondas e `lado-a-lado` ficaram em `C:\Users\...\scratchpad\iris-onda2\tools\qualidade-tela\.saida\`
 (cópia descartável, apagada ao final desta tarefa) — se alguém precisar reabrir a investigação, o roteiro acima
 é reproduzível em poucos minutos com a ferramenta oficial.
+
+## Ressalvas `ea1ad77` (conferência de 22-23/11/2026)
+
+**VEREDITO: APROVADO.**
+
+Candidata: `fatia/f09-onda2-ressalvas` (`ea1ad77`), um commit sobre a `main` (`ac747e8`) —
+`fix(apps,ui): ressalvas do portao da onda 2 (endereco em 2 linhas, atalhos da Home com acao, estado sem
+aprovacao alcancavel em desenvolvimento)`. Toca `apps/driver/app/(app)/index.tsx`,
+`apps/passenger/app/(app)/index.tsx`, `apps/passenger/src/components/destination/PlaceRow.tsx`,
+`packages/ui/src/ListRow.tsx` e `tools/qualidade-tela/screens.config.mjs` (acrescenta a entrada `M05b`).
+
+**Como medi:** `git archive ea1ad77` para uma cópia limpa no meu scratchpad (fora do repositório real),
+`npm install` de verdade (symlinks de workspace conferidos com `ls -la node_modules/@vuumbora/*` antes de
+confiar — [[feedback-cp-r-quebra-symlink-workspace]]), cache global do Metro limpo antes de começar
+([[feedback-cache-global-metro-envenenado]]). `tools/qualidade-tela capturar`+`sondas` nas 4 larguras para
+P03/P04/M05/M05b (32 combinações, 0 erro, abertas a olho). Um roteiro Playwright próprio (reaproveitando
+`dev-server.mjs`/`auth-bootstrap.mjs`/`browsers.mjs` da própria ferramenta, login mock real) cobrindo os 5
+pontos pedidos — 12 asserções, todas passando na versão final do roteiro (duas falharam na 1ª tentativa por
+erro do MEU harness, não do produto — corrigidas e revalidadas antes de reportar, ver abaixo). `npm run
+typecheck` limpo nos 8 workspaces. Portas 10301/10302 (sondas) e 10321/10322/10331/10332 (roteiro/debug),
+todas acima de 10300 como pedido; nada ficou preso (`netstat` conferido no final). Cópia, export de produção
+e scripts apagados ao terminar.
+
+1. **P04 — endereço em até 2 linhas, lugares salvos E resultados de busca.** Confirmado visualmente: em 320px,
+   "Casa" (menor) cabe inteiro em 2 linhas; "Trabalho" (63 caracteres, `Av. Engenheiro Roberto Freire, 3000 —
+   Capim Macio, Natal - RN`) ainda corta na 2ª linha — exatamente o aceito pela ficha. Provado também por
+   computed style: o nó de texto real tem `webkit-line-clamp: 2` tanto no `PlaceRow` de "Trabalho" (lugar
+   salvo) quanto no resultado de busca por "terminal" (`Terminal Rodoviário de Natal`, mesmo componente
+   `PlaceRow`→`ListRow`, usado também pelos recentes) — a correção é no componente compartilhado, não só na
+   lista de salvos. Em 360/390/430px nenhum truncamento. **Achei um falso positivo no meu próprio roteiro**
+   na 1ª rodada (`webkitLineClamp=none`): meu seletor pegava um `<div>` ancestral, não o nó-folha com o texto
+   — troquei por uma busca pelo nó-folha de verdade (script `debug-p04.mjs` à parte confirmou o DOM real antes
+   de eu corrigir o roteiro principal), regra [[medir-antes-de-afirmar]].
+2. **P03 — Casa/Trabalho definem destino e cotam sem navegar; Favoritos abre a P04.** Provado ao vivo: tocar
+   "Casa" mantém a URL em `/`, o endereço de Casa aparece na barra de busca e a cotação carrega; tocar
+   "Trabalho" faz o mesmo sem navegar; tocar "Favoritos" leva para `/destino` (lugares salvos). Nenhum toque
+   morto — os 3 atalhos têm `onPress` agora (fecha o G-19 registrado como pendência na rodada anterior).
+3. **M05b (`/?devAprovado=false`) — estado "sem aprovação".** Capturas confirmam: sem chave/alternador, sem
+   CTA "Ficar online", aviso "Cadastro em análise. Você poderá ficar online após a aprovação." no lugar do
+   texto "Você está Offline" + chave, e as 4 métricas em "—" em vez de valor. **Em produção o parâmetro não
+   muda nada** — confirmado de verdade, não só por leitura de código: gerei um build de produção real
+   (`expo export --platform web`, `VUUMBORA_BUILD_PROFILE=production`) e inspecionei o bundle minificado da
+   rota `/`: `__DEV__` não aparece em lugar nenhum (eliminado em tempo de build) e a variável que guarda
+   `registrationApproved` está **hardcoded `const D=!0` (true)** — o `devAprovado` do `useLocalSearchParams`
+   continua sendo lido (variável morta, não removida pelo minificador), mas não influencia mais nada: o
+   `__DEV__ && ...` já virou uma constante antes do deploy.
+4. **Regressão: categorias só da cotação + preço igual Home→recibo.** Provado ao vivo com o fluxo NOVO desta
+   rodada (escolher "Shopping Midway Mall" nos lugares salvos → Home mostra só "VuumBora"/"Conforto", sem as 3
+   categorias desligadas por padrão → **R$ 18,90** na Home → mesmo valor em `/confirmacao`). `useRideRequestStore.ts`/`confirmacao.tsx` continuam fora do `git diff` deste commit.
+5. **Shift+Tab no `ConfirmDialog` do perfil do motorista** (pendência aberta na rodada anterior). Testei os
+   dois cantos que faltavam: Shift+Tab a partir do primeiro elemento (Cancelar, foco inicial) fica preso
+   dentro do diálogo e vai para o último (Sair) — não escapa para o conteúdo de fundo; Tab a partir do último
+   (Sair) envolve de volta para o primeiro (Cancelar). Diálogo continua aberto depois da navegação por
+   teclado inteira. Confirma a expectativa do veredito anterior: é o `ModalFocusTrap` nativo do RNW, mesmo
+   mecanismo já usado em "cancelar corrida", funcionando nos dois sentidos aqui também — ver
+   [[feedback-focus-trap-testar-os-dois-sentidos]]. **Achei um erro de rótulo no meu próprio roteiro** nesta
+   checagem (esperava o foco voltar para "Cancelar" depois de uma sequência Tab→Shift+Tab que, pela lógica,
+   só podia voltar para "Sair" — o produto estava certo, a expectativa do teste é que estava mal escrita;
+   corrigi o roteiro para testar o canto que realmente faltava — Tab a partir do último elemento — em vez de
+   repetir o mesmo canto já provado com uma conta errada).
+
+**Nada regrediu.** `npm run typecheck` limpo nos 8 workspaces (`admin`, `api`, `driver`, `passenger`,
+`api-client`, `domain`, `tokens`, `ui`) — nenhuma das 5 mudanças quebrou tipo em quem consome `ListRow`
+(perfil, configurações continuam com `valueLines` padrão 1, não especificado, comportamento idêntico ao
+anterior).
+
+**Pendências que seguem de pé (fora do escopo desta conferência, já registradas no veredito original):**
+"Taxa de aceitação"→"Tempo online" (D-17) e `semIndicadorDeFoco` elemento a elemento — nenhuma delas foi
+tocada por este commit.
+
+Ver [[project-portao-onda2-telas-casa-qa]] (rodada anterior) e [[feedback-harness-passada-9]]-style de lição
+nova: dois achados do meu PRÓPRIO roteiro (não do produto) nesta rodada — registrado na memória para a
+próxima conferência não repetir o mesmo tipo de seletor/expectativa errada.
