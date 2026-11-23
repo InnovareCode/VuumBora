@@ -154,6 +154,17 @@ porque esta tarefa só podia escrever em `docs/fichas-de-tela/`. O Atlas move pa
 | **PP-14** | Histórico do motorista só com bairros (sem rua e número) | Sim: minimização (LGPD). O endereço exato serviu durante a corrida; guardado por meses, é o endereço de casa de outra pessoa | M12, M14 | Atlas, com o Órion |
 | **PP-15** | Linha de lista sem destino real **não aparece** (nem com aviso de "ainda não disponível") | Sim. O perfil do passageiro tem 6 de 7 linhas que só avisam (`perfil.tsx:77-118`): parece protótipo. O aviso de indisponível fica só para o que existe e está fora por um motivo passageiro (sem rede, manutenção) | P13, P14, M13 | Atlas |
 
+**Decididas pelo Atlas em 22/11/2026**, seguindo as recomendações acima:
+- **PP-10:** sim, a corrida fica numa rota só com estados (`/corrida`), nos dois apps.
+- **PP-12:** sim, os acréscimos de contrato vão para a Vega, com conferência da Nova. Todos são aditivos: modelo, cor e
+  nota do motorista; distância e duração da viagem na oferta, em faixa, para não revelar mais que o bairro; histórico do
+  motorista e período no histórico.
+- **PP-13:** sim, o motorista continua online depois de finalizar; para parar, usa a chave da M05.
+- **PP-14:** sim, o histórico do motorista guarda só bairros. O Órion revisa quando a rota existir.
+- **PP-15:** sim, linha sem destino real não aparece.
+
+**PP-11 ("Ligar 190") fica com o dono:** é uma decisão de produto sobre emergência.
+
 ### Divergências novas entre a prancha (ou o protótipo) e o decidido
 
 | # | Tela | Prancha ou protótipo | Recomendação | Dono? |
