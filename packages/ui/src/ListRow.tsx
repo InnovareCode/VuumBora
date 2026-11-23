@@ -17,6 +17,13 @@ export interface ListRowProps {
   readonly label: string;
   /** Valor exibido embaixo do rótulo (nunca ao lado — ver nota em `textBlock`). */
   readonly value?: string;
+  /**
+   * Quantas linhas o `value` pode ocupar antes de truncar com reticências. Padrão 1 (preserva
+   * todo uso existente). Endereço completo (P04) precisa de 2 — ver
+   * `bug_componente_reaproveitado_numberoflines_fixo` na memória da Lyra: um limite fixo sem
+   * prop truncava endereço real que o caso original (rótulo curto) nunca previu.
+   */
+  readonly valueLines?: number;
   /** Linha vira interruptor: toda a linha é o alvo de toque. */
   readonly toggle?: ListRowToggleProps;
   /** Ação simples (ex.: navegar, "Limpar cache"). Ignorado quando `toggle` está presente. */
@@ -37,7 +44,16 @@ export interface ListRowProps {
  * (`{onPress: () => setNoticeVisible(true)}` + o próprio banner abaixo do `ListRow`) — esta
  * fatia não altera as telas que já usam o padrão antigo (`apps/*​/app` fora do escopo).
  */
-export const ListRow = memo(function ListRow({ icon, label, value, toggle, onPress, accessibilityLabel, testID }: ListRowProps) {
+export const ListRow = memo(function ListRow({
+  icon,
+  label,
+  value,
+  valueLines = 1,
+  toggle,
+  onPress,
+  accessibilityLabel,
+  testID,
+}: ListRowProps) {
   const { focusVisible, focusProps } = useKeyboardFocusRing();
 
   function handlePress() {
@@ -66,7 +82,7 @@ export const ListRow = memo(function ListRow({ icon, label, value, toggle, onPre
           {label}
         </Text>
         {value ? (
-          <Text style={styles.value} numberOfLines={1}>
+          <Text style={styles.value} numberOfLines={valueLines}>
             {value}
           </Text>
         ) : null}

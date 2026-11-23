@@ -24,14 +24,14 @@ import { QuickAccessGrid, type QuickAccessItem } from '../../src/components/home
 import { RideCategoryCard } from '../../src/components/home/RideCategoryCard';
 import { rideCategoryName, type RideCategoryKey } from '../../src/data/rideCategoryDisplay';
 import { formatQuotePickupEta, formatQuotePrice } from '../../src/utils/rideQuoteFormatting';
+import { MOCK_SAVED_PLACES } from '../../src/data/mockPlaces';
 import { useRideRequestStore } from '../../src/store/useRideRequestStore';
 import { useSession } from '../../src/session/SessionProvider';
 
-const QUICK_ACCESS_ITEMS: readonly QuickAccessItem[] = [
-  { key: 'casa', label: 'Casa', icon: <HomeIcon size={20} color={theme.role.ctaBackground} strokeWidth={1.75} /> },
-  { key: 'trabalho', label: 'Trabalho', icon: <Briefcase size={20} color={theme.role.ctaBackground} strokeWidth={1.75} /> },
-  { key: 'favoritos', label: 'Favoritos', icon: <Star size={20} color={theme.role.ctaBackground} strokeWidth={1.75} /> },
-];
+/** Lugar salvo pelo rótulo do atalho (Casa/Trabalho) — `undefined` quando a pessoa ainda não salvou. */
+function findSavedPlace(label: string) {
+  return MOCK_SAVED_PLACES.find((place) => place.label.toLowerCase() === label.toLowerCase());
+}
 
 /**
  * Como cada categoria CONHECIDA aparece no card: as duas que são o próprio veículo mostram a
@@ -74,6 +74,7 @@ export default function PassengerHomeScreen() {
   const quoteStatus = useRideRequestStore((state) => state.quoteStatus);
   const quoteCategories = useRideRequestStore((state) => state.quoteCategories);
   const refreshQuote = useRideRequestStore((state) => state.refreshQuote);
+  const setDestination = useRideRequestStore((state) => state.setDestination);
   const [menuVisible, setMenuVisible] = useState(false);
 
   const canProceed = Boolean(destination && categoryId);
@@ -82,6 +83,36 @@ export default function PassengerHomeScreen() {
     if (!canProceed) return;
     router.push('/confirmacao');
   }
+
+  // G-19 (achado do portão onda 2): os 3 atalhos não tinham ação nenhuma. Com endereço salvo
+  // (hoje sempre tem, `MOCK_SAVED_PLACES`), o toque faz o MESMO que escolher o lugar na P04:
+  // define o destino via `setDestination` (que já dispara a cotação) — sem navegar, a seção
+  // "Escolha sua viagem" abaixo atualiza na própria Home. Sem endereço salvo, o rótulo vira
+  // "Salvar {label}" e o toque leva à P04 (não há onde salvar um lugar ainda). Favoritos não tem
+  // um único lugar fixo — leva direto à P04, que já abre na seção "Lugares salvos".
+  const casaPlace = findSavedPlace('Casa');
+  const trabalhoPlace = findSavedPlace('Trabalho');
+
+  const quickAccessItems: readonly QuickAccessItem[] = [
+    {
+      key: 'casa',
+      label: casaPlace ? 'Casa' : 'Salvar Casa',
+      icon: <HomeIcon size={20} color={theme.role.ctaBackground} strokeWidth={1.75} />,
+      onPress: casaPlace ? () => setDestination(casaPlace) : () => router.push('/destino'),
+    },
+    {
+      key: 'trabalho',
+      label: trabalhoPlace ? 'Trabalho' : 'Salvar Trabalho',
+      icon: <Briefcase size={20} color={theme.role.ctaBackground} strokeWidth={1.75} />,
+      onPress: trabalhoPlace ? () => setDestination(trabalhoPlace) : () => router.push('/destino'),
+    },
+    {
+      key: 'favoritos',
+      label: 'Favoritos',
+      icon: <Star size={20} color={theme.role.ctaBackground} strokeWidth={1.75} />,
+      onPress: () => router.push('/destino'),
+    },
+  ];
 
   return (
     <AppShell scroll glow>
@@ -93,7 +124,7 @@ export default function PassengerHomeScreen() {
         ) : null}
         <GreetingRow passengerName="Juliana" />
         <DestinationSearchBar onPress={() => router.push('/destino')} destinationAddress={destination?.address} />
-        <QuickAccessGrid items={QUICK_ACCESS_ITEMS} />
+        <QuickAccessGrid items={quickAccessItems} />
 
         <View style={styles.categorySection}>
           <SectionHeader

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { ClipboardList, Home as HomeIcon, User, Wallet } from 'lucide-react-native';
 import { AppShell, BottomTabBar, MockBadge, theme, type BottomTabBarItem } from '@vuumbora/ui';
@@ -35,13 +35,17 @@ import { useSession } from '../../src/session/SessionProvider';
  */
 export default function DriverHomeScreen() {
   const { mode: sessionMode } = useSession();
+  const { devAprovado } = useLocalSearchParams<{ devAprovado?: string }>();
   const [online, setOnline] = useState(false);
   const [togglingOnline, setTogglingOnline] = useState(false);
 
-  // DEMO: cadastro/documentação aprovados viria de uma sessão real (M04). Fixo em
-  // `true` aqui só para a tela ficar navegável sem backend — nunca usar como estado
-  // de produção.
-  const registrationApproved = true;
+  // DEMO: cadastro/documentação aprovados viria de uma sessão real (M04) — a identidade de hoje
+  // não carrega esse dado (`SessionProvider`: "ter sessão é ter CONTA, não cadastro aprovado").
+  // Padrão `true`, pra navegar sem backend. Só em desenvolvimento (`__DEV__`, removido do bundle
+  // de produção pelo Metro — nunca alcançável fora dele) dá para forçar o estado "sem aprovação"
+  // com `?devAprovado=false` na URL, sem editar código: é o que permite a ferramenta de
+  // qualidade-tela e a Íris fotografarem esse estado.
+  const registrationApproved = __DEV__ && devAprovado === 'false' ? false : true;
 
   // Sem backend ainda: simula a confirmação do servidor antes de comitar o novo
   // estado — a chave e o CTA não mudam otimisticamente (MOTORISTA.md). Quando o

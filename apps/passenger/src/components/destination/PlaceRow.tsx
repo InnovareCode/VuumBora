@@ -36,6 +36,7 @@ export const PlaceRow = memo(function PlaceRow({ place, onPress, testID }: Place
       icon={iconFor(place.label)}
       label={place.label}
       value={place.address}
+      valueLines={2}
       onPress={() => onPress(place)}
       accessibilityLabel={`${place.label}, ${place.address}`}
       {...(testID !== undefined ? { testID } : {})}

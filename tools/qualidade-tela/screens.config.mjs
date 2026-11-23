@@ -102,13 +102,18 @@ export const TELAS = [
     estados: [ESTADOS.PADRAO],
     pranchaArquivo: 'alvo_motorista_2026-11-22.png',
     recortePrancha: { x0: 799, y0: 6, x1: 1045, y1: 470 },
-    // ⚠ `cli.mjs capturar --telas M05` ainda NÃO autentica: `lib/capture.mjs` navega direto para
-    // `rota` sem sessão, e a M05 fica atrás da guarda `(app)` (`Stack.Protected`) — a captura hoje
-    // sairia da tela de login, não da Home. Esta entrada documenta a tela para quando alguém
-    // acrescentar um passo de login ao `capture.mjs` (ex.: registrar+verificar+logar via
-    // `window.__vuumboraIdentity` antes do `page.goto`, código-mock fixo '123456' em
-    // `packages/api-client/src/identity/mock-adapter.ts:129`). Até lá, a medição da M05 foi feita
-    // por um script ad hoc fora desta ferramenta (ver handoff da Lyra, onda 2 do padrão premium).
+    // A M05 fica atrás da guarda `(app)`: a ferramenta entra sozinha no app simulado
+    // (`lib/auth-bootstrap.mjs`) antes de capturar.
+  },
+  {
+    id: 'M05b',
+    app: 'motorista',
+    nome: 'painel-do-motorista-sem-aprovacao',
+    // Parâmetro só de desenvolvimento (`__DEV__`): em produção é ignorado e o painel usa o status real.
+    rota: '/?devAprovado=false',
+    estados: [ESTADOS.PADRAO],
+    pranchaArquivo: 'alvo_motorista_2026-11-22.png',
+    recortePrancha: { x0: 799, y0: 6, x1: 1045, y1: 470 },
   },
 ];
 
