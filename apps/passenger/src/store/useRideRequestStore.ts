@@ -91,6 +91,10 @@ let quoteRequestId = 0;
 
 export const useRideRequestStore = create<RideRequestState>((set, get) => ({
   origin: MOCK_CURRENT_LOCATION,
+  // P05/P06 (onda 3 do padrão premium): a ficha mostra "Pagamento: Pix" já selecionado por
+  // padrão (como a categoria, que também cai na 1ª opção sozinha em `refreshQuote`) — a pessoa
+  // troca se quiser, mas nunca vê uma corrida sem forma de pagamento nenhuma escolhida.
+  paymentMethodId: 'pix',
   phase: 'draft',
   quoteStatus: 'idle',
   quoteCategories: [],

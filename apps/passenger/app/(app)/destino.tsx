@@ -159,10 +159,13 @@ export default function DestinationScreen() {
 
     // Ficha §2: com a origem já resolvida (mesmo a padrão "Sua localização atual"), escolher o
     // destino avança direto — "Confirmar" só entra quando a origem foi editada por ÚLTIMO.
+    // Onda 3 (PP-2): antes voltava para a Home (que mostrava a categoria); agora a categoria
+    // é a P05, então o destino escolhido leva para lá — `router.push` (não `replace`) para o
+    // "‹" do balão de origem na P05 poder voltar e reabrir esta tela para ajustar o trajeto.
     if (originPlace) {
       setOrigin(originPlace);
       setDestination(place);
-      router.back();
+      router.push('/categoria');
     }
   }
 
@@ -186,7 +189,7 @@ export default function DestinationScreen() {
     if (!originPlace || !destinationPlace) return;
     setOrigin(originPlace);
     setDestination(destinationPlace);
-    router.back();
+    router.push('/categoria'); // onda 3 (PP-2): ver comentário em `handlePickPlace`.
   }
 
   const savedToShow = useMemo(
