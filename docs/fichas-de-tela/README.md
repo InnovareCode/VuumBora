@@ -183,6 +183,14 @@ porque esta tarefa só podia escrever em `docs/fichas-de-tela/`. O Atlas move pa
 - **Aba "Ganhos" do motorista** sem destino (`apps/driver/app/(app)/index.tsx:67`; `perfil.tsx:45`), e a M11 está bloqueada
   em parte. Opções: M11 parcial (total do dia e corridas, sem saldo nem saque, D-22) ou esconder a aba até a M11 existir
   (a barra fica com 3 abas e diverge da prancha). Decisão do Atlas, antes da onda 5.
+  **Decidido pelo Atlas em 22/11/2026: esconder a aba "Ganhos" até a M11 existir** (barra com 3 abas: Início, Histórico,
+  Perfil). Mesmo princípio da PP-15: destino sem conteúdo real não aparece. Um total "do dia" sem tarifa decidida (decisão 7)
+  seria número inventado na tela do motorista.
+- **Levantadas na onda 5 do passageiro (Lyra, 23/11/2026):** (a) `me()` só traz nome e ID público, então o Perfil não
+  mostra e-mail nem telefone; mostrar o e-mail pede o contrato de identidade crescer (Vega + Nova). (b) `deleteAccount` é
+  imediato e não confere corrida ativa; quando a corrida for real (S4), precisa recusar com corrida em andamento.
+  (c) "Localização em tempo real" saiu de Configurações até existir o `expo-location` (PP-8). (d) "Copiar número" do
+  WhatsApp só no web até entrar o `expo-clipboard`.
 - **Rota de histórico do motorista** não existe no plano (`plano-sistema-arquitetura.md:625-640`): pedido de contrato (M12).
 - **Número do WhatsApp para os apps:** o do site é decidido; o dono confirma se o mesmo atende passageiro e motorista (P14, M14).
 - **Prazos de produto sem dono:** busca demorada (P07, proposto 2 min), proximidade do embarque (M07, 200 m), distância do

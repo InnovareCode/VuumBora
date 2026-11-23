@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
-import { ClipboardList, Home as HomeIcon, User, Wallet } from 'lucide-react-native';
-import { AppShell, BottomTabBar, MockBadge, theme, type BottomTabBarItem } from '@vuumbora/ui';
+import { AppShell, BottomTabBar, MockBadge, theme } from '@vuumbora/ui';
+import { buildDriverTabs } from '../../src/navigation/driverTabs';
 import { RegistrationNotice } from '../../src/components/auth/RegistrationNotice';
 import { DriverHeader } from '../../src/components/home/DriverHeader';
 import { OnlineToggle } from '../../src/components/home/OnlineToggle';
@@ -59,25 +59,11 @@ export default function DriverHomeScreen() {
     }, 600);
   }
 
-  // Início e Ganhos/Histórico ainda não navegam (M06/M11/M12 não existem) — mesmo andaime que a
-  // versão anterior já tinha. Perfil navega para a M13 provisória (`perfil.tsx`), que é onde o
-  // "Sair da conta" mora agora. `router.replace` (não `push`): troca de aba não empilha tela.
-  const tabs: readonly BottomTabBarItem[] = [
-    { key: 'inicio', label: 'Início', icon: ({ color, active }) => <HomeIcon size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
-    { key: 'ganhos', label: 'Ganhos', icon: ({ color, active }) => <Wallet size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />, onPress: () => {} },
-    {
-      key: 'historico',
-      label: 'Histórico',
-      icon: ({ color, active }) => <ClipboardList size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />,
-      onPress: () => {},
-    },
-    {
-      key: 'perfil',
-      label: 'Perfil',
-      icon: ({ color, active }) => <User size={22} color={color} strokeWidth={active ? 2.25 : 1.75} />,
-      onPress: () => router.replace('/perfil'),
-    },
-  ];
+  // Onda 5: barra de abas de verdade (`buildDriverTabs`, `src/navigation/driverTabs.tsx`) — as
+  // mesmas 3 abas (Início/Histórico/Perfil) em toda tela, com navegação real por `router.replace`.
+  // "Ganhos" saiu (decisão do Atlas, 22/11/2026, `docs/fichas-de-tela/README.md`): a M11 não
+  // existe, e destino sem conteúdo real não aparece (mesmo princípio da PP-15).
+  const tabs = buildDriverTabs('inicio');
 
   return (
     // `glow` só sem mapa (§4 do padrão: "nunca sobre mapa ou foto"); com o motorista online a

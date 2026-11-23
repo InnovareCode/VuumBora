@@ -138,6 +138,101 @@ export const TELAS = [
     pranchaArquivo: 'alvo_motorista_2026-11-22.png',
     recortePrancha: { x0: 799, y0: 6, x1: 1045, y1: 470 },
   },
+  {
+    id: 'P11',
+    app: 'passageiro',
+    nome: 'historico',
+    rota: '/historico',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_passageiro_2026-11-22.png',
+    // Ficha P11 §título: recorte "Histórico", 376,522,640,976 + folga de 8px.
+    recortePrancha: { x0: 368, y0: 514, x1: 648, y1: 984 },
+  },
+  {
+    id: 'P11b',
+    app: 'passageiro',
+    nome: 'historico-detalhe',
+    // Ficha P11 §2.2: "o detalhe não tem recorte; herda o cartão-linha e o valor em destaque".
+    rota: '/historico-detalhe?id=trip-1',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+  },
+  {
+    id: 'P13',
+    app: 'passageiro',
+    nome: 'perfil',
+    rota: '/perfil',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_passageiro_2026-11-22.png',
+    // Ficha P13 §título: recorte "Meu Perfil", 925,522,1189,976 + folga de 8px.
+    recortePrancha: { x0: 917, y0: 514, x1: 1197, y1: 984 },
+  },
+  {
+    id: 'P13b',
+    app: 'passageiro',
+    nome: 'configuracoes',
+    rota: '/configuracoes',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_passageiro_2026-11-22.png',
+    // Ficha P13 §título: recorte "Configurações", 1200,522,1470,976 + folga de 8px.
+    recortePrancha: { x0: 1192, y0: 514, x1: 1478, y1: 984 },
+  },
+  {
+    id: 'P14',
+    app: 'passageiro',
+    nome: 'ajuda',
+    rota: '/ajuda',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    // Ficha P14: "Sem recorte: herda o 'Suporte' do motorista" (alvo_motorista, 1336,516,1532,926) + folga de 8px.
+    pranchaArquivo: 'alvo_motorista_2026-11-22.png',
+    recortePrancha: { x0: 1328, y0: 508, x1: 1540, y1: 934 },
+  },
+  {
+    id: 'M12',
+    app: 'motorista',
+    nome: 'historico-de-corridas',
+    rota: '/historico',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_motorista_2026-11-22.png',
+    // Ficha M12 §Alvo visual: recorte 708,516,906,926 ("Histórico de Corridas") + folga de 8px.
+    recortePrancha: { x0: 700, y0: 508, x1: 914, y1: 934 },
+  },
+  {
+    id: 'M12b',
+    app: 'motorista',
+    nome: 'historico-detalhe',
+    // Ficha M12 §2.2 (Detalhe): sem recorte próprio na prancha (mesmo padrão do P11b).
+    rota: '/historico-detalhe?id=trip-h1',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+  },
+  {
+    id: 'M13',
+    app: 'motorista',
+    nome: 'perfil-e-documentos',
+    rota: '/perfil',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_motorista_2026-11-22.png',
+    // Ficha M13 §Alvo visual: recorte 1127,516,1324,926 ("Perfil") + folga de 8px.
+    recortePrancha: { x0: 1119, y0: 508, x1: 1332, y1: 934 },
+  },
+  {
+    id: 'M13c',
+    app: 'motorista',
+    nome: 'excluir-conta',
+    // Sem recorte próprio na prancha (ajuste do dono: a exclusão de conta é real, `identity.deleteAccount`).
+    rota: '/excluir-conta',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+  },
+  {
+    id: 'M14',
+    app: 'motorista',
+    nome: 'suporte-e-seguranca',
+    rota: '/suporte',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_motorista_2026-11-22.png',
+    // Ficha M14 §Alvo visual: recorte 1336,516,1532,926 ("Suporte") + folga de 8px (mesmo recorte
+    // da P14 — as duas herdam a mesma tela da prancha, cada app com a própria cópia da tela).
+    recortePrancha: { x0: 1328, y0: 508, x1: 1540, y1: 934 },
+  },
 ];
 
 export function telaPorId(id) {
