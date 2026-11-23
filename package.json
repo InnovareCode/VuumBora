@@ -19,7 +19,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check:docker-context": "node scripts/check-docker-context.mjs",
-    "check": "npm run check:boundaries && npm run check:docker-context && npm run typecheck"
+    "check": "npm run check:boundaries && npm run check:docker-context && npm run check:support-channels && npm run typecheck",
+    "check:support-channels": "node scripts/check-support-channels.mjs"
   },
   "devDependencies": {
     "typescript": "~6.0.3"

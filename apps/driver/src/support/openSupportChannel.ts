@@ -9,7 +9,7 @@ import { Linking } from 'react-native';
  * registrada para quem construir a P14: promover esta porta (ou escrever a dela) para `packages/ui`
  * quando os dois apps precisarem da mesma coisa de verdade.
  */
-const WHATSAPP_DIGITS = '5584931132584';
+const WHATSAPP_DIGITS = '558431132584';
 
 export type SupportChannelResult = { readonly ok: true } | { readonly ok: false };
 
