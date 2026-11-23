@@ -148,7 +148,7 @@ ou para onde `QUALIDADE_TELA_BASELINE_DIR` apontar) — só rode depois de algu�
 | G-xx | O que o padrão pede | Onde está | Status |
 |---|---|---|---|
 | G-02, G-03, G-04, G-05, G-06 | assinatura premium, cor nos tokens, contagem de amarelo, tipografia | `lib/probes/estilo.mjs` | **parcial** — inventaria toda caixa; só G-03 (cor fora do conjunto) e G-04 (contagem de amarelo) viram achado automático. Ver "O que não foi validado": não conta amarelo vindo de gradiente |
-| G-09, G-11 (indício), G-12, G-13 (indício), G-21 | viewport, CTA visível sem rolar, sobreposição, alvo de toque | `lib/probes/geometria.mjs` | funcional |
+| G-09, G-11 (indício), G-12, G-13 (indício), G-21 | viewport, CTA visível sem rolar, sobreposição, alvo de toque | `lib/probes/geometria.mjs` | funcional — G-09 recorta pelos ancestrais com `overflow` ≠ `visible` antes de comparar com a viewport (ver item 10 de "O que esta ferramenta NÃO validou"), então uma Image com bleed contida por um `overflow:hidden` não dá falso positivo |
 | G-10 | truncamento de texto | `lib/probes/texto.mjs` | funcional (sem lista de exceção — nenhuma tela desta rodada precisa) |
 | G-20 | contraste de texto | `lib/probes/contraste.mjs` | funcional sobre fundo sólido (compõe alpha de camadas translúcidas empilhadas, ver nota 4 abaixo); fundo com imagem/gradiente fica "não medido" (ver limitações) |
 | G-22 (ordem de tabulação + anel visível) | Tab percorre os interativos, anel de foco visível no Chromium e no WebKit | `lib/probes/foco.mjs` | **adaptação do `ring6.mjs`/`ring.mjs` que a Íris deixou na passada 6** — mede o recorte focado × desfocado e exige contraste ≥ 3:1 em ≥ 60% de cada um dos 4 lados (não só `outline-style !== 'none'`), mais o controle de mouse (pressionar com o mouse não pode acender o mesmo anel). Hoje só roda no Chromium pela matriz principal — ver limitações sobre o WebKit |
@@ -247,6 +247,27 @@ ou para onde `QUALIDADE_TELA_BASELINE_DIR` apontar) — só rode depois de algu�
    `onPress` vazio, honestidade de conteúdo, movimento): nada disso é
    automatizável em navegador; ficam para prova em aparelho/emulador (fora do
    escopo desta ferramenta) ou para leitura de código.
+10. **Correção (22/11/2026, achado da Íris no portão da onda 2,
+    `docs/veredito-iris-portao-onda2.md`): G-09 acusava falso positivo em Image
+    com "bleed".** `sondaGeometria` (G-09) comparava o retângulo INTRÍNSECO do
+    elemento com a viewport — uma `Image` maior que o container por desenho
+    (`HomeMapPreview`, arquivo-fonte 1170×1560 recortado numa caixa bem menor)
+    reportava `getBoundingClientRect()` do tamanho do arquivo, e a sonda acusava
+    "ultrapassa a viewport" mesmo com um ancestral `overflow:hidden` do tamanho
+    certo recortando tudo que sobra — na tela, visualmente, nada vaza (P03 dava
+    `ultrapassaViewport: 2` nas 8 combinações, um falso positivo por tamanho×estado).
+    Corrigido: `caixaRecortada()` (`lib/probes/geometria.mjs`) intersecciona o
+    retângulo do elemento com a caixa de TODO ancestral que recorta (qualquer
+    `overflow` ≠ `'visible'` naquele eixo — `hidden`, `clip`, `auto` ou `scroll`),
+    subindo até `<html>`; um elemento recortado a zero por um ancestral (largura ou
+    altura recortada ≤ 0) sai da checagem (não pode "vazar" o que está 100%
+    invisível). **Verificado com números reais:** `node cli.mjs sondas --telas
+    P03,P04,M05` deu `ultrapassaViewport: 0` nas 20 combinações (era 2 por
+    combinação no P03 antes da correção; P04 e M05 já estavam em 0). Controle
+    positivo (fora da suíte, script ad-hoc com `page.setContent`): um elemento
+    deslocado para fora da viewport SEM nenhum ancestral recortando continua
+    acusando (`ultrapassaViewport: 1`); um elemento recortado a zero por um
+    ancestral não vira achado nem erro.
 
 ## Prova do que FOI validado
 

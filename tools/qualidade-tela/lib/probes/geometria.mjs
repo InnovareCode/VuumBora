@@ -32,16 +32,58 @@ export async function sondaGeometria(page) {
       return cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) !== 0;
     }
 
+    // Achado da Íris (portão onda 2): o tamanho intrínseco de uma `Image` com "bleed"
+    // (ex. `HomeMapPreview`, arquivo 1170x1560 recortado numa caixa menor) conta como
+    // "ultrapassa a viewport" mesmo quando um ANCESTRAL com `overflow: hidden`/`clip`/
+    // `auto`/`scroll` do tamanho certo recorta tudo que sobra — na tela, visualmente,
+    // nada vaza. `caixaRecortada` devolve o retângulo do elemento já interseccionado
+    // com a caixa de todo ancestral que recorta (qualquer overflow != 'visible' num
+    // eixo, por esse eixo), subindo até `<html>`. Um elemento 100% recortado por um
+    // ancestral (largura ou altura recortada <= 0) não pode "vazar": fica fora da
+    // checagem, não é falso "zero achados" — é invisível de verdade, igual um
+    // `display:none` já seria.
+    function caixaRecortada(el) {
+      const r = el.getBoundingClientRect();
+      let left = r.left, top = r.top, right = r.right, bottom = r.bottom;
+      let node = el.parentElement;
+      while (node && node !== document.documentElement) {
+        const cs = getComputedStyle(node);
+        const recortaX = cs.overflowX !== 'visible';
+        const recortaY = cs.overflowY !== 'visible';
+        if (recortaX || recortaY) {
+          const nr = node.getBoundingClientRect();
+          if (recortaX) {
+            left = Math.max(left, nr.left);
+            right = Math.min(right, nr.right);
+          }
+          if (recortaY) {
+            top = Math.max(top, nr.top);
+            bottom = Math.min(bottom, nr.bottom);
+          }
+        }
+        node = node.parentElement;
+      }
+      return { left, top, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+    }
+
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const todos = Array.from(document.querySelectorAll('body *')).filter(visivel);
 
     // G-09: nada ultrapassa a viewport horizontalmente (vertical é normal: RN Web rola).
+    // Compara a caixa JÁ RECORTADA pelos ancestrais (ver `caixaRecortada` acima), não a
+    // caixa intrínseca do elemento — senão uma Image maior que o container (bleed)
+    // acusa falso positivo mesmo totalmente contida visualmente.
     const ultrapassaViewport = [];
     for (const el of todos) {
-      const r = el.getBoundingClientRect();
-      if (r.right > vw + 1 || r.left < -1) {
-        ultrapassaViewport.push({ seletor: cssPath(el), rect: rectOf(r) });
+      const rRecortada = caixaRecortada(el);
+      if (rRecortada.width <= 0 || rRecortada.height <= 0) continue; // recortado a nada por um ancestral: não vaza de verdade
+      if (rRecortada.right > vw + 1 || rRecortada.left < -1) {
+        ultrapassaViewport.push({
+          seletor: cssPath(el),
+          rect: rectOf(el.getBoundingClientRect()),
+          rectRecortado: rectOf({ x: rRecortada.left, y: rRecortada.top, width: rRecortada.width, height: rRecortada.height }),
+        });
       }
     }
 
