@@ -735,7 +735,7 @@ describe('historyPort.history — PP-12, item 3 (porta que não existia)', () =>
       estimatedPayout: PAYOUT,
       tripDistanceM: 4000,
       tripDurationS: 600,
-      passengerFirstName: 'Marina',
+      passengerFirstName: 'Marina', // P3: aparece em DriverTripSnapshot (depois do aceite), nunca no histórico
     });
     const accepted = await mock.offerPort.accept(offer, 'acc-hist-1');
     assert.ok(accepted.ok);
@@ -757,8 +757,8 @@ describe('historyPort.history — PP-12, item 3 (porta que não existia)', () =>
     assert.ok(!('address' in entry!.destination));
     assert.equal(entry!.distanceM, 4000);
     assert.equal(entry!.durationS, 600);
-    assert.deepEqual(entry!.payout, PAYOUT);
-    assert.equal(entry!.passenger?.firstName, 'Marina');
+    assert.deepEqual(entry!.payout, PAYOUT, 'P2: completed mostra o ganho');
+    assert.ok(!('passenger' in entry!), 'P3: sem nome do passageiro no histórico do motorista');
     assert.equal(page.data.nextCursor, undefined, 'só uma viagem: sem próxima página');
   });
 
@@ -786,7 +786,48 @@ describe('historyPort.history — PP-12, item 3 (porta que não existia)', () =>
 
     const page = await drv.historyPort.history({});
     assert.ok(page.ok);
-    if (page.ok) assert.equal(page.data.items[0]?.status, 'cancelled');
+    if (page.ok) {
+      assert.equal(page.data.items[0]?.status, 'cancelled');
+      assert.equal(page.data.items[0]?.payout, undefined, 'P2: cancelled não mostra ganho (decisão 15 em aberto)');
+    }
+  });
+
+  test('P1: motorista que DEVOLVEU a corrida não herda a entrada de quem a concluiu depois dele', async () => {
+    // Cenário exato da sonda da Nova (conferencia-pp12-nova.md, H1): A aceita e cancela (volta p/
+    // busca), B aceita e conclui. O histórico de A tem que ficar VAZIO; o de B tem a corrida.
+    const store = createTripStore(() => 0);
+    const passenger = createMockPassengerRidePort({ store, clock: () => 0 });
+    const A = createMockDriverRidePort({ store, clock: () => 0, driverId: 'A' });
+    const B = createMockDriverRidePort({ store, clock: () => 0, driverId: 'B' });
+
+    const quote = await passenger.port.quote({ origin: PICKUP, destination: DESTINATION });
+    assert.ok(quote.ok);
+    if (!quote.ok) return;
+    const category = (quote.data as Quote).categories[0];
+    const requested = await passenger.port.request({ quoteId: category!.quoteId, paymentMethodId: 'pm' }, 'req-p1');
+    assert.ok(requested.ok);
+    if (!requested.ok) return;
+    const tripId = requested.data.tripId;
+    passenger.control.advance(tripId, 'searching_driver');
+
+    const offerA = A.control.offer({ tripId, pickup: PICKUP, destination: DESTINATION, categoryId: 'vuumbora', estimatedPayout: PAYOUT });
+    await A.offerPort.accept(offerA, 'acc-p1-a');
+    await A.tripPort.cancel(tripId, {}, 'cancel-p1-a'); // devolve: volta para searching_driver
+
+    const offerB = B.control.offer({ tripId, pickup: PICKUP, destination: DESTINATION, categoryId: 'vuumbora', estimatedPayout: PAYOUT });
+    await B.offerPort.accept(offerB, 'acc-p1-b');
+    await B.tripPort.arrived(tripId, 'arr-p1-b');
+    await B.tripPort.start(tripId, {}, 'start-p1-b');
+    await B.tripPort.complete(tripId, {}, 'complete-p1-b');
+
+    const historyA = await A.historyPort.history({});
+    const historyB = await B.historyPort.history({});
+    assert.ok(historyA.ok && historyB.ok);
+    if (historyA.ok) assert.deepEqual(historyA.data.items, [], 'A devolveu a corrida — histórico vazio');
+    if (historyB.ok) {
+      assert.equal(historyB.data.items.length, 1, 'B concluiu — a corrida é dele');
+      assert.equal(historyB.data.items[0]?.status, 'completed');
+    }
   });
 
   test('motorista que recusa (volta para a busca) NÃO entra no histórico — a corrida não terminou para ele', async () => {

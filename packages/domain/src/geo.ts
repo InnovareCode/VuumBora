@@ -6,7 +6,7 @@
  * (`@vuumbora/domain/driver`); o endereço completo só existe no `DriverTripSnapshot` do
  * `api-client`, depois do aceite, para o motorista atribuído.
  */
-import type { GeoPoint, Place, Range } from './index';
+import type { GeoPoint, NumericRange, Place } from './index';
 
 export interface ApproximatePlace {
   readonly neighborhood: string;
@@ -44,7 +44,7 @@ const TRIP_DISTANCE_RANGE_STEP_M = 1000;
 /** Largura do intervalo de duração da viagem na oferta (PP-12). */
 const TRIP_DURATION_RANGE_STEP_S = 300;
 
-function toRange(value: number, step: number): Range {
+function toRange(value: number, step: number): NumericRange {
   const min = Math.max(0, Math.floor(value / step) * step);
   return { min, max: min + step };
 }
@@ -56,7 +56,7 @@ function toRange(value: number, step: number): Range {
  * em faixas de 1 km / 5 min (nunca o valor exato). Usada por `RideOffer.tripDistanceM`/`tripDurationS`
  * (`@vuumbora/domain/driver`) — o mesmo princípio de `toApproximatePlace`, para números.
  */
-export function toTripRange(distanceM: number, durationS: number): { readonly distanceM: Range; readonly durationS: Range } {
+export function toTripRange(distanceM: number, durationS: number): { readonly distanceM: NumericRange; readonly durationS: NumericRange } {
   return {
     distanceM: toRange(distanceM, TRIP_DISTANCE_RANGE_STEP_M),
     durationS: toRange(durationS, TRIP_DURATION_RANGE_STEP_S),

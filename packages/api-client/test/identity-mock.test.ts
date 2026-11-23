@@ -317,12 +317,12 @@ describe('mock — login, tokens e sessão', () => {
 });
 
 describe('mock — exclusão de conta (delete-account)', () => {
-  test('senha errada: 401 wrong_password, a conta e a sessão continuam vivas', async () => {
+  test('senha errada: 403 wrong_password (não 401 — não colide com "token inválido"), a conta e a sessão continuam vivas', async () => {
     const api = fresh();
     await verified(api);
     const login = await api.login({ identifier: EMAIL, password: PASSWORD }, DEVICE);
     assert.ok(login.ok);
-    expectError(await api.deleteAccount(login.data.accessToken, { password: 'senha-errada' }), { kind: 'unauthorized', code: 'wrong_password' });
+    expectError(await api.deleteAccount(login.data.accessToken, { password: 'senha-errada' }), { kind: 'forbidden', code: 'wrong_password' });
     assert.ok((await api.me(login.data.accessToken)).ok, 'a sessão não foi tocada por uma senha errada');
     assert.ok((await api.login({ identifier: EMAIL, password: PASSWORD }, DEVICE)).ok, 'a conta continua existindo');
   });

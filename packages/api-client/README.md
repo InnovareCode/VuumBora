@@ -66,15 +66,16 @@ const identity = createIdentityClient({
   - O `mock` acompanha: catálogo em `mock.legal` (padrão `mock-1`), `409` com `current`, `consent` em `me`, reaceite.
     `sha256` (zeros) e `url` (`.invalid`) do mock são fictícios.
 - **Exclusão de conta** (`deleteAccount({ password })`, item 3 das pendências jurídicas,
-  `docs/contrato-identidade-apps.md`): reautentica por senha pela sessão atual (401 → renova e repete uma vez) e, se
-  confirmada, encerra a sessão LOCAL — o servidor já revogou TODAS as sessões da conta, não só esta. `401
-  wrong_password` deixa a conta e a sessão intactas (a tela pode deixar tentar de novo); `401 unauthorized` é sem
-  sessão válida. **Achado de contrato:** `wrong_password` é `401`, o MESMO status de "token de acesso inválido" — o
-  `kind` não distingue os dois, então uma senha errada aciona o `refresh` automático do `SessionManager` (genérico
-  para qualquer porta autenticada) antes de devolver o erro: um `/refresh` a mais, sem efeito prático (a sessão segue
-  a mesma e o servidor responde `wrong_password` de novo na repetição), mas vale saber que a tentativa gasta um
-  round-trip extra — e, no servidor real, bcrypt a mais. Ainda não existe tela nos apps que chame isto (gap conhecido,
-  `docs/veredito-iris-s1-passada-8.md`).
+  `docs/contrato-identidade-apps.md`): reautentica por senha pela sessão atual (um 401 de token vencido ainda renova
+  e repete uma vez, como qualquer chamada autenticada) e, se confirmada, encerra a sessão LOCAL — o servidor já
+  revogou TODAS as sessões da conta, não só esta. **`403 wrong_password`** (não `401`) deixa a conta e a sessão
+  intactas, numa chamada só, sem repetição automática; `401 unauthorized` é sem sessão válida. **P4 (decisão do
+  Atlas em 22/11/2026, conferência PP-12 da Nova, `docs/contratos/conferencia-pp12-nova.md`):** `wrong_password` é
+  `403`, não `401`, DE PROPÓSITO — `401` tem o MESMO `kind: 'unauthorized'` de "token de acesso inválido", e o
+  `SessionManager` trataria a senha errada como sessão vencida, renovando o token e repetindo a chamada sozinho (a
+  senha errada seria conferida duas vezes, e a repetição caía dentro da espera progressiva do servidor, virando
+  `429 too_many_attempts` em vez de "senha incorreta"). Mesmo desenho de `403 email_not_verified` no login. Ainda
+  não existe tela nos apps que chame isto (gap conhecido, `docs/veredito-iris-s1-passada-8.md`).
 - **Estado de sessão**: `identity.session.getState()` / `subscribe()` / `restore()` →
   `unknown` (lendo o cofre) | `signed_in` | `signed_out` com `reason` `none | user | session_expired`. O objeto é estável
   enquanto nada muda (serve a `useSyncExternalStore`); rotação de token não notifica.
@@ -240,7 +241,7 @@ devolve bairro).
 
 **Distância e duração da viagem na oferta, em FAIXA — acréscimo PP-12 (decisão do dono em 22/11/2026,
 `docs/fichas-de-tela/README.md`):** `RideOffer.tripDistanceM`/`tripDurationS` (`@vuumbora/domain/driver`) são
-`Range` (`{ min, max }`, `@vuumbora/domain`) em passos de 1 km / 5 min, calculados por `toTripRange`
+`NumericRange` (`{ min, max }`, `@vuumbora/domain`) em passos de 1 km / 5 min, calculados por `toTripRange`
 (`@vuumbora/domain/geo`) — nunca o valor exato, pelo mesmo motivo de `pickup`/`destination` só levarem o bairro: o
 par exato estreitaria de volta o quadrado aproximado. No mock, `control.offer({ tripDistanceM?, tripDurationS? })`
 aceita os valores EXATOS (padrão 5200 m / 900 s) e devolve a faixa já calculada em `RideOffer`.
@@ -314,20 +315,30 @@ data — `from` depois de `to`, ou qualquer um que não seja uma data válida, �
 
 - `PassengerRidePort.history({ cursor?, limit?, from?, to? })` → `PassengerTripHistoryEntry[]`: viagens
   TERMINAIS do passageiro (`completed`, `cancelled`, `failed`), com `origin`/`destination` COMPLETOS (é a
-  viagem dele), `distanceM`/`durationS`/`fare` exatos e `driver?` (mesmo `TripDriverSummary` enriquecido do
-  snapshot, PP-12) quando a corrida teve motorista atribuído. Filtra por `requestedAt`.
+  viagem dele), `distanceM`/`durationS` exatos e `driver?` (mesmo `TripDriverSummary` enriquecido do
+  snapshot, PP-12) quando a corrida teve motorista atribuído. Filtra por `requestedAt`. **P2 (conferência
+  da Nova sobre a PP-12, `docs/contratos/conferencia-pp12-nova.md`): `fare?` só em `completed`** (é o valor
+  final COBRADO, não a estimativa — `cancelled`/`failed` nunca cobraram nada). `cancellationFee?` existe
+  para `cancelled` mas fica sempre ausente até a decisão 15 (M6) decidir o que cobrar.
 - `DriverTripHistoryPort.history({ cursor?, limit?, from?, to? })` → `DriverTripHistoryEntry[]`: viagens
-  TERMINAIS deste motorista (`completed`, `cancelled`). **PP-14 (decisão do dono, com revisão do Órion
-  pendente quando a rota existir): `pickup`/`destination` são `ApproximatePlace` — só bairro, nunca
-  endereço nem ponto exato, mesmo tempo depois da corrida** (minimização LGPD: o endereço exato serviu
-  durante a corrida; guardado por meses, é o endereço de casa de outra pessoa). `distanceM`/`durationS`
-  exatos continuam — não revelam localização nenhuma depois do fato. Filtra por `endedAt`. Exposta em
+  TERMINAIS deste motorista (`completed`, `cancelled`) **que terminaram com ELE atribuído** (achado P1,
+  mesma conferência — ver abaixo). **PP-14 (decisão do dono, com revisão do Órion pendente quando a rota
+  existir): `pickup`/`destination` são `ApproximatePlace` — só bairro, nunca endereço nem ponto exato,
+  mesmo tempo depois da corrida** (minimização LGPD: o endereço exato serviu durante a corrida; guardado
+  por meses, é o endereço de casa de outra pessoa). `distanceM`/`durationS` exatos continuam — não revelam
+  localização nenhuma depois do fato. `payout?` só em `completed` (achado P2: o que conta como ganho numa
+  corrida cancelada é a decisão 15; o valor por corrida, a decisão 7/D-23). **P3: sem o nome do
+  passageiro** — a ficha M12 pede bairro, horário, distância, categoria e valor; nome guardado por meses
+  sem uso para o motorista é dado pessoal de outra pessoa. Filtra por `endedAt`. Exposta em
   `MockDriverRide.historyPort` (ao lado de `offerPort`/`tripPort`/`journeyPort`/`locationPort`).
 
 No mock, uma corrida só entra no histórico quando chega a um estado TERMINAL de verdade — o motorista
 voltando para a busca (`driver_en_route` → `searching_driver`, cancelamento DELE mesmo antes de
 `driver_arrived`) não é terminal e não aparece; o passageiro cancelando com o motorista atribuído (R1) é
-terminal e aparece nos dois históricos.
+terminal e aparece nos dois históricos. **P1:** além de terminal, o motorista precisa ser o ATRIBUÍDO no
+estado FINAL — um motorista que devolveu a corrida (A aceita, cancela, volta para a busca; B aceita e
+conclui) nunca ganha a entrada de quem a concluiu depois dele, mesmo "escutando" o `tripId` por baixo até
+lá (mesma regra de visibilidade do R1 da F08).
 
 ### Idempotência — achado A4, revisado por R6
 

@@ -98,9 +98,11 @@ export interface IdentityClient {
    */
   acceptConsents(input: AcceptConsentsInput): Promise<Result<ConsentStatus>>;
   /**
-   * Exclusão de conta: reautentica por senha (401 → renova e repete uma vez) e, se confirmada,
-   * encerra a sessão local — o servidor já revogou TODAS as sessões, não só esta. `401
-   * wrong_password` deixa a conta e a sessão intactas (a tela pode deixar a pessoa tentar de novo).
+   * Exclusão de conta: reautentica por senha pela sessão atual (um 401 de token vencido ainda
+   * renova e repete uma vez, como qualquer chamada autenticada) e, se confirmada, encerra a sessão
+   * local — o servidor já revogou TODAS as sessões, não só esta. **`403 wrong_password`** (não
+   * `401` — de propósito, para não colidir com "token inválido" e disparar uma renovação
+   * desnecessária) deixa a conta e a sessão intactas, numa chamada só, sem repetição automática.
    */
   deleteAccount(input: DeleteAccountInput): Promise<Result<DeleteAccountOutput>>;
 }

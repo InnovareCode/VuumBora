@@ -195,7 +195,11 @@ transação (`delete_account()`, migração 0022):
 - **Nunca tocados** (é o que a lei obriga manter): `account_consents` (prova do aceite, LGPD art. 8º §2º) e
   `access_log` (auditoria — ganha a linha `account_deleted`).
 
-Erros: `400 invalid_body` (sem senha); `401 wrong_password` (senha errada — a conta e as sessões continuam vivas);
+Erros: `400 invalid_body` (sem senha); `403 wrong_password` (senha errada — a conta e as sessões continuam vivas;
+**403, não 401** — decisão do Atlas em 22/11/2026, conferência PP-12 da Nova, `docs/contratos/conferencia-pp12-nova.md`:
+`401` tem o mesmo `kind` de "token de acesso inválido" no cliente, que renovava a sessão e repetia a chamada sozinho
+— a senha errada era conferida duas vezes e a repetição automática caía dentro da espera progressiva abaixo, virando
+`429 too_many_attempts` em vez de "senha incorreta". Mesmo desenho de `403 email_not_verified`, acima);
 `401 unauthorized` (sem Bearer ou sessão inválida); `429 too_many_attempts` com `Retry-After` e
 `error.retryAfterSeconds` — **mesma espera progressiva do login (I-6)**, por um par PRÓPRIO (`accountId` + IP, não o
 `identifier` do login: não há "e-mail de outra pessoa" a proteger aqui), então errar a senha na exclusão não atrasa o

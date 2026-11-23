@@ -27,9 +27,15 @@ export interface Money {
 /**
  * Faixa — nunca o valor exato. Mesmo princípio de `ApproximatePlace` (ver `geo.ts`), para números:
  * usada quando um dado precisa aparecer ANTES de um compromisso (ex.: distância/duração da viagem
- * na oferta ao motorista, PP-12) sem revelar mais do que o necessário.
+ * na oferta ao motorista, PP-12) sem revelar mais do que o necessário. `[min, max)`: o valor real
+ * está entre os dois, nunca é igual a `max`.
+ *
+ * Chamado `NumericRange`, não `Range` (achado da conferência da Nova sobre a PP-12,
+ * `docs/contratos/conferencia-pp12-nova.md`): `Range` é um tipo global do DOM (`lib.dom.d.ts`) — um
+ * arquivo que compila com a lib DOM (ex. o painel admin) e esquece de importar este tipo pegaria o
+ * do navegador, calado, em vez de um erro de compilação.
  */
-export interface Range {
+export interface NumericRange {
   readonly min: number;
   readonly max: number;
 }

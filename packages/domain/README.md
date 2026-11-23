@@ -4,7 +4,7 @@ Tipos e funções puras do negócio. Sem React, sem I/O.
 
 | Import | Conteúdo | Quem pode usar |
 |---|---|---|
-| `@vuumbora/domain` | núcleo comum: `Id`, `Money` (centavos BRL), `Range` (faixa, nunca o valor exato), `Place`, `TripStatus`, `DataOrigin`, a tabela de transições de `TripStatus` (`cancelTrip`, `transitionTrip`, `isTripCancellable`) e localização/números aproximados (`ApproximatePlace`, `toApproximatePlace`, `toTripRange`) | todos, inclusive `apps/driver` |
+| `@vuumbora/domain` | núcleo comum: `Id`, `Money` (centavos BRL), `NumericRange` (faixa, nunca o valor exato), `Place`, `TripStatus`, `DataOrigin`, a tabela de transições de `TripStatus` (`cancelTrip`, `transitionTrip`, `isTripCancellable`) e localização/números aproximados (`ApproximatePlace`, `toApproximatePlace`, `toTripRange`) | todos, inclusive `apps/driver` |
 | `@vuumbora/domain/passenger` | fases de UI do passageiro (`draft`/`quoted` + `TripStatus`) sobre a MESMA tabela da raiz, mais `cancelRide` | só `apps/passenger` |
 | `@vuumbora/domain/driver` | fases e regras do motorista, `RideOffer` | só `apps/driver` |
 
@@ -42,7 +42,7 @@ devolve bairro).
 
 **Distância e duração em faixa** (`geo.ts`, `toTripRange`) — acréscimo PP-12 (decisão do dono em
 22/11/2026, `docs/fichas-de-tela/README.md`): `RideOffer.tripDistanceM`/`tripDurationS` (`./driver`) são
-`Range` (`{ min, max }`) em passos de 1 km / 5 min — nunca o valor exato da distância/duração da viagem
+`NumericRange` (`{ min, max }`) em passos de 1 km / 5 min — nunca o valor exato da distância/duração da viagem
 (embarque até destino), pelo mesmo motivo de `pickup`/`destination` só levarem o bairro: a oferta vai a
 vários motoristas, um de cada vez, inclusive aos que recusam, e o par exato estreitaria de volta o
 quadrado aproximado que `toApproximatePlace` já entrega.

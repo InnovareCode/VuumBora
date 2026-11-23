@@ -48,10 +48,10 @@ describe('POST /v1/auth/delete-account — contrato básico', () => {
     assert.equal((await call('GET', '/v1/auth/me', { bearer: session.accessToken })).status, 200, 'a sessão não caiu com corpo inválido');
   });
 
-  test('senha errada: 401 wrong_password; a conta e as sessões continuam vivas', async () => {
+  test('senha errada: 403 wrong_password (não 401 — decisão do Atlas em 22/11/2026, conferência PP-12 da Nova: 401 colidia com "token inválido" e o cliente renovava a sessão e repetia a chamada sozinho); a conta e as sessões continuam vivas', async () => {
     const session = await registerAndLogin();
     const wrong = await deleteAccount(session.accessToken, 'senha-errada-xyz');
-    assert.equal(wrong.status, 401);
+    assert.equal(wrong.status, 403);
     assert.equal(wrong.body.error.code, 'wrong_password');
     assert.equal((await call('GET', '/v1/auth/me', { bearer: session.accessToken })).status, 200);
     assert.equal((await accountRow(session.account.id)).status, 'active');
@@ -155,7 +155,7 @@ describe('POST /v1/auth/delete-account — adivinhação de senha é freada (esp
     const session = await registerAndLogin();
     const ip = randomIp();
     const first = await deleteAccount(session.accessToken, 'errada-1', ip);
-    assert.equal(first.status, 401);
+    assert.equal(first.status, 403);
     const second = await deleteAccount(session.accessToken, 'errada-2', ip);
     assert.equal(second.status, 429);
     assert.equal(second.body.error.code, 'too_many_attempts');
@@ -171,7 +171,7 @@ describe('POST /v1/auth/delete-account — adivinhação de senha é freada (esp
   test('o par é PRÓPRIO da exclusão: errar a senha aqui não atrasa o login da mesma conta, e vice-versa', async () => {
     const session = await registerAndLogin();
     const ip = randomIp();
-    assert.equal((await deleteAccount(session.accessToken, 'errada-delete', ip)).status, 401);
+    assert.equal((await deleteAccount(session.accessToken, 'errada-delete', ip)).status, 403);
     const login = await call('POST', '/v1/auth/login', { ip, body: { accountType: 'passenger', identifier: session.email, password: PASSWORD } });
     assert.equal(login.status, 200, 'o par do login está limpo: a falha foi só na exclusão');
   });

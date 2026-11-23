@@ -182,7 +182,10 @@ export interface IdentityApi {
    * Exclusão de conta (`docs/contrato-identidade-apps.md`, item 3 das pendências jurídicas).
    * Reautentica por senha (gasta bcrypt no servidor, mesma classe de limite do login/cadastro); só
    * se ela confere, a conta é anonimizada e TODAS as sessões são revogadas (não só a usada).
-   * `401 wrong_password` (conta e sessões continuam vivas) ou `401 unauthorized` (sem sessão
+   * `403 wrong_password` (conta e sessões continuam vivas — **403, não 401**: decisão do Atlas em
+   * 22/11/2026, conferência PP-12 da Nova, `docs/contratos/conferencia-pp12-nova.md`. `401` colide
+   * com "token de acesso inválido" e faria `SessionManager.run()` renovar a sessão e repetir a
+   * chamada sozinho, conferindo a senha errada duas vezes) ou `401 unauthorized` (sem sessão
    * válida); `429 too_many_attempts` com espera própria (par conta+IP, isolada do login).
    */
   deleteAccount(accessToken: string, input: DeleteAccountInput): Promise<Result<DeleteAccountOutput>>;

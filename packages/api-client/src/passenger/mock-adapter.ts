@@ -170,7 +170,9 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
           categoryId: draft.categoryId,
           distanceM: draft.distanceM,
           durationS: draft.durationS,
-          fare: draft.fare,
+          // P2 (conferência da Nova, PP-12): dinheiro só em completed — cancelled/failed nunca
+          // chegaram a cobrar nada. cancellationFee fica de fora até a decisão 15 (M6) existir.
+          ...(event.status === 'completed' ? { fare: draft.fare } : {}),
           ...(driver ? { driver } : {}),
         });
         historyDrafts.delete(tripId);

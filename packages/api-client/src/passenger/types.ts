@@ -104,7 +104,18 @@ export interface PassengerTripHistoryEntry {
   readonly categoryId: string;
   readonly distanceM: number;
   readonly durationS: number;
-  readonly fare: Money;
+  /**
+   * Valor final COBRADO — não a estimativa (o domínio separa os dois tipos de propósito, ver
+   * `FareEstimate`). Presente só em `completed` (achado P2 da conferência da Nova sobre a PP-12,
+   * `docs/contratos/conferencia-pp12-nova.md`): uma corrida `cancelled`/`failed` nunca foi cobrada.
+   */
+  readonly fare?: Money;
+  /**
+   * Taxa de cancelamento, quando existir — presente só em `cancelled`. Depende da decisão 15 (M6),
+   * ainda em aberto: até ela sair, este campo nunca é preenchido (mesmo motivo de
+   * `PassengerRidePort.cancel`'s `cancellationFee?`, já provisório por lá).
+   */
+  readonly cancellationFee?: Money;
   /** Só presente se a corrida teve motorista atribuído (mesma regra do snapshot, B4). */
   readonly driver?: TripDriverSummary;
 }

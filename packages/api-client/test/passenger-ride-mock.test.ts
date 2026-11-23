@@ -390,7 +390,8 @@ describe('history — PP-12, item 3 (período no histórico do passageiro)', () 
     assert.deepEqual(entry!.destination, DESTINATION);
     assert.equal(typeof entry!.distanceM, 'number');
     assert.equal(typeof entry!.durationS, 'number');
-    assert.equal(entry!.fare.currency, 'BRL');
+    assert.ok(entry!.fare, 'P2: completed mostra o valor final cobrado');
+    assert.equal(entry!.fare?.currency, 'BRL');
     assert.equal(entry!.driver?.vehicleModel, 'Onix');
     assert.equal(page.data.nextCursor, undefined);
   });
@@ -404,13 +405,45 @@ describe('history — PP-12, item 3 (período no histórico do passageiro)', () 
     if (page.ok) assert.deepEqual(page.data.items, []);
   });
 
-  test('corrida cancelada também entra no histórico', async () => {
+  test('corrida cancelada também entra no histórico, mas P2: sem fare — nunca cobrou nada', async () => {
     const mock = fresh();
     const { tripId } = await quotedAndRequested(mock);
     await mock.port.cancel(tripId, { reason: 'other' }, 'cancel-hist-1');
     const page = await mock.port.history({});
     assert.ok(page.ok);
-    if (page.ok) assert.equal(page.data.items[0]?.status, 'cancelled');
+    if (page.ok) {
+      assert.equal(page.data.items[0]?.status, 'cancelled');
+      assert.equal(page.data.items[0]?.fare, undefined);
+      assert.equal(page.data.items[0]?.cancellationFee, undefined, 'ainda em aberto (decisão 15/M6)');
+    }
+  });
+
+  test('corrida que FALHOU por falta de motorista também não mostra fare', async () => {
+    const mock = fresh();
+    const { tripId } = await quotedAndRequested(mock);
+    mock.control.advance(tripId, 'searching_driver');
+    const result = mock.control.advance(tripId, 'failed');
+    assert.ok(result.ok);
+    const page = await mock.port.history({});
+    assert.ok(page.ok);
+    if (page.ok) {
+      assert.equal(page.data.items[0]?.status, 'failed');
+      assert.equal(page.data.items[0]?.fare, undefined);
+    }
+  });
+
+  test('corrida cancelada pelo SISTEMA antes de ter motorista também não mostra fare (cenário H2b da sonda da Nova)', async () => {
+    const mock = fresh();
+    const { tripId } = await quotedAndRequested(mock);
+    mock.control.advance(tripId, 'searching_driver');
+    const result = mock.control.cancel(tripId, 'system');
+    assert.ok(result.ok);
+    const page = await mock.port.history({});
+    assert.ok(page.ok);
+    if (page.ok) {
+      assert.equal(page.data.items[0]?.status, 'cancelled');
+      assert.equal(page.data.items[0]?.fare, undefined);
+    }
   });
 
   test('período (from/to) filtra por requestedAt; from depois de to é 400 validation', async () => {

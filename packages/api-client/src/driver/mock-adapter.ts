@@ -188,12 +188,24 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
   /** Mais recente primeiro — como `historyPort.history()` devolve a página (mock em memória). */
   const historyEntries: DriverTripHistoryEntry[] = [];
 
+  /**
+   * P1 (achado da conferência da Nova sobre a PP-12, `docs/contratos/conferencia-pp12-nova.md`):
+   * só grava a entrada se, no estado FINAL, a corrida ainda está atribuída a ESTE motorista — mesma
+   * regra de visibilidade do R1 da F08. Sem essa checagem, um motorista que devolveu a corrida
+   * (voltou para a busca) continuava "escutando" o `tripId` por baixo (o watcher só se desliga num
+   * estado terminal) e, quando OUTRO motorista a concluía, herdava a entrada — com o `payout` e a
+   * categoria do PRÓPRIO rascunho dele, de uma corrida que não foi dele. `historyDrafts.delete` e
+   * `stop()` correm SEMPRE (mesmo sem gravar): é o que evita duplicata se este motorista aceitou o
+   * MESMO `tripId` mais de uma vez (devolveu e foi oferecido de novo) — o 1º watcher a ver o estado
+   * terminal apaga o rascunho; o(s) outro(s) encontram `draft` vazio e não gravam de novo.
+   */
   function watchForHistory(tripId: TripId): void {
     const stop = store.subscribe(tripId, (event) => {
       if (event.type !== 'status' || !isTerminalStatus(event.status)) return;
       const draft = historyDrafts.get(tripId);
       const info = tripInfoById.get(tripId);
-      if (draft && info) {
+      const stillAssignedToMe = store.get(tripId)?.assignedDriverId === driverId;
+      if (draft && info && stillAssignedToMe) {
         historyEntries.unshift({
           tripId,
           status: event.status,
@@ -205,11 +217,14 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
           categoryId: info.categoryId,
           distanceM: info.tripDistanceM,
           durationS: info.tripDurationS,
-          payout: info.estimatedPayout,
-          ...(info.passengerFirstName !== undefined ? { passenger: { firstName: info.passengerFirstName } } : {}),
+          // P2 (mesma conferência): dinheiro só em completed — "ganho numa corrida cancelada" espera
+          // a decisão 15; mostrar o estimado hoje seria dinheiro na frente do motorista sem cobertura.
+          ...(event.status === 'completed' ? { payout: info.estimatedPayout } : {}),
+          // P3 (mesma conferência): sem o nome do passageiro — a M12 pede bairro, horário, distância,
+          // categoria e valor; nome guardado por meses é dado pessoal de outra pessoa sem uso aqui.
         });
-        historyDrafts.delete(tripId);
       }
+      historyDrafts.delete(tripId);
       stop();
     });
   }

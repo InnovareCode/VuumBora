@@ -117,7 +117,13 @@ export interface DriverTripHistoryInput {
  */
 export interface DriverTripHistoryEntry {
   readonly tripId: TripId;
-  /** Sempre terminal: `completed` ou `cancelled`. */
+  /**
+   * Sempre terminal: `completed` ou `cancelled` — e só quando a corrida terminou com ESTE
+   * motorista atribuído (achado P1 da conferência da Nova sobre a PP-12,
+   * `docs/contratos/conferencia-pp12-nova.md`): um motorista que devolveu a corrida para a busca
+   * (`driver_en_route` → `searching_driver`) nunca ganha a entrada de quem a concluiu depois dele —
+   * mesma regra de visibilidade do R1 da F08.
+   */
   readonly status: TripStatus;
   /** ISO 8601 — quando este motorista foi atribuído (não há "pedido" do lado dele). */
   readonly assignedAt: string;
@@ -127,8 +133,14 @@ export interface DriverTripHistoryEntry {
   readonly categoryId: string;
   readonly distanceM: number;
   readonly durationS: number;
-  readonly payout: Money;
-  readonly passenger?: { readonly firstName: string };
+  /**
+   * Ganho do motorista — presente só em `completed` (achado P2, mesma conferência): o que conta
+   * como ganho numa corrida CANCELADA depende da decisão 15 (M6), ainda em aberto; o valor exato
+   * por corrida depende da decisão 7 (D-23, taxa variável). Até lá, `cancelled` nunca mostra dinheiro.
+   */
+  readonly payout?: Money;
+  // P3 (mesma conferência): sem nome do passageiro — a ficha M12 pede bairro, horário, distância,
+  // categoria e valor; nome guardado por meses, sem uso para o motorista, é minimização (PP-14).
 }
 
 export interface DriverTripHistoryPort {

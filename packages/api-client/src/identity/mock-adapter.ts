@@ -470,11 +470,17 @@ export function createMockIdentityApi(accountType: AccountType, options: MockIde
    * não só a usada. **O que este mock NÃO reproduz** (mesma lacuna documentada no topo do arquivo):
    * a espera progressiva própria do par conta+IP (`429 too_many_attempts`) e o `503` da pista de
    * bcrypt — aqui só o caminho de senha certa/errada.
+   *
+   * **`403`, não `401` (decisão do Atlas em 22/11/2026, conferência PP-12 da Nova,
+   * `docs/contratos/conferencia-pp12-nova.md`):** `401` tem o MESMO `kind: 'unauthorized'` de "token
+   * de acesso inválido" — `SessionManager.run()` trataria a senha errada como sessão vencida, renovaria
+   * o token e repetiria a chamada sozinho (a senha errada seria conferida duas vezes). `403` sai do
+   * caminho do refresh automático, igual `email_not_verified` no login.
    */
   function deleteAccount(account: MockAccount, raw: Record<string, unknown>): Outcome<DeleteAccountOutput> {
     const { password } = raw;
     if (!isString(password) || password.length < 1 || password.length > 256) return INVALID_BODY();
-    if (password !== account.password) return reject(401, 'wrong_password', 'Senha incorreta.');
+    if (password !== account.password) return reject(403, 'wrong_password', 'Senha incorreta.');
     account.deleted = true;
     revokeAccount(account.id);
     return accept({ accountDeleted: true });
