@@ -97,6 +97,25 @@ e deixa a decisão 17, contas de loja da Apple e do Google, como bloqueio de iPh
 - Apps móveis (quando forem ligados à API): serializar a renovação do token,
   porque duas renovações simultâneas com o mesmo token derrubam a sessão.
 
+## Estado em 22/11/2026 (noite): o que entrou desde a tarde
+
+- **F07 completa**: tela de usuários e papéis do painel (`77a6315`), com a correção do 403 da senha errada no step-up
+  (`21e0905`). Íris aprovou contra API e Postgres reais, com contas de teste autorizadas pelo dono.
+- **F08 e F08b**: contratos da corrida com os ajustes R1 a R8 da Nova (`f753c75`); a corrida do passageiro roda sobre o
+  adaptador mock, e a Home mostra só as categorias da cotação (`b171c87`). Embarque e destino na oferta só pelo bairro
+  (decisões do dono). Íris 39/39, com mutação de prova.
+- **F03 completa**: a rede estática pega o login do admin fora do pool (`b9fb483`).
+- **Padrão premium**: ondas 0, 1 e 2 na main, todas aprovadas no portão. Notas: P01 8, P02a 8, P02b 7, P03 9, P04 8, M01 8,
+  M02 8, M05 9 (era 4), perfil provisório do motorista 8. O botão do cadastro do passageiro ficou fixo no rodapé (`05c6a34`).
+- **Ferramenta do portão**: captura pelo Metro vivo, sonda de contraste que compõe fundos translúcidos e login automático nas
+  telas protegidas (`b046474`).
+- **Em andamento**: ressalvas da onda 2 (endereço em 2 linhas, atalhos da Home, estado sem aprovação do motorista) e a sonda
+  de geometria com overflow hidden.
+- **Próximas ondas** (`docs/fichas-de-tela/README.md`): onda 3, pedido (P05, P06, P07). A onda 4 (corrida) depende do
+  Mapbox nativo e do S4.
+- **Esperando o dono**: F05 (publicação) e F06 (Android). As decisões abertas de categoria (D-08 Motorista mulher, D-09 Pet
+  e Entrega) seguem com as categorias ocultas.
+
 ## Estado em 22/11/2026 (tarde): plano mestre em execução, toda fatia passa pelo painel
 
 **Processo:** cada fatia vira commit candidato numa branch `fatia/<id>` com CI. Ela só entra na `main` por merge que preserva o
