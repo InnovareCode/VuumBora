@@ -1,7 +1,12 @@
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { LocateFixed, MapPin, Minus, Plus } from 'lucide-react-native';
 import { MapPreviewBackground, MockBadge, theme, textStyle, tokens } from '@vuumbora/ui';
+
+// Mesmo corte do `AppShell` (`layout.screenPaddingCompact` abaixo de 375pt) — o sangramento
+// horizontal precisa cancelar EXATAMENTE o padding que o `AppShell` aplicou, senão sobra (ou
+// falta) 4pt e a borda do mapa não encosta na tela (G-09: elemento vazando a viewport).
+const COMPACT_WIDTH_BREAKPOINT = 375;
 
 export interface HomeMapPreviewProps {
   readonly cityLabel: string;
@@ -10,6 +15,13 @@ export interface HomeMapPreviewProps {
   readonly onPressLocate?: () => void;
   readonly onPressZoomIn?: () => void;
   readonly onPressZoomOut?: () => void;
+  /**
+   * Ficha P03 §2: "mapa sangrando até a borda e o pé" — cresce para ocupar a sobra vertical
+   * (`flex`, dentro do `ScrollView` com `flexGrow` do `AppShell`) e perde o raio/moldura de
+   * baixo, para colar nas bordas da tela em vez de ficar num cartão fechado. Quem posiciona o
+   * sangramento horizontal é o chamador (`index.tsx`, margem negativa = `screenPadding`).
+   */
+  readonly bleed?: boolean;
 }
 
 /**
@@ -29,9 +41,17 @@ export const HomeMapPreview = memo(function HomeMapPreview({
   onPressLocate,
   onPressZoomIn,
   onPressZoomOut,
+  bleed = false,
 }: HomeMapPreviewProps) {
+  const { width } = useWindowDimensions();
+  const bleedMargin = width < COMPACT_WIDTH_BREAKPOINT ? theme.layout.screenPaddingCompact : theme.layout.screenPadding;
+
   return (
-    <View style={styles.root} accessibilityRole="image" accessibilityLabel={`Mapa ilustrativo (mock) de ${cityLabel}`}>
+    <View
+      style={[styles.root, bleed && [styles.rootBleed, { marginHorizontal: -bleedMargin, marginBottom: -bleedMargin }]]}
+      accessibilityRole="image"
+      accessibilityLabel={`Mapa ilustrativo (mock) de ${cityLabel}`}
+    >
       <MapPreviewBackground />
 
       <View style={styles.mockTag}>
@@ -49,8 +69,10 @@ export const HomeMapPreview = memo(function HomeMapPreview({
         </View>
       ) : null}
 
-      <View style={styles.centerMarkerRing}>
-        <View style={styles.centerMarkerDot} />
+      <View style={styles.centerMarkerLayer} pointerEvents="none">
+        <View style={styles.centerMarkerRing}>
+          <View style={styles.centerMarkerDot} />
+        </View>
       </View>
 
       <View style={styles.controls}>
@@ -89,6 +111,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.role.border,
   },
+  // Sangramento (ficha P03 §2): some a moldura de baixo e os cantos de baixo, e cresce para
+  // ocupar a sobra vertical em vez de uma altura fixa — mas nunca abaixo de `MAP_HEIGHT`
+  // (320×568, onde não há sobra para crescer).
+  rootBleed: {
+    height: undefined,
+    flex: 1,
+    minHeight: MAP_HEIGHT,
+    borderBottomWidth: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
   mockTag: { position: 'absolute', top: theme.spacing['2'], right: theme.spacing['2'], zIndex: 2 },
   // Chip translúcido sobre o mapa (direção de arte §5/§9 item 7, `theme.role.glassOnMap`)
   // — opaco, SEM blur. Precisa de fundo próprio porque o mapa agora é foto/ilustração
@@ -121,10 +154,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   landmarkLabel: { color: theme.role.textSecondary, ...textStyle('medium', 'caption') },
+  // Camada cheia + `alignItems`/`justifyContent` centra o pino de verdade (meio exato da área
+  // visível), em vez de um `top` fixo em px que só batia com `MAP_HEIGHT`: no sangramento
+  // (`bleed`, altura variável por `flex`) o pino ficaria fora do centro.
+  centerMarkerLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   centerMarkerRing: {
-    position: 'absolute',
-    top: MAP_HEIGHT / 2 - 18,
-    left: '48%',
     width: 36,
     height: 36,
     borderRadius: 18,

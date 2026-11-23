@@ -74,6 +74,42 @@ export const TELAS = [
     pranchaArquivo: 'alvo_motorista_2026-11-22.png',
     recortePrancha: { x0: 553, y0: 6, x1: 799, y1: 470 },
   },
+  {
+    id: 'P03',
+    app: 'passageiro',
+    nome: 'inicio',
+    rota: '/',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_passageiro_2026-11-22.png',
+    // §18.1: "Home", 813,12,1049,508 + folga de 8px.
+    recortePrancha: { x0: 805, y0: 4, x1: 1057, y1: 516 },
+  },
+  {
+    id: 'P04',
+    app: 'passageiro',
+    nome: 'destino',
+    rota: '/destino',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    // Ficha P04: "sem recorte na prancha, herda o topo da 'Escolha de categoria'" (§18.1: 1061,12,1297,508) + folga de 8px.
+    pranchaArquivo: 'alvo_passageiro_2026-11-22.png',
+    recortePrancha: { x0: 1053, y0: 4, x1: 1305, y1: 516 },
+  },
+  {
+    id: 'M05',
+    app: 'motorista',
+    nome: 'painel-do-motorista',
+    rota: '/',
+    estados: [ESTADOS.PADRAO],
+    pranchaArquivo: 'alvo_motorista_2026-11-22.png',
+    recortePrancha: { x0: 799, y0: 6, x1: 1045, y1: 470 },
+    // ⚠ `cli.mjs capturar --telas M05` ainda NÃO autentica: `lib/capture.mjs` navega direto para
+    // `rota` sem sessão, e a M05 fica atrás da guarda `(app)` (`Stack.Protected`) — a captura hoje
+    // sairia da tela de login, não da Home. Esta entrada documenta a tela para quando alguém
+    // acrescentar um passo de login ao `capture.mjs` (ex.: registrar+verificar+logar via
+    // `window.__vuumboraIdentity` antes do `page.goto`, código-mock fixo '123456' em
+    // `packages/api-client/src/identity/mock-adapter.ts:129`). Até lá, a medição da M05 foi feita
+    // por um script ad hoc fora desta ferramenta (ver handoff da Lyra, onda 2 do padrão premium).
+  },
 ];
 
 export function telaPorId(id) {
