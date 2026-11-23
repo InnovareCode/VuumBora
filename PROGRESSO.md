@@ -2,6 +2,32 @@
 
 Estado do projeto entre sessões. Atualizar ao fim de cada marco.
 
+## Estado em 23/11/2026 (madrugada): S1 EM PRODUÇÃO e onda 5 na main
+
+**Produção (publicada pelo dono em 22-23/11, conferida por `tools/producao/verificar-pos-deploy.mjs`):**
+- API do S1 no ar com as migrações 0010-0023 aplicadas no boot, `REQUIRE_SECRETS=true`. `/healthz` 200;
+  `/v1/legal/current` 503 `consent_unavailable` (esperado: textos legais ainda não publicados).
+- Painel admin publicado a partir da main; admin de produção criado (`create-admin` + `reissue-2fa-enrollment`) e
+  login do dono com 2FA funcionando. Banco só com dados de teste (o dono dispensou backup antes da publicação).
+- Falta antes de abrir o cadastro (missão **F05c**): trocar os três segredos gerados na conversa (o dono adiou; refazer
+  o 2FA junto), ativar o papel restrito `vuumbora_api` (scripts `ativar-papel-api.mjs`/`conferir-papel-api.mjs`, na main
+  desde `ef4a5d0`; trocar `DATABASE_URL` e `RUN_MIGRATIONS_ON_BOOT=false` no MESMO salvamento), SMTP do domínio, textos
+  legais revisados pelo advogado + `legal:publish`, Let's Encrypt do `painel.` (ainda autoassinado), desligar o
+  Web Analytics da Cloudflare no `admin.` (a CSP já bloqueia o beacon) e o favicon do painel (404).
+
+**Main em `a280d81`:** expo-dev-client (`aaa6fcc`), scripts do papel restrito (`ef4a5d0`) e **onda 5 do padrão premium**
+nos dois apps (P11, P13, P14, M12, M13, M14; abas reais do motorista sem "Ganhos"; exclusão de conta real pelos dois
+apps). Íris APROVADO em `a280d81` depois de reprovar o WhatsApp do motorista com um 9 a mais; agora
+`scripts/check-support-channels.mjs` roda no `npm run check`.
+
+**Pendências abertas pela onda 5** (detalhe em `docs/fichas-de-tela/README.md`): `me()` sem e-mail/telefone;
+`deleteAccount` sem checar corrida ativa (resolver no S4); `expo-location` e `expo-clipboard` (PP-8); `BottomTabBar`
+sem `aria-selected` no react-native-web (design system).
+
+**Próximos passos:** F06 (build Android) espera só a conta Expo do dono. Onda 4 (corrida, PP-10 rota única) e onda 6
+(painel pelo portão). Decisões do dono ainda abertas: tarifa (simulador entregue), gateway, textos legais e seguro
+(advogado), conta Google Play.
+
 ## S1 (fundação do backend) e fecho do Admin v0 — NO REPOSITÓRIO, NÃO PUBLICADO (21/11/2026)
 
 Tudo abaixo está commitado e enviado para `origin/main`. **A API e as
