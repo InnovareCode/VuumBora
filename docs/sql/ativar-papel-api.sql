@@ -1,7 +1,13 @@
 -- Ativa a credencial de runtime da API (papel `vuumbora_api`, criado pela
 -- migracao 0012 sem LOGIN). Rodar UMA vez por ambiente, com a credencial
--- DONA do banco, depois da migracao 0012. A senha NAO vai para o git:
--- gere uma aleatoria (ex.: `openssl rand -base64 32`) e cole no lugar.
+-- DONA do banco, depois da migracao 0012.
+--
+-- CAMINHO RECOMENDADO: `node scripts/ativar-papel-api.mjs` (apps/api), com
+-- MIGRATION_DATABASE_URL = credencial dona. Ele gera a senha, roda o ALTER ROLE
+-- abaixo e IMPRIME a DATABASE_URL pronta (nunca a URL dona). Este arquivo é só a
+-- versao MANUAL, equivalente, para quem preferir nao rodar o script. A senha NAO
+-- vai para o git: gere uma aleatoria (ex.: `openssl rand -base64 32`, sem
+-- caracteres que precisem de escape em URL) e cole no lugar.
 --
 --   ALTER ROLE vuumbora_api LOGIN PASSWORD '<SENHA_GERADA>';
 --
@@ -12,6 +18,15 @@
 --     API. Ponha-a so numa tarefa/terminal de operador (migrar, create-admin, retencao)
 --     e desligue RUN_MIGRATIONS_ON_BOOT. Ver docs/publicar-o-backend.md.
 --
--- Conferir (deve falhar com "permission denied"/"append-only"):
+-- Conferir: `node scripts/conferir-papel-api.mjs` (apps/api), com DATABASE_URL = a URL
+-- do vuumbora_api acima, prova tudo de uma vez (current_user, SELECT 1 e as recusas
+-- abaixo), dentro de uma transacao com ROLLBACK, sem efeito no banco. A mao, deve
+-- falhar com "permission denied" (42501):
 --   UPDATE admin_audit_log SET action = 'x';
 --   DELETE FROM admin_audit_log;
+--   DELETE FROM admin_users;
+--   CREATE TABLE qualquer_coisa (id int);  -- qualquer DDL
+-- ATENCAO (migracao 0023, F07): desde entao o papel PODE INSERT/UPDATE em
+-- admin_users (nunca DELETE) -- a gestao de usuarios do painel precisa escrever ali.
+-- "INSERT INTO admin_users ... passar" NAO e mais sinal de falha. A matriz completa
+-- de privilegios mora em apps/api/test/runtime-role.test.ts.

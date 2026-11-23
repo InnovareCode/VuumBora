@@ -166,7 +166,9 @@ administrador e desliga trigger) **não estiver no mesmo contêiner**: quem vaza
 
 Passo a passo (infraestrutura — Vulcano):
 
-1. Ative o papel uma vez: `docs/sql/ativar-papel-api.sql` (com a credencial dona). Ponha a senha dele em `DATABASE_URL` da API.
+1. Ative o papel uma vez: `node scripts/ativar-papel-api.mjs` (com `MIGRATION_DATABASE_URL` = credencial dona). Ele
+   gera uma senha, roda o `ALTER ROLE` e imprime a `DATABASE_URL` pronta — cole-a em `DATABASE_URL` da API (nunca
+   imprime a URL dona). `docs/sql/ativar-papel-api.sql` tem o SQL equivalente, manual, se preferir não rodar o script.
 2. **Retire `MIGRATION_DATABASE_URL` do ambiente do serviço da API.** Com `RUN_MIGRATIONS_ON_BOOT` ligado a API ainda
    migra no boot e, sem a credencial dona, usa a própria `DATABASE_URL` (o papel restrito não faz DDL): então, em produção,
    **desligue `RUN_MIGRATIONS_ON_BOOT`** e migre por uma tarefa de operador que tenha `MIGRATION_DATABASE_URL`:
@@ -178,8 +180,13 @@ Passo a passo (infraestrutura — Vulcano):
 4. Se for inevitável manter `MIGRATION_DATABASE_URL` no serviço da API (migração no boot), a API a **remove do
    `process.env` depois de migrar** e avisa no log a cada boot (`[server] AVISO ...`). Isso reduz, não elimina: o ambiente do
    contêiner continua legível por quem tem acesso ao contêiner.
-5. Confira: com `DATABASE_URL` da API, `INSERT INTO admin_users ...` deve falhar com `permission denied`.
-   (`apps/api/test/runtime-role.test.ts` prova isso contra Postgres real a cada execução do CI.)
+5. Confira com `DATABASE_URL="<a URL da API>" node scripts/conferir-papel-api.mjs`: ele prova que `current_user` é
+   `vuumbora_api`, que `SELECT 1` funciona e que `DELETE` em `admin_users`, `UPDATE` em `admin_audit_log` e qualquer
+   DDL falham com `permission denied` — tudo dentro de uma transação com `ROLLBACK`, sem efeito no banco.
+   **Atenção:** desde a migração 0023 (F07), o papel restrito PODE `INSERT`/`UPDATE` em `admin_users` (nunca
+   `DELETE`) — a gestão de usuários do painel precisa escrever ali. `INSERT INTO admin_users ...` passar não é mais
+   sinal de falha; a matriz completa de privilégios mora em `apps/api/test/runtime-role.test.ts`, que prova isso
+   contra Postgres real a cada execução do CI.
 
 ⚠️ **Isto ficou mais estreito em 22/11/2026 (F07, migração 0023):** a credencial `vuumbora_api` passou a poder
 `INSERT`/`UPDATE` em `admin_users` (nunca `DELETE`) e `INSERT`/`DELETE` em `admin_enrollment_tokens` — só para a rota

@@ -32,11 +32,18 @@ seção com o comando/clique exato — você não precisa pesquisar nada, só se
    Acrescente também **`REQUIRE_SECRETS` = `true`** (Órion, rodada 3h): se um dos três segredos faltar num redeploy
    futuro, a API para de subir, em vez de responder 503 em silêncio.
    **Logo depois do primeiro boot, antes de abrir o cadastro:** passe a API para o papel restrito `vuumbora_api` (Órion,
-   rodada 3h). Rode `docs/sql/ativar-papel-api.sql` com a credencial dona. Troque o `DATABASE_URL` do
-   `vuumbora-backend` para o `vuumbora_api` e desligue `RUN_MIGRATIONS_ON_BOOT`. Daí em diante, as migrações rodam por
-   tarefa de operador, com `MIGRATION_DATABASE_URL` só durante o comando (`docs/publicar-o-backend.md`, "Duas
-   credenciais de banco"). Sem esse passo, a API roda com a credencial dona do banco, e as proteções das migrações 0017 e
-   0023 deixam de valer na prática.
+   rodada 3h). No Console do contêiner (pasta `/app`), com `MIGRATION_DATABASE_URL` apontando para a credencial dona:
+   `node scripts/ativar-papel-api.mjs` — troca a senha do papel e imprime a `DATABASE_URL` pronta para o
+   `vuumbora_api` (nunca mostra a URL dona). Ainda no Console, confira a URL impressa **antes de mexer no ambiente**:
+   `DATABASE_URL="<a URL impressa>" node scripts/conferir-papel-api.mjs` — sai só `OK` ou mostra exatamente o item que
+   falhou, sem deixar efeito no banco. Com tudo `OK`, no `vuumbora-backend` troque **no mesmo salvamento** o
+   `DATABASE_URL` pela URL impressa **e** `RUN_MIGRATIONS_ON_BOOT` para `false`, e só então faça o Deploy. Se subir com o
+   papel restrito e a migração no boot ainda ligada, a API tenta o `CREATE TABLE IF NOT EXISTS schema_migrations` do
+   `migrate.ts`, o papel não tem permissão de DDL e o boot falha.
+   Daí em diante, as migrações rodam por tarefa de operador, com `MIGRATION_DATABASE_URL` só durante o comando
+   (`docs/publicar-o-backend.md`, "Duas credenciais de banco"). Sem esse passo, a API roda com a credencial dona do
+   banco, e as proteções das migrações 0017 e 0023 deixam de valer na prática. (`docs/sql/ativar-papel-api.sql` tem o
+   SQL equivalente, manual, se preferir não rodar o script.)
 3. **Confirmar o HTTPS do painel do próprio Easypanel** (`painel.vuumbora.com.br`, passo 2) — sem isso a senha do
    Easypanel ainda viaja em texto claro quando você for preencher o passo 2.
 4. **Publicar a API com as migrações 0010–0023 e, na mesma janela, o painel** (`docs/publicar-o-backend.md`, seção 3,
@@ -245,9 +252,18 @@ Depois:
    > `MIGRATION_DATABASE_URL="postgres://dono:SENHA@host:5432/vuumbora" node scripts/create-admin.mjs ...`) — não a
    > deixe no ambiente permanente da API. Sem ela o script avisa e tenta com a `DATABASE_URL` (e o banco recusa).
    > Detalhes em `docs/publicar-o-backend.md`, seção "Duas credenciais de banco".
-3. Abra `https://admin.vuumbora.com.br`, entre e faça o cadastro do app
-   autenticador (Google Authenticator, Authy, 1Password) quando o painel pedir.
-   Guarde os códigos de recuperação que ele mostrar.
+   No fim, o script imprime um **CÓDIGO DE ATIVAÇÃO DO 2FA** (formato `ABCDE-FGHIJ-KLMNO-PQRST`, uso único,
+   vale 48 horas, **não aparece de novo**). Copie antes de fechar o console: o painel pede esse código antes de
+   mostrar o QR. Perdeu, venceu, ou o script disse que o admin já existia? Emita outro no mesmo console:
+
+   ```
+   node scripts/reissue-2fa-enrollment.mjs --email=seu-email@dominio.com.br
+   ```
+3. Abra `https://admin.vuumbora.com.br`, entre com e-mail e senha, digite o **código de ativação** na tela
+   "Ative a verificação em duas etapas" e só então cadastre o app autenticador (Google Authenticator, Authy,
+   1Password). **No celular**, não dá para escanear o QR da própria tela: use "Copiar chave", logo abaixo do QR,
+   e no app autenticador escolha "Inserir chave de configuração". Guarde os códigos de recuperação que ele
+   mostrar, fora do celular.
 
 Verificação: o login completo funciona e uma candidatura de teste aparece na
 lista. Depois **apague** a candidatura de teste.
@@ -615,10 +631,17 @@ opcionais mudam o alvo — o comentário no topo do próprio arquivo explica (`V
       `ADMIN_TOTP_ENCRYPTION_KEY`). Os da primeira publicação, em 22/11/2026, foram gerados na conversa com a equipe
       porque o dono estava no celular, e ficaram no histórico. Gere os novos com
       `tools/producao/gerar-segredos.ps1` no computador. Enquanto o banco só tiver dados de teste, trocar não custa
-      nada. Depois que houver usuários reais, trocar o pepper invalida as senhas, e trocar a chave do TOTP invalida o 2FA
-      e a senha do SMTP salva.
-- [ ] API no papel restrito `vuumbora_api` (antes de abrir o cadastro): `INSERT INTO admin_users ...` com o
-      `DATABASE_URL` da API falha com `permission denied`, e `RUN_MIGRATIONS_ON_BOOT` está desligado
+      nada. Depois que houver usuários reais: trocar `AUTH_JWT_SECRET` desloga todo mundo (as sessões são assinadas
+      com ele) e trocar a chave do TOTP invalida o 2FA e a senha do SMTP salva. **Trocar o `AUTH_PEPPER` NÃO invalida
+      senha** (o hash da senha é bcrypt puro, sem pepper — confira em `apps/api/src/services/identity-service.ts`):
+      o que ele invalida é o código de e-mail PENDENTE (quem estiver no meio da verificação de cadastro ou da
+      redefinição de senha precisa pedir um código novo) e a correlação dos hashes de IP já gravados na trilha de
+      acesso com os de depois da troca (perde histórico de correlação, não é falha de segurança).
+- [ ] API no papel restrito `vuumbora_api` (antes de abrir o cadastro): `node scripts/ativar-papel-api.mjs`
+      (credencial dona) seguido de `DATABASE_URL="<a URL impressa>" node scripts/conferir-papel-api.mjs` só mostra
+      `OK` — `current_user` é `vuumbora_api`, `DELETE` em `admin_users`, `UPDATE` em `admin_audit_log` e qualquer DDL
+      continuam recusados. (Desde a migração 0023 o papel PODE `INSERT`/`UPDATE` em `admin_users`, de propósito, para
+      a gestão de usuários do painel — isso não é mais sinal de falha.) `RUN_MIGRATIONS_ON_BOOT` está desligado
 - [ ] Backup ativado e **restaurado de verdade uma vez** (`docs/backup-e-restauracao.md`)
 - [ ] `BACKUP_PASSPHRASE` e `ADMIN_TOTP_ENCRYPTION_KEY` guardadas fora do Easypanel
 - [ ] Cabeçalhos conferidos com `curl -sI` em admin e site; `strict-transport-security` aparece **uma vez** (passo 7.1)

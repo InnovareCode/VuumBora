@@ -20,7 +20,9 @@
     "identity:retention": "node scripts/retention-identity.mjs",
     "legal:publish": "node scripts/publish-legal.mjs",
     "create-admin": "node scripts/create-admin.mjs",
-    "reissue-2fa-enrollment": "node scripts/reissue-2fa-enrollment.mjs"
+    "reissue-2fa-enrollment": "node scripts/reissue-2fa-enrollment.mjs",
+    "ativar-papel-api": "node scripts/ativar-papel-api.mjs",
+    "conferir-papel-api": "node scripts/conferir-papel-api.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.5",
