@@ -1,10 +1,20 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Car, Circle, Clock, CreditCard, MapPin } from 'lucide-react-native';
-import { AppShell, ErrorState, MockBadge, ScreenHeader, StatusBadge, theme, textStyle, type StatusBadgeVariant } from '@vuumbora/ui';
-import { formatMoneyBRL } from '../../src/utils/money';
+import { Car, Circle, Clock, CreditCard, HelpCircle, MapPin } from 'lucide-react-native';
+import {
+  AppShell,
+  ErrorState,
+  ListRow,
+  MockBadge,
+  MoneyText,
+  ScreenHeader,
+  StatusBadge,
+  SurfaceRaised,
+  theme,
+  tokens,
+  type StatusBadgeVariant,
+} from '@vuumbora/ui';
 import { TripDetailRow } from '../../src/components/history/TripDetailRow';
-import { ReceiptBreakdownRow } from '../../src/components/trip/ReceiptBreakdownRow';
 import { findMockTripHistoryEntry, type TripHistoryStatus } from '../../src/data/mockTripHistory';
 
 const STATUS: Record<TripHistoryStatus, { readonly label: string; readonly variant: StatusBadgeVariant }> = {
@@ -13,10 +23,15 @@ const STATUS: Record<TripHistoryStatus, { readonly label: string; readonly varia
 };
 
 /**
- * Detalhe/comprovante de uma viagem do histórico (P11) — aberto a partir de
- * `/historico`, lido por `id` (mesmo padrão de `useLocalSearchParams` do `simulated`
- * em `index.tsx`, não rota dinâmica de arquivo). Sem `TripHistoryPort` real: tudo aqui
- * é FABRICADO (`mockTripHistory.ts`), sinalizado com `MockBadge`.
+ * Comprovante de uma viagem do histórico (P11), `docs/fichas-de-tela/P11-historico.md` §2.2.
+ * Lacunas corrigidas aqui (ficha §11): cartões em `role.surface` chapado → `SurfaceRaised`
+ * (item 5); origem amarela/destino laranja → `map.pickup` (verde)/`map.destination` (vermelho)
+ * (item 6); dois selos na mesma linha do título/seção → UM selo, embaixo do cartão de valor
+ * (item 7); linhas de tarifa fabricadas (incluindo "Taxa de serviço") → removidas (item 8,
+ * **D-38**: "só total e forma de pagamento até a decisão 7 dizer o que cada lado vê" — pedido
+ * explícito desta missão). "Ajuda com esta corrida" agora navega de verdade para a P14 (`/ajuda`),
+ * levando o destino e a data da corrida para o cartão "Corrida em questão" (sem código público
+ * real: o contrato ainda não tem um, ficha P14 §10).
  */
 export default function TripHistoryDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -24,7 +39,7 @@ export default function TripHistoryDetailScreen() {
 
   if (!trip) {
     return (
-      <AppShell scroll glow>
+      <AppShell scroll glow testID="trip-detail-screen">
         <View style={styles.content}>
           <ScreenHeader title="Comprovante" onBack={() => router.back()} testID="trip-detail-header" />
           <ErrorState
@@ -42,32 +57,32 @@ export default function TripHistoryDetailScreen() {
   const statusInfo = STATUS[trip.status];
 
   return (
-    <AppShell scroll glow>
+    <AppShell scroll glow testID="trip-detail-screen">
       <View style={styles.content}>
-        <ScreenHeader title="Comprovante" subtitle={trip.destinationLabel} onBack={() => router.back()} testID="trip-detail-header" />
+        <ScreenHeader title="Comprovante" subtitle={trip.dateLabel} onBack={() => router.back()} testID="trip-detail-header" />
 
-        <View style={styles.statusRow}>
+        <SurfaceRaised style={styles.valueCard} testID="trip-detail-value-card">
+          <MoneyText value={trip.receipt.total.amountCents / 100} label="Valor total" size="heading" testID="trip-detail-total" />
           <StatusBadge variant={statusInfo.variant} label={statusInfo.label} />
-          <MockBadge label="comprovante fabricado" />
-        </View>
+        </SurfaceRaised>
 
-        <View style={styles.card}>
+        <SurfaceRaised style={styles.card}>
           <TripDetailRow
-            icon={<Circle size={14} color={theme.role.ctaBackground} fill={theme.role.ctaBackground} />}
+            icon={<Circle size={14} color={tokens.color.map.pickup} fill={tokens.color.map.pickup} />}
             label="Origem"
             value={trip.originAddress}
             testID="trip-detail-origin"
           />
           <View style={styles.divider} />
           <TripDetailRow
-            icon={<MapPin size={16} color={theme.role.warning} strokeWidth={2} fill={theme.role.warning} />}
+            icon={<MapPin size={16} color={tokens.color.map.destination} fill={tokens.color.map.destination} strokeWidth={1.5} />}
             label="Destino"
             value={trip.destinationAddress}
             testID="trip-detail-destination"
           />
-        </View>
+        </SurfaceRaised>
 
-        <View style={styles.card}>
+        <SurfaceRaised style={styles.card}>
           <TripDetailRow
             icon={<Car size={18} color={theme.role.textSecondary} strokeWidth={1.75} />}
             label="Motorista e veículo"
@@ -88,21 +103,20 @@ export default function TripHistoryDetailScreen() {
             value={`${trip.distanceLabel} • ${trip.durationLabel}`}
             testID="trip-detail-duration"
           />
+        </SurfaceRaised>
+
+        <View style={styles.mockRow}>
+          <MockBadge label="comprovante de exemplo" testID="trip-detail-mock-badge" />
         </View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Valores</Text>
-            <MockBadge label="valores fabricados" />
-          </View>
-          <View style={styles.receiptCard} testID="trip-detail-receipt">
-            {trip.receipt.lines.map((line) => (
-              <ReceiptBreakdownRow key={line.label} label={line.label} value={formatMoneyBRL(line.amount)} />
-            ))}
-            <View style={styles.divider} />
-            <ReceiptBreakdownRow label="Total" value={formatMoneyBRL(trip.receipt.total)} emphasis testID="trip-detail-total" />
-          </View>
-        </View>
+        <ListRow
+          icon={<HelpCircle size={20} color={theme.role.textSecondary} strokeWidth={1.75} />}
+          label="Ajuda com esta corrida"
+          onPress={() =>
+            router.push({ pathname: '/ajuda', params: { tripDestino: trip.destinationLabel, tripData: trip.dateLabel } })
+          }
+          testID="trip-detail-help-row"
+        />
       </View>
     </AppShell>
   );
@@ -110,9 +124,16 @@ export default function TripHistoryDetailScreen() {
 
 const styles = StyleSheet.create({
   content: { gap: theme.spacing['4'] },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['2'] },
+  valueCard: {
+    alignItems: 'center',
+    gap: theme.spacing['2'],
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderTopColor: theme.role.edgeTop,
+    borderColor: theme.role.edgeBottom,
+    padding: theme.spacing['5'],
+  },
   card: {
-    backgroundColor: theme.role.surface,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
     borderTopColor: theme.role.edgeTop,
@@ -121,15 +142,5 @@ const styles = StyleSheet.create({
     gap: theme.spacing['3'],
   },
   divider: { height: 1, backgroundColor: theme.role.border },
-  section: { gap: theme.spacing['2'] },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing['2'] },
-  sectionTitle: { color: theme.role.textPrimary, ...textStyle('bold', 'body') },
-  receiptCard: {
-    backgroundColor: theme.role.surface,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.role.border,
-    padding: theme.spacing['4'],
-    gap: theme.spacing['2'],
-  },
+  mockRow: { alignItems: 'center' },
 });

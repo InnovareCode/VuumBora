@@ -1,82 +1,108 @@
-import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
-import { AppShell, EmptyState, ScreenHeader, theme } from '@vuumbora/ui';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import {
+  AppShell,
+  EmptyState,
+  ErrorState,
+  LoadingSkeleton,
+  MockBadge,
+  NetworkBanner,
+  PrimaryButton,
+  ScreenHeader,
+  SecondaryButton,
+  SegmentedControl,
+  theme,
+} from '@vuumbora/ui';
 import { formatMoneyBRL } from '../../src/utils/money';
-import { TripFilterChip } from '../../src/components/history/TripFilterChip';
 import { TripHistoryCard } from '../../src/components/history/TripHistoryCard';
 import { MOCK_TRIP_HISTORY, type TripHistoryPeriod } from '../../src/data/mockTripHistory';
 
 type TripFilter = 'all' | TripHistoryPeriod;
+type LoadStatus = 'loading' | 'error' | 'ready';
 
-const FILTERS: readonly { readonly key: TripFilter; readonly label: string }[] = [
-  { key: 'all', label: 'Todas' },
-  { key: 'currentMonth', label: 'Mês atual' },
-  { key: 'previous', label: 'Anteriores' },
+const FILTERS: readonly { readonly value: TripFilter; readonly label: string }[] = [
+  { value: 'all', label: 'Todas' },
+  { value: 'currentMonth', label: 'Mês atual' },
+  { value: 'previous', label: 'Anteriores' },
 ];
 
-const EMPTY_COPY: Record<TripFilter, { readonly title: string; readonly description: string }> = {
-  all: {
-    title: 'Nenhuma viagem ainda',
-    description: 'Suas corridas vão aparecer aqui assim que você fizer a primeira viagem.',
-  },
-  currentMonth: {
-    title: 'Nenhuma viagem neste mês',
-    description: 'As corridas feitas no mês atual aparecem aqui.',
-  },
-  previous: {
-    title: 'Nenhuma viagem anterior',
-    description: 'Corridas de meses passados aparecem aqui.',
-  },
-};
+/** Carga simulada (sem `TripHistoryPort` real, ficha §10/§11.1): dá tempo real de ver o esqueleto. */
+const SIMULATED_LOAD_MS = 500;
 
 /**
- * P11 — Histórico de viagens (VuumBora_Claude_Design_System/referencias/premium/
- * passageiro/P11-historico.webp). Sem `TripHistoryPort` real — toda a lista vem de
- * `mockTripHistory.ts` (pendência para Vega/Cronos). Toque abre o comprovante em
- * `/historico-detalhe`.
+ * P11 — Histórico de viagens (lista), `docs/fichas-de-tela/P11-historico.md`, onda 5 do padrão
+ * premium. Lacunas corrigidas (ficha §11): filtro em chip que rola → `SegmentedControl` (C-16,
+ * já em `packages/ui`, item 1); carregando/erro de carga que não existiam → simulados aqui
+ * mesmo sem porta real (item 2); carro amarelo da linha → corrigido em `TripHistoryCard`
+ * (D-30, item 3).
+ *
+ * `?devEstado=carregando|erro` (só `__DEV__`, removido do bundle de produção): captura dos
+ * estados que não têm porta real para provocar de verdade — mesmo padrão de `?devAprovado=false`
+ * (M05) e `?devSeed=1` (P05/P06).
+ *
+ * **"Carregando mais" e "Erro ao carregar mais" (ficha §5) ficam n/a**, com motivo: a lista é um
+ * array fixo de 5 viagens (`MOCK_TRIP_HISTORY`), sem paginação nenhuma — não existe "mais" para
+ * carregar até o `TripHistoryPort` real (`GET /v1/trips?cursor`) existir.
  */
 export default function TripHistoryScreen() {
+  const { devEstado } = useLocalSearchParams<{ devEstado?: string }>();
   const [filter, setFilter] = useState<TripFilter>('all');
+  const [status, setStatus] = useState<LoadStatus>('loading');
+
+  const load = useCallback(() => {
+    if (__DEV__ && devEstado === 'erro') {
+      setStatus('error');
+      return undefined;
+    }
+    if (__DEV__ && devEstado === 'carregando') {
+      setStatus('loading');
+      return undefined;
+    }
+    setStatus('loading');
+    const timer = setTimeout(() => setStatus('ready'), SIMULATED_LOAD_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devEstado]);
+
+  useEffect(() => load(), [load]);
 
   const trips = useMemo(
     () => (filter === 'all' ? MOCK_TRIP_HISTORY : MOCK_TRIP_HISTORY.filter((trip) => trip.period === filter)),
     [filter]
   );
 
-  const emptyCopy = EMPTY_COPY[filter];
-
   return (
-    <AppShell scroll glow>
+    <AppShell scroll glow testID="trip-history-screen">
       <View style={styles.content}>
-        {/* Título curto ("Minhas viagens", não "Histórico de viagens"): medido
-            (Playwright, 320px) que a versão longa da referência não cabe numa linha só
-            no título do ScreenHeader (numberOfLines={1} fixo no componente) — mesma
-            causa raiz já documentada em concluida.tsx ("Concluída" em vez de "Corrida
-            concluída"). */}
-        <ScreenHeader title="Minhas viagens" onBack={() => router.back()} testID="trip-history-header" />
+        <ScreenHeader title="Histórico de viagens" onBack={() => router.back()} testID="trip-history-header" />
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
-          testID="trip-history-filters"
-        >
-          {FILTERS.map((item) => (
-            <TripFilterChip
-              key={item.key}
-              label={item.label}
-              selected={filter === item.key}
-              onPress={() => setFilter(item.key)}
-              testID={`trip-history-filter-${item.key}`}
-            />
-          ))}
-        </ScrollView>
+        <NetworkBanner testID="trip-history-network-banner" />
 
-        {trips.length === 0 ? (
-          <EmptyState title={emptyCopy.title} description={emptyCopy.description} testID="trip-history-empty" />
+        <SegmentedControl
+          options={FILTERS}
+          value={filter}
+          onChange={(value) => setFilter(value as TripFilter)}
+          accessibilityLabel="Filtrar por período"
+          testID="trip-history-filter"
+        />
+        <MockBadge label="histórico de exemplo" testID="trip-history-mock-badge" />
+
+        {status === 'loading' ? (
+          <View style={styles.list} testID="trip-history-loading">
+            <LoadingSkeleton variant="block" height={64} lines={5} />
+          </View>
+        ) : status === 'error' ? (
+          <ErrorState
+            title="Não foi possível carregar suas viagens."
+            onRetry={load}
+            retryLabel="Tentar de novo"
+            testID="trip-history-error"
+          />
+        ) : trips.length === 0 ? (
+          <EmptyStateForFilter filter={filter} onChangeFilter={setFilter} />
         ) : (
-          <View style={styles.list}>
+          <View style={styles.list} testID="trip-history-list">
             {trips.map((trip) => (
               <TripHistoryCard
                 key={trip.id}
@@ -95,8 +121,32 @@ export default function TripHistoryScreen() {
   );
 }
 
+interface EmptyStateForFilterProps {
+  readonly filter: TripFilter;
+  readonly onChangeFilter: (filter: TripFilter) => void;
+}
+
+function EmptyStateForFilter({ filter, onChangeFilter }: EmptyStateForFilterProps) {
+  if (filter === 'all') {
+    return (
+      <EmptyState
+        title="Nenhuma viagem ainda"
+        description="Suas corridas aparecem aqui depois da primeira viagem."
+        action={<PrimaryButton label="Pedir uma corrida" onPress={() => router.push('/')} testID="trip-history-empty-cta" />}
+        testID="trip-history-empty"
+      />
+    );
+  }
+  return (
+    <EmptyState
+      title={filter === 'currentMonth' ? 'Nenhuma viagem neste mês' : 'Nenhuma viagem anterior'}
+      action={<SecondaryButton label="Ver todas" onPress={() => onChangeFilter('all')} testID="trip-history-empty-filter-cta" />}
+      testID="trip-history-empty-filter"
+    />
+  );
+}
+
 const styles = StyleSheet.create({
   content: { gap: theme.spacing['4'] },
-  filterRow: { flexDirection: 'row', gap: theme.spacing['2'], paddingVertical: 2 },
   list: { gap: theme.spacing['3'] },
 });

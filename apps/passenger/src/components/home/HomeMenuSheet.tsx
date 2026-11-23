@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Car, Settings, User, X } from 'lucide-react-native';
+import { Car, HelpCircle, Settings, User, X } from 'lucide-react-native';
 import { ListRow, SurfaceRaised, theme, textStyle, withAlpha } from '@vuumbora/ui';
 
 export interface HomeMenuSheetProps {
@@ -9,6 +9,7 @@ export interface HomeMenuSheetProps {
   readonly onPressTrips: () => void;
   readonly onPressProfile: () => void;
   readonly onPressSettings: () => void;
+  readonly onPressHelp: () => void;
   readonly testID?: string;
 }
 
@@ -16,9 +17,9 @@ export interface HomeMenuSheetProps {
  * Menu do ☰ da Home (PP-9/D-06): troca a barra de 4 abas (uma delas, "Mensagens", sem ação —
  * `index.tsx:57-63` antes desta fatia) por um menu, como a prancha de 22/11 pede. Lista
  * recomendada na ficha P03 é "Viagens, Carteira (quando existir), Perfil, Configurações e
- * Ajuda" — Carteira (P12) e Ajuda (P14) ainda não têm tela nem conteúdo real, então NÃO entram
- * aqui (G-19: nunca um item que não navega para lugar nenhum). Só Viagens/Perfil/Configurações,
- * que já são rotas de verdade.
+ * Ajuda" — Carteira (P12) ainda não tem tela nem conteúdo real, então NÃO entra aqui (G-19:
+ * nunca um item que não navega para lugar nenhum). Ajuda (P14) passou a existir na onda 5 e
+ * entrou.
  *
  * Sem "tocar fora fecha": mesmo motivo do `ConfirmDialog` (técnico — o scrim como `Pressable`
  * quebraria o `focusFirstDescendant` do `Modal` do react-native-web, ver
@@ -31,6 +32,7 @@ export const HomeMenuSheet = memo(function HomeMenuSheet({
   onPressTrips,
   onPressProfile,
   onPressSettings,
+  onPressHelp,
   testID,
 }: HomeMenuSheetProps) {
   function handlePress(action: () => void) {
@@ -69,6 +71,12 @@ export const HomeMenuSheet = memo(function HomeMenuSheet({
                 label="Configurações"
                 onPress={() => handlePress(onPressSettings)}
                 testID="home-menu-settings"
+              />
+              <ListRow
+                icon={<HelpCircle size={20} color={theme.role.textSecondary} strokeWidth={1.75} />}
+                label="Ajuda"
+                onPress={() => handlePress(onPressHelp)}
+                testID="home-menu-help"
               />
             </View>
           </SurfaceRaised>
