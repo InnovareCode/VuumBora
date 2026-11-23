@@ -18,6 +18,13 @@ Atualizado em 22/11/2026 (rodada 3b da Órion, achados B-5 e B-7): o fim da seç
 Termos e a Política (sem versão publicada o cadastro responde 503), a CPU do contêiner e a pista do bcrypt, a chave do 2FA
 e a senha do SMTP, uma conferência da trilha de auditoria e a ordem do primeiro deploy do S1.
 
+Atualizado de novo em 22/11/2026 (F07 e F11, já mescladas na `main`): o conjunto do primeiro deploy do S1 passou de
+"migrações 0010–0021" para **0010–0023** — a F11 trouxe a 0022 (exclusão de conta) e a F07 trouxe a 0023 (usuários e
+papéis do painel). Conferido no código (`apps/api/src/env.ts` e os módulos de configuração por área): nenhuma das duas
+fatias criou variável de ambiente nova — reaproveitam `ADMIN_LOGIN_RATE_LIMIT_MAX`/`_WINDOW_MINUTES` (rotas novas do
+painel) e `GLOBAL_RATE_LIMIT_MAX` (exclusão de conta, `/v1/auth/me` e `/v1/legal/current`, achado F01-M1 da Órion). Nada
+a acrescentar no passo 6 de `docs/producao-passo-a-passo-dono.md` por causa delas.
+
 ---
 
 ## 1. O banco
@@ -173,6 +180,13 @@ Passo a passo (infraestrutura — Vulcano):
    contêiner continua legível por quem tem acesso ao contêiner.
 5. Confira: com `DATABASE_URL` da API, `INSERT INTO admin_users ...` deve falhar com `permission denied`.
    (`apps/api/test/runtime-role.test.ts` prova isso contra Postgres real a cada execução do CI.)
+
+⚠️ **Isto ficou mais estreito em 22/11/2026 (F07, migração 0023):** a credencial `vuumbora_api` passou a poder
+`INSERT`/`UPDATE` em `admin_users` (nunca `DELETE`) e `INSERT`/`DELETE` em `admin_enrollment_tokens` — só para a rota
+`/v1/admin/users/*`, atrás de papel `dono` + CSRF + senha (e TOTP nas mutações mais sensíveis). O passo 5 de
+`docs/producao-passo-a-passo-dono.md` (criar o PRIMEIRO administrador por `create-admin.mjs`, com a credencial dona)
+continua necessário do mesmo jeito: sem nenhum admin, não há sessão `dono` para abrir a tela de usuários. Detalhe
+completo em `docs/contrato-admin-usuarios.md`, seção "Decisão de segurança registrada".
 
 ### Termos de Uso e Política: `LEGAL_DOCUMENTS_BASE_URL` e a primeira versão publicada
 
@@ -391,8 +405,10 @@ WHERE action = 'email_settings.updated'
 
 ### Ordem do primeiro deploy do S1 (API com migrações e painel juntos)
 
-A API nova, as migrações **0010 a 0021** e o painel novo formam um conjunto. O painel do `main` só funciona com a API nova (o
-aviso no topo de `docs/producao-passo-a-passo-dono.md` explica), e a API nova sem as migrações não atende a identidade. Em ordem:
+A API nova, as migrações **0010 a 0023** e o painel novo formam um conjunto. O painel do `main` só funciona com a API nova (o
+aviso no topo de `docs/producao-passo-a-passo-dono.md` explica), e a API nova sem as migrações não atende a identidade. A
+0022 (exclusão de conta) e a 0023 (usuários e papéis do painel) não pedem nenhuma variável nova — sobem com o mesmo boot
+automático da seção 2 deste documento, junto com as demais. Em ordem:
 
 1. **Backup do banco**, restaurado ao menos uma vez (`docs/backup-e-restauracao.md`).
 2. **Variáveis** no `vuumbora-backend`, antes de publicar: `ADMIN_ALLOWED_ORIGINS`, `ADMIN_TOTP_ENCRYPTION_KEY`, `AUTH_PEPPER` e

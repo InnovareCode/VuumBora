@@ -5,9 +5,52 @@ via **EAS Build** (serviço da Expo). Não há deploy automatizado de app: o CI
 (`.github/workflows/ci.yml`) roda checagens, testes e o ensaio de backup, sem etapa de EAS. Este documento
 descreve o caminho manual, hoje.
 
-## Pré-requisitos (uma vez por app)
+Atualizado em 22/11/2026 (F06): identificadores confirmados pelo dono (decisão DN-07, `docs/decisoes-do-dono.md`),
+ícone/splash/ícone adaptativo já entregues pela Apolo, e o dono decidiu criar agora as contas Expo e Google Play
+(a Google Play guardada até o beta). O que ficava como "pendente" abaixo foi conferido de novo no código.
 
-1. Conta Expo (gratuita) e CLI autenticado: `npx eas login`.
+## Antes de tudo: as duas contas — AÇÃO DO DONO (uma vez, pode fazer agora)
+
+Nenhuma das duas a equipe pode criar por você — login pessoal/da empresa.
+
+### Conta Expo (organização)
+
+1. Crie a conta em [expo.dev](https://expo.dev) — gratuita. Se for usar e-mail/organização da empresa, crie assim
+   desde já (trocar depois dá mais trabalho).
+2. No seu computador, autentique o terminal (uma vez por computador):
+   ```
+   cd apps/passenger
+   npx eas login
+   ```
+3. Ligue cada app a um projeto Expo (grava o `projectId` em `app.config.ts` → `extra.eas.projectId`):
+   ```
+   npx eas init
+   ```
+   Repita dentro de `apps/driver` — são dois apps, dois projetos Expo separados.
+
+Verificação: `npx eas whoami` mostra sua conta; `apps/passenger/app.config.ts` e `apps/driver/app.config.ts` passam
+a ter `extra.eas.projectId` preenchido (o `eas init` edita o arquivo por você).
+
+### Conta de desenvolvedor Google Play — guardar até o beta
+
+Faça agora porque a verificação da conta pode levar alguns dias; **não precisa publicar nada ainda**, é só abrir a
+porta para quando o app estiver pronto para um teste fechado/beta.
+
+1. Acesse [play.google.com/console/signup](https://play.google.com/console/signup) com a conta Google que vai ser a
+   dona do app (ideal: uma conta da empresa, não pessoal — é a que fica para sempre ligada aos apps).
+2. Escolha o tipo de conta: **Organização/Empresa** (não "Individual"), com CNPJ do VuumBora — organização muda de
+   titular mais fácil que conta individual se um dia precisar.
+3. Pague a taxa única de registro (cerca de US$ 25, cartão).
+4. A Google pode pedir verificação de identidade/empresa (documento, às vezes alguns dias de análise) — comece isso
+   com antecedência do que pensa precisar usar.
+5. **Pare aqui.** Não crie o "app" dentro do Console ainda — isso entra só quando houver uma build para subir
+   (seção "Publicação nas lojas", mais abaixo), com o nome, descrição e capturas de tela definitivos.
+
+Verificação: o Play Console abre sem pedir mais nada, e aparece o nome da conta/organização correto no canto.
+
+## Pré-requisitos (uma vez por app, já conferidos no código em 22/11/2026)
+
+1. Conta Expo e `projectId` — seção acima.
 2. `eas.json` na raiz de cada app (`apps/passenger/eas.json`,
    `apps/driver/eas.json`), já no repo (commit `856e399`), com três perfis:
    - `development`: `developmentClient: true`, distribuição interna, Android `apk`.
@@ -15,15 +58,45 @@ descreve o caminho manual, hoje.
    - `production`: distribuição `store`, Android `app-bundle` (`.aab`).
 
    Cada perfil define `env.VUUMBORA_BUILD_PROFILE` com o próprio nome (`development`, `preview` ou
-   `production`), que é o que o `metro.config.js` lê (ver a seção abaixo). Confirmar se o `projectId` do EAS
-   (`extra.eas.projectId` em `app.config.ts`) já foi gravado: a confirmar, não verificado nesta atualização.
-3. Identificadores de loja definitivos. Hoje `app.config.ts` usa provisórios
-   (`com.vuumbora.passenger`, `com.vuumbora.driver`) — ver "Decisões em aberto"
-   no `PROGRESSO.md`. Trocar antes do primeiro build de produção, porque o
-   identificador vira parte do artefato e é caro de mudar depois de publicado.
-4. Ícone/splash/adaptiveIcon: pendentes (ver comentários `PENDENTE (Apolo)` em
-   `app.config.ts`). EAS builda sem eles (usa placeholder padrão do Expo), mas
-   não é o artefato final de loja.
+   `production`), que é o que o `metro.config.js` lê (ver a seção abaixo).
+3. **Identificadores de loja: CONFIRMADOS pelo dono em 22/11/2026** (decisão DN-07) —
+   `com.vuumbora.passenger` e `com.vuumbora.driver`, já em `app.config.ts` dos dois apps. Não são mais provisórios;
+   não precisam trocar antes do build de produção. (O comentário `PENDENTE` que ainda está em `app.config.ts` ficou
+   desatualizado por esta decisão — sinalizado ao Atlas/Nova para a Vega limpar o comentário; não editei código
+   fora da minha zona.)
+4. **Ícone, splash e ícone adaptativo: entregues.** Conferido em 22/11/2026: `apps/passenger/assets/` e
+   `apps/driver/assets/` têm `icon.png`, `adaptive-icon.png` e `splash-icon.png`, e `app.config.ts` já aponta para
+   eles. Não é mais pendência — a linha antiga deste documento ("pendentes") estava desatualizada.
+5. ⚠️ **Bloqueio real, da equipe (não seu), achado em 22/11/2026:** os dois `eas.json` têm
+   `"developmentClient": true` no perfil `development`, mas **nenhum dos dois apps tem o pacote `expo-dev-client`
+   instalado** (`apps/passenger/package.json` e `apps/driver/package.json` não o listam). Sem ele, o build de
+   desenvolvimento tende a falhar ou gerar um app que não funciona como cliente de desenvolvimento. Avisei o Atlas
+   para a Vega rodar `npx expo install expo-dev-client` nos dois apps **antes** do primeiro
+   `eas build --profile development`. Se for tentar esse build antes disso acontecer, confira com a equipe primeiro.
+6. `android.versionCode` **não** está fixado em nenhum `app.config.ts` — sem ele, o EAS CLI oferece gerenciar a
+   versão remotamente e vai PERGUNTAR isso interativamente na primeira vez que rodar `eas build`. Responda a
+   pergunta (qualquer opção serve para o primeiro build de desenvolvimento); não é preciso decidir antes.
+
+## Primeiro build (desenvolvimento) — AÇÃO DO DONO
+
+Depois das duas contas e do `expo-dev-client` instalado pela equipe:
+
+```bash
+cd apps/passenger   # ou apps/driver
+npx eas build --platform android --profile development
+```
+
+O EAS pode perguntar sobre a keystore de assinatura do Android — responda "yes"/"generate" (ele gera e guarda para
+você, sem custo). O link que o terminal mostra tem o progresso e, no final, o `.apk` para baixar e instalar no
+aparelho (ative "fontes desconhecidas" no Android para instalar fora da Play Store).
+
+Verificação: o app abre no aparelho, mostra a tela inicial do VuumBora (não uma tela de erro do Expo). Se faltar
+`EXPO_PUBLIC_MAPBOX_TOKEN` no ambiente `development` do projeto Expo (expo.dev > seu projeto > Environment
+variables, ou `eas env:create`), o app abre mas o mapa fica em branco — não é erro de build, é variável faltando.
+
+Se o terminal recusar algum campo do `eas.json` ou pedir algo que este roteiro não previu, não tente adivinhar —
+provavelmente é uma versão de EAS CLI diferente da que validou o arquivo. Pare e chame o Vulcano com a mensagem de
+erro completa.
 
 ## Perfil de build e guarda de identidade (o que `preview`/`production` fazem)
 
@@ -111,9 +184,13 @@ npx eas build --platform ios --profile production
 
 ## Pendências para o primeiro build real
 
-- `eas.json` dos dois apps: feito (`856e399`). Falta confirmar o `projectId` do EAS (a confirmar).
-- Resolver os `bundleIdentifier`/`package` definitivos (dependem de domínio/
-  conta das lojas do dono — ver `PROGRESSO.md`).
-- Ícone, splash e adaptiveIcon (Apolo) antes do build de produção — build de
-  desenvolvimento roda sem eles.
-- Conta Apple Developer Program ativa, se o alvo for iOS.
+- `eas.json` dos dois apps: feito (`856e399`).
+- `projectId` do EAS: nasce com `npx eas init`, feito pelo dono junto com a conta (seção acima) — nada a conferir
+  antes disso existir.
+- `bundleIdentifier`/`package`: **resolvido** — confirmados pelo dono em 22/11/2026 (DN-07), não são mais pendência.
+- Ícone, splash e adaptiveIcon (Apolo): **entregues**, conferidos no código em 22/11/2026 — não são mais pendência.
+- `expo-dev-client` ausente nos dois apps: **pendência da equipe** (Vega), bloqueia o build `development` enquanto
+  não for instalado — ver seção "Pré-requisitos", item 5.
+- Conta de desenvolvedor Google Play: o dono vai criar agora (seção "Antes de tudo"), guardada até o beta — não é
+  mais pendência de "existir", só de uso (criar o app no Console) quando houver build para subir.
+- Conta Apple Developer Program ativa, se o alvo for iOS — não entrou na decisão de 22/11/2026; continua em aberto.

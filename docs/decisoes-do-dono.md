@@ -239,9 +239,9 @@ documentação específica.
 - **Google Play:** taxa única de cerca de US$ 25.
 - **Apple Developer:** cerca de US$ 99 por ano, obrigatória até para instalar no
   seu próprio iPhone fora do simulador.
-- **Identificadores de app:** hoje `com.vuumbora.passenger` e
-  `com.vuumbora.driver`, provisórios. Depois de publicado, **não dá para mudar**
-  sem criar um app novo na loja.
+- **Identificadores de app:** `com.vuumbora.passenger` e
+  `com.vuumbora.driver`, **confirmados** (decisão DN-07, 22/11/2026 — ver tabela "Publicação, apps e contas" acima).
+  Depois de publicado, **não dá para mudar** sem criar um app novo na loja.
 
 ---
 

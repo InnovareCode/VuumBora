@@ -1,12 +1,53 @@
 # Produção: o que falta e é seu — passo a passo
 
+> 🚨 **Achado de agora (22/11/2026, Vulcano) — confira isto primeiro, antes de qualquer outro passo.** Rodando o
+> script da seção 11 contra os endereços de produção de hoje (só leitura, sem senha): `https://admin.vuumbora.com.br`
+> já responde com `content-security-policy` (ou seja, já é o painel NOVO, do `main`), mas
+> `https://api.vuumbora.com.br/v1/auth/me` e `/v1/legal/current` respondem **404** (rota inexistente — a API em
+> produção ainda NÃO é a do S1). É exatamente o descasamento que o aviso abaixo descreve, e ele já está acontecendo:
+> hoje, ninguém consegue entrar no painel admin de produção (o login não conclui contra a API antiga). Duas saídas,
+> sem meio-termo: (a) publicar a API do S1 com as migrações 0010–0023 **agora** (`docs/publicar-o-backend.md`, seção
+> 3) — e, com o F05 liberado pelo dono, é o caminho recomendado; ou (b) reverter `vuumbora-admin` para
+> `producao-admin-estavel` enquanto isso não sai (roteiro logo abaixo). Não tomei nenhuma ação em produção — só li;
+> quem decide e aplica é o dono, com este roteiro.
+
 Escrito em 21/11/2026 (Vulcano). Tudo marcado **AÇÃO DO DONO** exige o painel do
 Easypanel, o GitHub ou o provedor do servidor, onde a equipe não tem acesso.
 Os nomes de menu do Easypanel mudam entre versões: onde eu não tinha como
 confirmar o nome exato, escrevi "algo como". O que vale é o **teste de
 verificação** de cada passo, que não depende do nome do menu.
 
-Ordem recomendada: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8. O passo 3 (fechar o acesso
+## A lista curta: o que só você faz, nesta ordem
+
+O dono decidiu (22/11/2026): a publicação sai assim que este roteiro estiver pronto — está. O cadastro dos apps nasce
+**fechado** até o passo 5 (textos legais) estar feito; isso é esperado, não é bug. Cada item abaixo aponta para a
+seção com o comando/clique exato — você não precisa pesquisar nada, só seguir.
+
+1. **Escolher a data** (pode ser hoje). Os passos 2 a 7 cabem numa sessão só; o 8 e o 9 (textos legais, SMTP) exigem
+   ter o texto jurídico e a conta de e-mail em mãos antes de começar.
+2. **Preencher os segredos no Easypanel**, serviço `vuumbora-backend` > Ambiente — passo 6 e seção 3 de
+   `docs/publicar-o-backend.md`: `AUTH_PEPPER`, `AUTH_JWT_SECRET` (gere os dois com `openssl rand -base64 48`, guarde
+   num gerenciador de senhas), `ADMIN_TOTP_ENCRYPTION_KEY` (passo 5, `openssl rand -base64 32`),
+   `ADMIN_ALLOWED_ORIGINS`, `LEGAL_DOCUMENTS_BASE_URL`, `AUTH_BCRYPT_CONCURRENCY`/`AUTH_BCRYPT_QUEUE_MAX` (passo 9.3).
+3. **Confirmar o HTTPS do painel do próprio Easypanel** (`painel.vuumbora.com.br`, passo 2) — sem isso a senha do
+   Easypanel ainda viaja em texto claro quando você for preencher o passo 2.
+4. **Publicar a API com as migrações 0010–0023 e, na mesma janela, o painel** (`docs/publicar-o-backend.md`, seção 3,
+   "Ordem do primeiro deploy do S1") — veja o alerta no topo desta página: hoje a API de produção ainda está
+   desatualizada.
+5. **Configurar o SMTP do domínio**, no painel admin (Configurações > E-mail) — servidor, porta, usuário e senha do
+   provedor de e-mail do `vuumbora.com.br`; confira SPF, DKIM e DMARC do domínio (sem isso os códigos de verificação
+   dos apps não saem) e use "enviar e-mail de teste".
+6. **Criar o administrador de produção** (passo 5), com 2FA.
+7. **Hospedar e publicar a primeira versão dos textos legais revisados** pelo jurídico (passo 9.1) — é o que destranca
+   o cadastro dos apps (hoje responde 503 de propósito).
+8. **Rodar `node tools/producao/verificar-pos-deploy.mjs`** (seção 11) e só considerar o deploy fechado quando a
+   saída não tiver nenhuma `FALHA`.
+9. **Só então divulgar o cadastro dos apps e do site.**
+
+O suporte dentro dos apps usa o mesmo WhatsApp do site, (84) 3113-2584, atendimento todos os dias das 7h às 22h — nada
+a configurar aqui, é conteúdo de tela (fora da minha parte); registrado para não inventar outro número depois.
+
+Ordem recomendada do roteiro completo: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8. O passo 3 (fechar o acesso
 por IP) só depois do 2 funcionar, senão você se tranca para fora do painel. O
 passo 7 só depois de republicar `vuumbora-admin` e `vuumbora-frontend` com o
 `nginx.conf` novo (HSTS e cabeçalhos do site entraram em 21/11/2026). O passo 9
@@ -20,13 +61,18 @@ passo 7 só depois de republicar `vuumbora-admin` e `vuumbora-frontend` com o
 > **não conclui** (a tela fica sem passo válido), e as telas de segurança e de
 > e-mail dão 404. Achado de 21/11/2026, depois de um redeploy do painel com a
 > API ainda antiga. Saídas: (a) publicar a API do S1 **e** as migrações
-> 0010–0021 juntas e só então o painel (a ordem completa está em
+> 0010–0023 juntas e só então o painel (a ordem completa está em
 > `docs/publicar-o-backend.md`, seção 3, "Ordem do primeiro deploy do S1"); ou (b)
 > reverter o painel para a branch `producao-admin-estavel` (commit `f79b0fe`, o
 > Admin v0 que combina com a API de produção; roteiro logo abaixo). **Não** use
 > o `da9db50`: ele traz os botões de aprovar e recusar, e essas rotas não
 > existem na API de produção (404). Esta restrição é do painel: o `nginx.conf`
 > do site é estático e não depende da API.
+>
+> Atualizado em 22/11/2026: o painel do `main` de hoje (a partir do commit `77a6315`) também tem a tela "Usuários"
+> (criar, desativar, reativar e trocar papel de outro administrador) — ela só funciona com a migração **0023** já
+> aplicada. Sem ela, a tela carrega mas toda ação dá erro do banco. Como a API aplica as migrações sozinha no boot
+> (seção 2 de `docs/publicar-o-backend.md`), isto resolve-se publicando a API: não há passo manual extra.
 
 ### Roteiro de reversão do painel — AÇÃO DO DONO (uns 5 minutos)
 
@@ -43,11 +89,12 @@ passo 7 só depois de republicar `vuumbora-admin` e `vuumbora-frontend` com o
 
 ### Compatibilidade entre painel e API (consultar antes de qualquer deploy)
 
-| Painel (commit) | Exige na API | Situação em 21/11/2026 |
+| Painel (commit) | Exige na API | Situação em 22/11/2026 |
 |---|---|---|
 | `f79b0fe` (Admin v0) | a API de produção de hoje | combina; é a branch `producao-admin-estavel` |
 | `da9db50` | aprovar e recusar candidatura, com CSRF (migração 0009) | a produção **não** tem |
-| `5273769` em diante (`main`) | API do S1 (`40d78cb` em diante) e migrações 0010–0021 | a produção **não** tem |
+| `5273769` até antes de `77a6315` | API do S1 (`40d78cb` em diante) e migrações 0010–0021 | a produção **não** tem |
+| `77a6315` em diante (`main` de hoje, `0802e92`) | o mesmo de cima **mais** a migração 0023 (tela "Usuários", só papel `dono`) e a 0022 (exclusão de conta, usada pelos apps, não pelo painel) — ou seja, migrações **0010–0023** | a produção **não** tem |
 
 ---
 
@@ -196,6 +243,15 @@ Depois:
 
 Verificação: o login completo funciona e uma candidatura de teste aparece na
 lista. Depois **apague** a candidatura de teste.
+
+**A partir de agora, os PRÓXIMOS administradores (financeiro, operação, suporte, revisor de documentos) você cria
+pelo próprio painel** — Usuários > Novo usuário — sem precisar do terminal de novo. Duas coisas pedem atenção:
+
+- A tela mostra um **token de ativação de uso único** só nesse momento — não aparece de novo. Copie e entregue à
+  pessoa por fora do painel (WhatsApp, e-mail, em mãos); ela usa o token para criar a própria senha. Perdeu o prazo
+  (7 dias) ou o token: desative o usuário e crie de novo.
+- Criar ou promover alguém para `dono`/`financeiro`, ou reativar um `dono` desativado, pede a sua senha **e** o
+  código do seu autenticador (TOTP) na mesma tela — as outras ações pedem só a senha.
 
 ## 6. Variáveis do backend e do admin — AÇÃO DO DONO
 
@@ -496,6 +552,11 @@ perfil define: `development` e `preview` mantêm as telas de desenvolvimento, e 
 identidade aborta antes, nos dois apps (controle: `prod` também aborta). Ou seja: o `eas.json` está certo, e quem barra a
 build de loja hoje é a guarda, não ele.
 
+**O passo a passo das contas (Expo, Google Play) e do primeiro `eas build` está em `docs/build-e-deploy.md`**, seções
+"Antes de tudo: as duas contas" e "Primeiro build (desenvolvimento)" — escrito e atualizado em 22/11/2026, depois que o dono
+confirmou os identificadores (`com.vuumbora.passenger`/`com.vuumbora.driver`, decisão DN-07 em `docs/decisoes-do-dono.md`) e
+decidiu criar as contas Expo e Google Play agora.
+
 **O que eu NÃO validei (ainda não há conta Expo):** nenhum `eas build` de verdade; que os ambientes `development`, `preview` e
 `production` existem no seu projeto Expo (confira ao criar o projeto); que o EAS exporta `EAS_BUILD_PROFILE` com o nome do
 perfil (está na documentação da Expo, não foi testado; o `metro.config.js` usa como segunda rede); e a versão do EAS CLI da sua
@@ -506,6 +567,32 @@ desenvolvimento (o EAS CLI vai avisar ou pedir para instalar; não mexi em `pack
 identificadores de loja definitivos e contas, em `docs/build-e-deploy.md`.
 
 ---
+
+## 11. Verificação pós-deploy — rode a qualquer momento, sem risco
+
+Script novo, só leitura e sem credencial nenhuma: `tools/producao/verificar-pos-deploy.mjs`. Ele faz as mesmas
+requisições que um navegador faria contra os endereços públicos (`/healthz`, `/v1/legal/current`, a home do painel
+admin e do site) e confere os cabeçalhos de segurança — nunca mexe no banco, nunca pede senha. Rode depois de
+qualquer deploy, ou sempre que quiser conferir se tudo continua no ar:
+
+```
+node tools/producao/verificar-pos-deploy.mjs
+```
+
+Precisa só de Node instalado (o mesmo que já usa para o projeto) — não precisa estar na pasta do projeto nem ter o
+`.env`. A saída é uma lista com `OK`, `AVISO` ou `FALHA` em cada linha, e um resumo no final. **Qualquer `FALHA` quer
+dizer que algo que deveria funcionar não está funcionando** — não avise ninguém do lançamento até a lista só ter `OK`
+e, no máximo, `AVISO` esperados (por exemplo, textos legais ainda não publicados, passo 9.1). Exemplo de leitura:
+
+```
+[✔] OK    /healthz respondeu 200 com status "ok".
+[!] AVISO /v1/legal/current?audience=passenger respondeu 503 (consent_unavailable) — ...
+[✘] FALHA strict-transport-security aparece MAIS DE UMA VEZ ...
+```
+
+Se quiser testar contra outro endereço (por exemplo antes do domínio definitivo), três variáveis de ambiente
+opcionais mudam o alvo — o comentário no topo do próprio arquivo explica (`VUUMBORA_API_BASE`, `VUUMBORA_ADMIN_BASE`,
+`VUUMBORA_SITE_BASE`).
 
 ## Checklist final
 
@@ -525,4 +612,7 @@ identificadores de loja definitivos e contas, em `docs/build-e-deploy.md`.
 - [ ] E-mail de teste do painel feito depois de qualquer mudança de `ADMIN_TOTP_ENCRYPTION_KEY` (passo 9.2)
 - [ ] `AUTH_BCRYPT_CONCURRENCY` definida pela cota de CPU e `/healthz` medido sob rajada (passo 9.3)
 - [ ] Contagem de linhas antigas com usuário SMTP na trilha: 0, ou aceite registrado (passo 9.4)
+- [ ] API no ar com as migrações **0010 a 0023** (painel de hoje, a partir de `77a6315`, exige a 0023 para a tela de Usuários)
+- [ ] `node tools/producao/verificar-pos-deploy.mjs` rodado depois do deploy: só `OK` e avisos esperados, nenhuma `FALHA` (passo 11)
 - [ ] `EXPO_PUBLIC_*` só no EAS, um ambiente por perfil, nada no git (passo 10)
+- [ ] Conta Expo e conta de desenvolvedor Google Play criadas (`docs/build-e-deploy.md`); `expo-dev-client` instalado pela equipe antes do primeiro `eas build --profile development`
