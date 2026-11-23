@@ -1,40 +1,49 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { HelpCircle, Info, LogOut, Settings, Shield, User } from 'lucide-react-native';
 import {
-  HelpCircle,
-  Info,
-  LogOut,
-  MapPin,
-  Settings,
-  Shield,
-  SlidersHorizontal,
-  Bell as BellIcon,
-  User,
-} from 'lucide-react-native';
-import { AppShell, DangerButton, MockBadge, ScreenHeader, theme, textStyle } from '@vuumbora/ui';
-import { EditableAvatar } from '../../src/components/profile/EditableAvatar';
-import { ListMenuRow } from '../../src/components/shared/ListMenuRow';
-import { MOCK_PASSENGER_PROFILE } from '../../src/data/mockPassengerProfile';
+  AppShell,
+  Avatar,
+  ConfirmDialog,
+  DangerButton,
+  InlineAlert,
+  ListRow,
+  LoadingSkeleton,
+  MockBadge,
+  ScreenHeader,
+  SecondaryButton,
+  theme,
+  textStyle,
+  focusRingStyle,
+  useKeyboardFocusRing,
+} from '@vuumbora/ui';
+import { useAccountSummary } from '../../src/identity/useAccountSummary';
 import { useSession } from '../../src/session/SessionProvider';
 import { useRideRequestStore } from '../../src/store/useRideRequestStore';
 
 /**
- * P13 — Perfil do passageiro (VuumBora_Claude_Design_System/referencias/premium/
- * passageiro/P13-perfil.webp). Nenhuma das seções abaixo tem tela própria ainda —
- * o toque revela `UnavailableNoticeBanner` (dentro de `ListMenuRow`) em vez de navegar
- * para rota vazia. "Sair da conta" chama o logout do cliente de identidade (`useSession().signOut`): o
- * aparelho sai SEMPRE (mesmo sem rede) e o servidor é avisado se der; a guarda de `app/_layout.tsx`
- * desmonta `(app)` e volta para a P01. Limpa também a jornada de corrida em memória, para a próxima
- * sessão não herdar destino/avaliação da anterior. Nome e telefone abaixo ainda são exemplo (C1 liga
- * `GET /v1/auth/me`).
+ * P13 — Meu Perfil (`docs/fichas-de-tela/P13-perfil-e-configuracoes.md`), onda 5 do padrão
+ * premium. Nome e ID público agora vêm de `identity.me()` de verdade (não mais
+ * `MOCK_PASSENGER_PROFILE`) — ver `useAccountSummary`. **PP-15 aplicada**: das 7 linhas da
+ * prancha só entram as que levam a algum lugar real hoje: Meus dados (`/perfil/dados`),
+ * Privacidade e termos (`/privacidade-e-termos`, que também concentra "Segurança e privacidade"
+ * e "Excluir conta" — ver aquela tela), Ajuda (`/ajuda`, P14, nova nesta onda) e Sobre o
+ * VuumBora (`/sobre`, nova). Endereços favoritos, Preferências de viagem e Notificações ficaram
+ * de fora (dependem de decisões/contratos que não existem: S3, D-08/D-09, D5) — nenhuma delas
+ * mostra mais aviso de "indisponível", só não aparece (regra PP-15, decidida pelo Atlas).
+ *
+ * "Sair da conta" ganhou `ConfirmDialog` (lacuna #6 da ficha: o motorista já tinha, o
+ * passageiro não).
  */
 export default function ProfileScreen() {
   const { signOut, mode } = useSession();
   const startNewRide = useRideRequestStore((state) => state.startNewRide);
+  const { state: account, retry } = useAccountSummary();
+  const [confirmVisible, setConfirmVisible] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
-  async function handleSignOut() {
+  async function handleConfirmSignOut() {
     if (signingOut) return;
     setSigningOut(true);
     startNewRide();
@@ -42,78 +51,60 @@ export default function ProfileScreen() {
   }
 
   return (
-    <AppShell scroll glow>
+    <AppShell scroll glow testID="profile-screen">
       <View style={styles.content}>
         <ScreenHeader
           title="Meu Perfil"
           onBack={() => router.back()}
-          rightSlot={
-            <Pressable
-              onPress={() => router.push('/configuracoes')}
-              accessibilityRole="button"
-              accessibilityLabel="Abrir configurações"
-              style={styles.settingsButton}
-              testID="profile-settings-button"
-            >
-              <Settings size={22} color={theme.role.textPrimary} strokeWidth={1.75} />
-            </Pressable>
-          }
+          rightSlot={<SettingsButton onPress={() => router.push('/configuracoes')} />}
           testID="profile-header"
         />
 
-        <EditableAvatar name={MOCK_PASSENGER_PROFILE.name} testID="profile-avatar" />
-
-        <View style={styles.identityBlock}>
-          <Text style={styles.name} numberOfLines={1}>
-            {MOCK_PASSENGER_PROFILE.name}
-          </Text>
-          <Text style={styles.phone} numberOfLines={1}>
-            {MOCK_PASSENGER_PROFILE.phoneLabel}
-          </Text>
-          <MockBadge label="dados de exemplo" />
-        </View>
+        {account.status === 'loading' ? (
+          <View style={styles.identityBlock} testID="profile-identity-loading">
+            <LoadingSkeleton variant="circle" height={88} />
+            <LoadingSkeleton lines={2} width="60%" />
+          </View>
+        ) : account.status === 'ready' ? (
+          <View style={styles.identityBlock}>
+            <Avatar name={account.account.fullName} size="lg" />
+            <Text style={styles.name} numberOfLines={2}>
+              {account.account.fullName}
+            </Text>
+            <Text style={styles.publicId} numberOfLines={1}>
+              ID público: {account.account.publicId}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.identityBlock} testID="profile-identity-error">
+            <InlineAlert tone="danger" message="Não foi possível carregar seus dados." />
+            <SecondaryButton label="Tentar de novo" onPress={retry} testID="profile-identity-retry" />
+          </View>
+        )}
 
         <View style={styles.menu}>
-          <ListMenuRow
-            icon={<User size={20} color={theme.role.ctaBackground} strokeWidth={1.75} />}
+          <ListRow
+            icon={<User size={20} color={theme.role.textSecondary} strokeWidth={1.75} />}
             label="Meus dados"
-            unavailableMessage="Edição de dados pessoais ainda não está disponível nesta versão."
+            onPress={() => router.push('/perfil/dados')}
             testID="profile-menu-my-data"
           />
-          <ListMenuRow
-            icon={<MapPin size={20} color={theme.role.ctaBackground} strokeWidth={1.75} />}
-            label="Endereços favoritos"
-            unavailableMessage="Gestão de endereços favoritos ainda não está disponível nesta versão."
-            testID="profile-menu-addresses"
+          <ListRow
+            icon={<Shield size={20} color={theme.role.textSecondary} strokeWidth={1.75} />}
+            label="Privacidade e termos"
+            onPress={() => router.push('/privacidade-e-termos')}
+            testID="profile-menu-privacy"
           />
-          <ListMenuRow
-            icon={<SlidersHorizontal size={20} color={theme.role.ctaBackground} strokeWidth={1.75} />}
-            label="Preferências de viagem"
-            unavailableMessage="Preferências de viagem ainda não estão disponíveis nesta versão."
-            testID="profile-menu-preferences"
-          />
-          <ListMenuRow
-            icon={<Shield size={20} color={theme.role.ctaBackground} strokeWidth={1.75} />}
-            label="Segurança e privacidade"
-            unavailableMessage="Segurança e privacidade ainda não estão disponíveis nesta versão."
-            testID="profile-menu-security"
-          />
-          <ListMenuRow
-            icon={<BellIcon size={20} color={theme.role.ctaBackground} strokeWidth={1.75} />}
-            label="Notificações"
-            unavailableMessage="Preferências de notificação detalhadas ainda não estão disponíveis — use a tela de Configurações para ligar/desligar."
-            testID="profile-menu-notifications"
-          />
-          <ListMenuRow
-            icon={<HelpCircle size={20} color={theme.role.ctaBackground} strokeWidth={1.75} />}
-            label="Ajuda e suporte"
-            unavailableMessage="Central de ajuda ainda não está disponível nesta versão."
+          <ListRow
+            icon={<HelpCircle size={20} color={theme.role.textSecondary} strokeWidth={1.75} />}
+            label="Ajuda"
+            onPress={() => router.push('/ajuda')}
             testID="profile-menu-help"
           />
-          <ListMenuRow
-            icon={<Info size={20} color={theme.role.ctaBackground} strokeWidth={1.75} />}
+          <ListRow
+            icon={<Info size={20} color={theme.role.textSecondary} strokeWidth={1.75} />}
             label="Sobre o VuumBora"
-            unavailableMessage="Tela 'Sobre' ainda não está disponível nesta versão."
+            onPress={() => router.push('/sobre')}
             testID="profile-menu-about"
           />
         </View>
@@ -121,8 +112,7 @@ export default function ProfileScreen() {
         <DangerButton
           label="Sair da conta"
           icon={<LogOut size={18} color={theme.role.textPrimary} strokeWidth={2} />}
-          onPress={() => void handleSignOut()}
-          loading={signingOut}
+          onPress={() => setConfirmVisible(true)}
           accessibilityLabel="Sair da conta"
           testID="profile-sign-out-button"
         />
@@ -132,9 +122,50 @@ export default function ProfileScreen() {
           </View>
         ) : null}
       </View>
+
+      <ConfirmDialog
+        visible={confirmVisible}
+        title="Sair da conta?"
+        description="Você vai precisar entrar de novo para usar o aplicativo."
+        confirmLabel="Sair"
+        cancelLabel="Cancelar"
+        destructive
+        loading={signingOut}
+        onConfirm={() => void handleConfirmSignOut()}
+        onCancel={() => setConfirmVisible(false)}
+        testID="profile-sign-out-dialog"
+      />
     </AppShell>
   );
 }
+
+interface SettingsButtonProps {
+  readonly onPress: () => void;
+}
+
+/**
+ * Abre Configurações, no `rightSlot` do `ScreenHeader`. Componente à parte (como o
+ * "Voltar" do próprio `ScreenHeader`) porque o anel de foco de teclado exige o hook —
+ * medido com a sonda da ferramenta de qualidade: sem ele o `outline` saía `auto` (padrão
+ * do navegador, quase invisível sobre o fundo escuro, G-22).
+ */
+function SettingsButton({ onPress }: SettingsButtonProps) {
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
+  return (
+    <Pressable
+      {...focusProps}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Abrir configurações"
+      style={[styles.settingsButton, focusVisible && FOCUS_RING]}
+      testID="profile-settings-button"
+    >
+      <Settings size={22} color={theme.role.textPrimary} strokeWidth={1.75} />
+    </Pressable>
+  );
+}
+
+const FOCUS_RING = focusRingStyle('inside', theme.radius.md);
 
 const styles = StyleSheet.create({
   content: { gap: theme.spacing['5'] },
@@ -145,8 +176,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   identityBlock: { alignItems: 'center', gap: theme.spacing['1'] },
-  name: { color: theme.role.textPrimary, ...textStyle('bold', 'title') },
-  phone: { color: theme.role.textSecondary, ...textStyle('regular', 'body') },
+  name: { color: theme.role.textPrimary, ...textStyle('bold', 'title'), marginTop: theme.spacing['2'] },
+  publicId: { color: theme.role.textSecondary, ...textStyle('regular', 'small') },
   menu: { gap: theme.spacing['2'] },
   signOutNotice: { alignItems: 'center' },
 });

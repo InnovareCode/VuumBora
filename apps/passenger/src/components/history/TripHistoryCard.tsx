@@ -1,7 +1,16 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Car, ChevronRight } from 'lucide-react-native';
-import { StatusBadge, SurfaceRaised, theme, textStyle, tabularNums, type StatusBadgeVariant } from '@vuumbora/ui';
+import {
+  StatusBadge,
+  SurfaceRaised,
+  theme,
+  textStyle,
+  tabularNums,
+  focusRingStyle,
+  useKeyboardFocusRing,
+  type StatusBadgeVariant,
+} from '@vuumbora/ui';
 import type { TripHistoryStatus } from '../../data/mockTripHistory';
 
 export interface TripHistoryCardProps {
@@ -23,6 +32,11 @@ const STATUS: Record<TripHistoryStatus, { readonly label: string; readonly varia
  * de data/valor — não ao lado como irmão de largura fixa: mesma causa raiz evitada em
  * bug_flex_fixo_espreme_texto_flex1_vizinho (memória da Lyra), aqui a soma
  * data+valor+selo não cabia numa linha só a 320pt sem espremer o destino.
+ *
+ * Ganhou anel de foco de teclado (`useKeyboardFocusRing`, G-22): media com a sonda da
+ * ferramenta de qualidade e o `outline` saía `auto` (padrão do navegador, quase invisível
+ * sobre o fundo escuro) — o `Pressable` nunca tinha o hook, igual ao padrão já corrigido em
+ * `ListRow`/`SegmentedControl`.
  */
 export const TripHistoryCard = memo(function TripHistoryCard({
   destinationLabel,
@@ -33,19 +47,23 @@ export const TripHistoryCard = memo(function TripHistoryCard({
   testID,
 }: TripHistoryCardProps) {
   const statusInfo = STATUS[status];
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
 
   return (
     <Pressable
+      {...focusProps}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`Viagem para ${destinationLabel}, ${dateLabel}, ${amountLabel}, ${statusInfo.label}`}
+      style={focusVisible ? FOCUS_RING : undefined}
       testID={testID}
     >
       {({ pressed }) => (
         <SurfaceRaised style={[styles.card, pressed && styles.cardPressed]}>
           <View style={styles.row}>
             <View style={styles.iconCircle}>
-              <Car size={20} color={theme.role.ctaBackground} strokeWidth={1.75} />
+              {/* D-30 (decidida): ícone de linha NUNCA amarelo — era `ctaBackground`, compete com o CTA. */}
+              <Car size={20} color={theme.role.textSecondary} strokeWidth={1.75} />
             </View>
             <View style={styles.content}>
               <View style={styles.titleRow}>
@@ -72,6 +90,9 @@ export const TripHistoryCard = memo(function TripHistoryCard({
     </Pressable>
   );
 });
+
+// Anel de foco de teclado em volta do cartão inteiro (é ele o alvo), FORA dele, com o raio do cartão.
+const FOCUS_RING = focusRingStyle('outside', theme.radius.lg);
 
 const styles = StyleSheet.create({
   card: {

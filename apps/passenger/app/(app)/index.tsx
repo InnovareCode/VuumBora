@@ -106,6 +106,7 @@ export default function PassengerHomeScreen() {
         onPressTrips={() => router.push('/historico')}
         onPressProfile={() => router.push('/perfil')}
         onPressSettings={() => router.push('/configuracoes')}
+        onPressHelp={() => router.push('/ajuda')}
         testID="home-menu"
       />
     </AppShell>
