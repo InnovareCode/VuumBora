@@ -611,6 +611,12 @@ opcionais mudam o alvo — o comentário no topo do próprio arquivo explica (`V
 - [ ] Admin de produção criado; login com 2FA funcionou
 - [ ] `ADMIN_ALLOWED_ORIGINS` e `ADMIN_TOTP_ENCRYPTION_KEY` preenchidas, sem barra final
 - [ ] `REQUIRE_SECRETS=true` no `vuumbora-backend`
+- [ ] **Trocar os três segredos antes de abrir o cadastro** (`AUTH_PEPPER`, `AUTH_JWT_SECRET`,
+      `ADMIN_TOTP_ENCRYPTION_KEY`). Os da primeira publicação, em 22/11/2026, foram gerados na conversa com a equipe
+      porque o dono estava no celular, e ficaram no histórico. Gere os novos com
+      `tools/producao/gerar-segredos.ps1` no computador. Enquanto o banco só tiver dados de teste, trocar não custa
+      nada. Depois que houver usuários reais, trocar o pepper invalida as senhas, e trocar a chave do TOTP invalida o 2FA
+      e a senha do SMTP salva.
 - [ ] API no papel restrito `vuumbora_api` (antes de abrir o cadastro): `INSERT INTO admin_users ...` com o
       `DATABASE_URL` da API falha com `permission denied`, e `RUN_MIGRATIONS_ON_BOOT` está desligado
 - [ ] Backup ativado e **restaurado de verdade uma vez** (`docs/backup-e-restauracao.md`)
