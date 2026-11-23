@@ -17,7 +17,6 @@ import './helpers/setup.js';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { after, before, describe, test } from 'node:test';
@@ -28,14 +27,23 @@ const SCRIPTS_DIR = join(HERE, '..', 'scripts');
 const CWD = join(HERE, '..');
 
 const OWNER_DATABASE_URL = process.env['DATABASE_URL']!;
-// Canário: senha FALSA só para provar que nenhum dos dois scripts ecoa a URL dona na
-// saída. A autenticação local deste cluster de teste é `trust` (ver initdb do ambiente):
-// qualquer senha é aceita, então isto conecta de verdade sem precisar da senha real.
-const CANARY_PASSWORD = `canario-dona-${randomUUID()}`;
-function withCanaryPassword(url: string): string {
-  const u = new URL(url);
-  u.password = CANARY_PASSWORD;
-  return u.toString();
+
+/**
+ * Prova "nunca ecoa a URL dona" com a credencial DONA REAL (não um canário): em CI o
+ * Postgres exige senha (md5/scram), então uma senha inventada não autenticaria — tem de
+ * ser a mesma URL que o resto da suíte já usa. Confere a URL inteira e, se houver senha,
+ * a senha isolada e o par `usuário:senha@`/`usuário@` (forma como ela apareceria embutida
+ * numa URL impressa por engano).
+ */
+function assertNeverLeaksOwnerUrl(stdout: string, stderr: string): void {
+  const combined = `${stdout}\n${stderr}`;
+  const ownerUrl = new URL(OWNER_DATABASE_URL);
+  assert.ok(!combined.includes(OWNER_DATABASE_URL), 'a URL dona completa não pode aparecer na saída');
+  if (ownerUrl.password) {
+    assert.ok(!combined.includes(ownerUrl.password), 'a senha dona não pode aparecer na saída');
+  }
+  const userinfo = ownerUrl.password ? `${ownerUrl.username}:${ownerUrl.password}@` : `${ownerUrl.username}@`;
+  assert.ok(!combined.includes(userinfo), 'o par usuário(:senha)@ do dono não pode aparecer na saída');
 }
 
 const owner = new pg.Pool({ connectionString: OWNER_DATABASE_URL, max: 2 });
@@ -86,11 +94,9 @@ describe('ativar-papel-api.mjs', () => {
   });
 
   test('ativa o papel, imprime uma DATABASE_URL nova do vuumbora_api, e nunca ecoa a URL dona', async () => {
-    const ownerWithCanary = withCanaryPassword(OWNER_DATABASE_URL);
-    const r = await runScript('ativar-papel-api.mjs', { MIGRATION_DATABASE_URL: ownerWithCanary });
+    const r = await runScript('ativar-papel-api.mjs', { MIGRATION_DATABASE_URL: OWNER_DATABASE_URL });
     assert.equal(r.code, 0, `stdout=${r.stdout}\nstderr=${r.stderr}`);
-    assert.ok(!r.stdout.includes(CANARY_PASSWORD), 'a URL dona (senha) não pode aparecer no stdout');
-    assert.ok(!r.stderr.includes(CANARY_PASSWORD), 'a URL dona (senha) não pode aparecer no stderr');
+    assertNeverLeaksOwnerUrl(r.stdout, r.stderr);
 
     const printed = r.stdout.match(/postgres:\/\/\S+/)?.[0];
     assert.ok(printed, 'o script precisa imprimir a nova DATABASE_URL');
