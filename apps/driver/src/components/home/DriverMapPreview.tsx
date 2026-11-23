@@ -1,8 +1,8 @@
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Car, LocateFixed, MapPin, Minus, Plus } from 'lucide-react-native';
-import { MapPreviewBackground, MockBadge, theme, textStyle, tokens } from '@vuumbora/ui';
+import { MapPreviewBackground, MockBadge, focusRingStyle, theme, textStyle, tokens, useKeyboardFocusRing } from '@vuumbora/ui';
 
 export interface DriverMapPreviewProps {
   readonly cityLabel: string;
@@ -11,9 +11,52 @@ export interface DriverMapPreviewProps {
   readonly onPressZoomOut?: () => void;
 }
 
-const MAP_HEIGHT = 220;
+// 168 a 200pt (ficha M05 §2, "faixa de mapa"): a versão anterior (220) excedia o teto.
+const MAP_HEIGHT = 180;
 const CAR_RING_SIZE = 40;
 const PIN_ICON_SIZE = 24;
+
+// Anel "outside" (fora do alvo): usado no botão de localizar, que tem folga até a borda do card.
+const CONTROL_FOCUS_RING = focusRingStyle('outside', theme.layout.touchTarget / 2);
+// Anel "inside": os botões de zoom moram dentro de `zoomGroup`, que tem `overflow: hidden` — um anel
+// "outside" seria cortado pela própria pílula que os envolve.
+const ZOOM_FOCUS_RING = focusRingStyle('inside', 0);
+
+interface MapControlButtonProps {
+  readonly onPress?: (() => void) | undefined;
+  readonly accessibilityLabel: string;
+  readonly children: ReactNode;
+}
+
+function MapControlButton({ onPress, accessibilityLabel, children }: MapControlButtonProps) {
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
+  return (
+    <Pressable
+      {...focusProps}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={[styles.controlButton, focusVisible && CONTROL_FOCUS_RING]}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+function ZoomButton({ onPress, accessibilityLabel, children }: MapControlButtonProps) {
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
+  return (
+    <Pressable
+      {...focusProps}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={[styles.zoomButton, focusVisible && ZOOM_FOCUS_RING]}
+    >
+      {children}
+    </Pressable>
+  );
+}
 
 // Pontos do trajeto em FRAÇÃO da largura/altura do card (0–1), não pixel fixo — o
 // card ocupa a largura inteira do conteúdo (que muda por breakpoint), então um
@@ -82,17 +125,17 @@ export const DriverMapPreview = memo(function DriverMapPreview({
       </View>
 
       <View style={styles.controls}>
-        <Pressable onPress={onPressLocate} accessibilityRole="button" accessibilityLabel="Centralizar no local atual" style={styles.controlButton}>
+        <MapControlButton onPress={onPressLocate} accessibilityLabel="Centralizar no local atual">
           <LocateFixed size={18} color={theme.role.textPrimary} strokeWidth={2} />
-        </Pressable>
+        </MapControlButton>
         <View style={styles.zoomGroup}>
-          <Pressable onPress={onPressZoomIn} accessibilityRole="button" accessibilityLabel="Aproximar mapa" style={styles.zoomButton}>
+          <ZoomButton onPress={onPressZoomIn} accessibilityLabel="Aproximar mapa">
             <Plus size={16} color={theme.role.textPrimary} strokeWidth={2.25} />
-          </Pressable>
+          </ZoomButton>
           <View style={styles.zoomDivider} />
-          <Pressable onPress={onPressZoomOut} accessibilityRole="button" accessibilityLabel="Afastar mapa" style={styles.zoomButton}>
+          <ZoomButton onPress={onPressZoomOut} accessibilityLabel="Afastar mapa">
             <Minus size={16} color={theme.role.textPrimary} strokeWidth={2.25} />
-          </Pressable>
+          </ZoomButton>
         </View>
       </View>
 

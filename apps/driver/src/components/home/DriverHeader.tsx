@@ -1,32 +1,56 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Bell } from 'lucide-react-native';
-import { BrandLogo, theme } from '@vuumbora/ui';
+import { Avatar, focusRingStyle, theme, textStyle, useKeyboardFocusRing } from '@vuumbora/ui';
 
 export interface DriverHeaderProps {
+  /** Nome exibido — dado de DEMONSTRAÇÃO enquanto não há sessão autenticada real. */
+  readonly driverName: string;
   readonly notificationCount?: number;
+  /** Foto remota (sessão real, futuro). Sem avatar de demonstração (D-27): sem foto, cai na inicial. */
+  readonly avatarUri?: string;
   readonly onPressNotifications?: () => void;
 }
 
+function firstNameOf(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? name;
+}
+
+// Anel de foco de teclado do sino — mesmo padrão do `ButtonCore` (fora do alvo, 2pt), raio igual ao círculo do botão.
+const FOCUS_RING = focusRingStyle('outside', theme.layout.touchTarget / 2);
+
 /**
- * Cabeçalho da Home do motorista: marca CENTRALIZADA no topo + sino de notificações
- * à direita (referência motorista-home-alvo.webp item 3 — antes a marca ficava
- * alinhada à esquerda). O sino fica numa `View` ABSOLUTA à direita (não mais
- * irmão em `justify-content: space-between`) para a logo centralizar de verdade em
- * relação à largura da tela, não à metade do espaço que sobra do sino.
+ * Saudação da Home do motorista (ficha M05 §2): avatar + "Olá, {nome}! / Pronto para
+ * dirigir?" + sino de notificações à direita. Substitui o par antigo
+ * `DriverHeader` (marca centralizada) + `DriverProfileRow` (avatar + selo de
+ * verificação + "Motorista VuumBora") — a prancha de 22/11 não tem marca nem selo
+ * nesta tela, só a saudação (consolidado nesta rodada, onda 2 "casa").
  */
-export const DriverHeader = memo(function DriverHeader({ notificationCount = 0, onPressNotifications }: DriverHeaderProps) {
+export const DriverHeader = memo(function DriverHeader({
+  driverName,
+  notificationCount = 0,
+  avatarUri,
+  onPressNotifications,
+}: DriverHeaderProps) {
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
   return (
     <View style={styles.row}>
-      <View style={styles.logoSlot} pointerEvents="none">
-        <BrandLogo variant="horizontal" size="sm" />
+      <Avatar name={driverName} size="md" {...(avatarUri !== undefined ? { imageUri: avatarUri } : {})} />
+      <View style={styles.textBlock}>
+        <Text style={styles.greeting} numberOfLines={1}>
+          Olá, {firstNameOf(driverName)}!
+        </Text>
+        <Text style={styles.subtitle} numberOfLines={1}>
+          Pronto para dirigir?
+        </Text>
       </View>
       <Pressable
+        {...focusProps}
         onPress={onPressNotifications}
         accessibilityRole="button"
         accessibilityLabel={notificationCount > 0 ? `Notificações, ${notificationCount} não lidas` : 'Notificações'}
         hitSlop={8}
-        style={styles.bellTarget}
+        style={[styles.bellTarget, focusVisible && FOCUS_RING]}
       >
         <Bell size={22} color={theme.role.textPrimary} strokeWidth={1.75} />
         {notificationCount > 0 ? (
@@ -40,11 +64,14 @@ export const DriverHeader = memo(function DriverHeader({ notificationCount = 0, 
 });
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', minHeight: theme.layout.touchTarget },
-  logoSlot: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['3'] },
+  textBlock: { flex: 1, gap: 2 },
+  greeting: { color: theme.role.textPrimary, ...textStyle('bold', 'subtitle') },
+  subtitle: { color: theme.role.textSecondary, ...textStyle('regular', 'small') },
   bellTarget: {
     width: theme.layout.touchTarget,
     height: theme.layout.touchTarget,
+    borderRadius: theme.layout.touchTarget / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
