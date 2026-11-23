@@ -95,6 +95,29 @@ export const TELAS = [
     recortePrancha: { x0: 1053, y0: 4, x1: 1305, y1: 516 },
   },
   {
+    id: 'P05',
+    app: 'passageiro',
+    nome: 'categoria',
+    // `?devSeed=1`: só em desenvolvimento (`__DEV__`), popula o destino para a captura não
+    // precisar clicar o fluxo inteiro (Home/P04) antes de chegar aqui — ver
+    // `apps/passenger/src/dev/useDevRideSeed.ts`. Mesmo padrão já usado pela M05b (`devAprovado`).
+    rota: '/categoria?devSeed=1',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_passageiro_2026-11-22.png',
+    // Ficha P05 §título: recorte "Escolha de categoria", 1061,12,1297,508 + folga de 8px.
+    recortePrancha: { x0: 1053, y0: 4, x1: 1305, y1: 516 },
+  },
+  {
+    id: 'P06',
+    app: 'passageiro',
+    nome: 'confirmacao',
+    rota: '/confirmacao?devSeed=1',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_passageiro_2026-11-22.png',
+    // Ficha P06 §título: "mesmo recorte da P05".
+    recortePrancha: { x0: 1053, y0: 4, x1: 1305, y1: 516 },
+  },
+  {
     id: 'M05',
     app: 'motorista',
     nome: 'painel-do-motorista',
