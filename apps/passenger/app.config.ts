@@ -14,12 +14,12 @@ const config: ExpoConfig = {
   // iOS: 1024×1024 opaco, sem cantos arredondados (a Apple aplica a máscara).
   icon: './assets/icon.png',
   ios: {
-    // PENDENTE: identificador definitivo depende do domínio/conta Apple da empresa.
+    // Confirmado pelo dono em 22/11/2026 (DN-07, docs/decisoes-do-dono.md): mudar depois exige app novo na loja.
     bundleIdentifier: 'com.vuumbora.passenger',
     supportsTablet: false,
   },
   android: {
-    // PENDENTE: idem, conta Google Play.
+    // Confirmado pelo dono em 22/11/2026 (DN-07).
     package: 'com.vuumbora.passenger',
     // Camada de frente 1024×1024 com o conteúdo dentro do círculo seguro de 66dp (de 108dp).
     adaptiveIcon: {
