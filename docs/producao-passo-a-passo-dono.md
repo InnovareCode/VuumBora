@@ -29,6 +29,14 @@ seção com o comando/clique exato — você não precisa pesquisar nada, só se
    `docs/publicar-o-backend.md`: `AUTH_PEPPER`, `AUTH_JWT_SECRET` (gere os dois com `openssl rand -base64 48`, guarde
    num gerenciador de senhas), `ADMIN_TOTP_ENCRYPTION_KEY` (passo 5, `openssl rand -base64 32`),
    `ADMIN_ALLOWED_ORIGINS`, `LEGAL_DOCUMENTS_BASE_URL`, `AUTH_BCRYPT_CONCURRENCY`/`AUTH_BCRYPT_QUEUE_MAX` (passo 9.3).
+   Acrescente também **`REQUIRE_SECRETS` = `true`** (Órion, rodada 3h): se um dos três segredos faltar num redeploy
+   futuro, a API para de subir, em vez de responder 503 em silêncio.
+   **Logo depois do primeiro boot, antes de abrir o cadastro:** passe a API para o papel restrito `vuumbora_api` (Órion,
+   rodada 3h). Rode `docs/sql/ativar-papel-api.sql` com a credencial dona. Troque o `DATABASE_URL` do
+   `vuumbora-backend` para o `vuumbora_api` e desligue `RUN_MIGRATIONS_ON_BOOT`. Daí em diante, as migrações rodam por
+   tarefa de operador, com `MIGRATION_DATABASE_URL` só durante o comando (`docs/publicar-o-backend.md`, "Duas
+   credenciais de banco"). Sem esse passo, a API roda com a credencial dona do banco, e as proteções das migrações 0017 e
+   0023 deixam de valer na prática.
 3. **Confirmar o HTTPS do painel do próprio Easypanel** (`painel.vuumbora.com.br`, passo 2) — sem isso a senha do
    Easypanel ainda viaja em texto claro quando você for preencher o passo 2.
 4. **Publicar a API com as migrações 0010–0023 e, na mesma janela, o painel** (`docs/publicar-o-backend.md`, seção 3,
@@ -602,6 +610,9 @@ opcionais mudam o alvo — o comentário no topo do próprio arquivo explica (`V
 - [ ] Monitores criados; alerta de teste chegou no celular
 - [ ] Admin de produção criado; login com 2FA funcionou
 - [ ] `ADMIN_ALLOWED_ORIGINS` e `ADMIN_TOTP_ENCRYPTION_KEY` preenchidas, sem barra final
+- [ ] `REQUIRE_SECRETS=true` no `vuumbora-backend`
+- [ ] API no papel restrito `vuumbora_api` (antes de abrir o cadastro): `INSERT INTO admin_users ...` com o
+      `DATABASE_URL` da API falha com `permission denied`, e `RUN_MIGRATIONS_ON_BOOT` está desligado
 - [ ] Backup ativado e **restaurado de verdade uma vez** (`docs/backup-e-restauracao.md`)
 - [ ] `BACKUP_PASSPHRASE` e `ADMIN_TOTP_ENCRYPTION_KEY` guardadas fora do Easypanel
 - [ ] Cabeçalhos conferidos com `curl -sI` em admin e site; `strict-transport-security` aparece **uma vez** (passo 7.1)
