@@ -222,8 +222,11 @@ oposto de um compromisso novo.
 - **E-mail:** `buildApp({ mail })` recebe um `MailPort` (`src/lib/mail-port.ts`). Em produção usa
   `createSmtpMailer` (`src/services/mailer.ts`, SMTP do painel/ambiente, lido a cada envio). Falha de envio nunca vira erro
   HTTP: no cadastro aparece como `emailSent:false`; nas rotas "iguais" é só log (`auth_mail_send_failed`, com nome/código do erro).
-- **Retenção (M-5):** `npm run identity:retention -w @vuumbora/api` (cron diário do Easypanel, dentro do contêiner, com
-  **`MIGRATION_DATABASE_URL`** = credencial dona; `access_log` é append-only para o papel da API). Apaga `login_attempts` > 2 dias,
+- **Retenção (M-5):** `npm run identity:retention -w @vuumbora/api` no monorepo; **dentro do contêiner** da API (cron diário do
+  Easypanel) o comando é `node scripts/retention-identity.mjs` (ou `npm run identity:retention`, sem `-w`: na imagem a raiz é o
+  próprio `apps/api` e o `-w` responde `No workspaces found`). Roda com **`MIGRATION_DATABASE_URL`** = credencial dona, presente
+  só durante a execução (`docs/publicar-o-backend.md`, "Duas credenciais de banco"); `access_log` é append-only para o papel da
+  API. Apaga `login_attempts` > 2 dias,
   `access_log` > **180 dias** (6 meses — item 12 das pendências jurídicas, Marco Civil art. 15; era 90), famílias de sessão
   vencidas/revogadas há > 7 dias, códigos de e-mail fechados/vencidos há > 7 dias.
   Também apaga **contas NUNCA verificadas e paradas há > 7 dias** (I-4: nome, e-mail e telefone de quem não provou ser dono do e-mail;

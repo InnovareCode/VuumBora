@@ -67,19 +67,16 @@ Verificação: o Play Console abre sem pedir mais nada, e aparece o nome da cont
 4. **Ícone, splash e ícone adaptativo: entregues.** Conferido em 22/11/2026: `apps/passenger/assets/` e
    `apps/driver/assets/` têm `icon.png`, `adaptive-icon.png` e `splash-icon.png`, e `app.config.ts` já aponta para
    eles. Não é mais pendência — a linha antiga deste documento ("pendentes") estava desatualizada.
-5. ⚠️ **Bloqueio real, da equipe (não seu), achado em 22/11/2026:** os dois `eas.json` têm
-   `"developmentClient": true` no perfil `development`, mas **nenhum dos dois apps tem o pacote `expo-dev-client`
-   instalado** (`apps/passenger/package.json` e `apps/driver/package.json` não o listam). Sem ele, o build de
-   desenvolvimento tende a falhar ou gerar um app que não funciona como cliente de desenvolvimento. Avisei o Atlas
-   para a Vega rodar `npx expo install expo-dev-client` nos dois apps **antes** do primeiro
-   `eas build --profile development`. Se for tentar esse build antes disso acontecer, confira com a equipe primeiro.
+5. **`expo-dev-client`: instalado nos dois apps** (conferido em 27/11/2026 em `apps/passenger/package.json` e
+   `apps/driver/package.json`, `~58.0.22`). O perfil `development` dos dois `eas.json` (`"developmentClient": true`)
+   já tem o pacote de que precisa. O bloqueio anotado aqui em 22/11/2026 não existe mais.
 6. `android.versionCode` **não** está fixado em nenhum `app.config.ts` — sem ele, o EAS CLI oferece gerenciar a
    versão remotamente e vai PERGUNTAR isso interativamente na primeira vez que rodar `eas build`. Responda a
    pergunta (qualquer opção serve para o primeiro build de desenvolvimento); não é preciso decidir antes.
 
 ## Primeiro build (desenvolvimento) — AÇÃO DO DONO
 
-Depois das duas contas e do `expo-dev-client` instalado pela equipe:
+Depois das duas contas (o `expo-dev-client` já está instalado nos dois apps):
 
 ```bash
 cd apps/passenger   # ou apps/driver
@@ -189,8 +186,24 @@ npx eas build --platform ios --profile production
   antes disso existir.
 - `bundleIdentifier`/`package`: **resolvido** — confirmados pelo dono em 22/11/2026 (DN-07), não são mais pendência.
 - Ícone, splash e adaptiveIcon (Apolo): **entregues**, conferidos no código em 22/11/2026 — não são mais pendência.
-- `expo-dev-client` ausente nos dois apps: **pendência da equipe** (Vega), bloqueia o build `development` enquanto
-  não for instalado — ver seção "Pré-requisitos", item 5.
+- `expo-dev-client`: **resolvido**, instalado nos dois apps (conferido em 27/11/2026) — ver seção "Pré-requisitos", item 5.
 - Conta de desenvolvedor Google Play: o dono vai criar agora (seção "Antes de tudo"), guardada até o beta — não é
   mais pendência de "existir", só de uso (criar o app no Console) quando houver build para subir.
 - Conta Apple Developer Program ativa, se o alvo for iOS — não entrou na decisão de 22/11/2026; continua em aberto.
+
+## Pendências para antes da loja (anotadas em 27/11/2026, sem resolver)
+
+Não bloqueiam o primeiro build de desenvolvimento nem o `preview`. Só importam para o build que vai à loja.
+Achadas no `npx expo config --type introspect` dos dois apps.
+
+- **Android: `SYSTEM_ALERT_WINDOW` ("sobrepor a outros apps") nos dois apps.** Vem do modelo de manifesto do Expo
+  (`expo-template-bare-minimum`, marcado lá como "OPTIONAL PERMISSIONS, REMOVE WHATEVER YOU DO NOT NEED"), não de
+  código nosso. Nenhum dos dois apps usa. Ela aparece na lista de permissões da ficha da Play. A decisão é se ela sai do
+  build de loja por `android.blockedPermissions` no `app.config.ts`, só no perfil `production` ou em todos. Antes,
+  é preciso conferir se alguma ferramenta de desenvolvimento depende dela.
+- **iOS: `NSLocalNetworkUsageDescription` em inglês nos dois apps** ("Expo Dev Launcher uses the local network...").
+  Vem do plugin do `expo-dev-client`. Lendo o plugin (`expo-dev-launcher`, `withDevLauncher.js`): ele acrescenta uma
+  fase de build no Xcode que **apaga essa chave nos builds de release**, mas só se o texto ainda for o padrão (contém
+  "Expo Dev Launcher"). Por isso **não traduza esse texto**: traduzido, a fase de build deixa de reconhecê-lo e ele
+  vai para a loja. Falta provar no primeiro `.ipa` de produção que a chave sumiu do `Info.plist` (só dá com conta
+  Apple e build iOS de verdade).
