@@ -83,15 +83,44 @@ async function cmdLadoALado(opt) {
   const telas = filtrarTelas(opt);
   const capturaDir = opt.capturas ? path.resolve(opt.capturas) : path.join(SAIDA_DIR, 'capturas');
   const saidaDir = path.join(SAIDA_DIR, 'lado-a-lado');
+  const montadas = [];
+  const puladas = [];
+  const erros = [];
+  // Uma tela sem prancha (a ficha diz que G-07b não se aplica) é PULADA com aviso; um
+  // erro numa tela (prancha declarada mas ausente, captura que falta) não derruba as
+  // outras — junta tudo e sai com código 1 no fim, para o `tudo` seguir até o comparar.
   for (const tela of telas) {
-    const destino = montarLadoALado(tela, capturaDir, saidaDir);
-    console.log(`[qualidade-tela] G-07b de ${tela.id}: ${destino}`);
+    try {
+      const destino = montarLadoALado(tela, capturaDir, saidaDir);
+      if (destino === null) {
+        puladas.push(tela.id);
+        console.log(`[qualidade-tela] G-07b de ${tela.id}: pulada — sem prancha em screens.config.mjs (G-07b não se aplica a esta tela).`);
+      } else {
+        montadas.push(tela.id);
+        console.log(`[qualidade-tela] G-07b de ${tela.id}: ${destino}`);
+      }
+    } catch (err) {
+      erros.push(tela.id);
+      console.error(`[qualidade-tela] G-07b de ${tela.id}: ERRO — ${err.message}`);
+    }
   }
+  console.log(
+    `[qualidade-tela] G-07b: ${montadas.length} montadas, ${puladas.length} puladas sem prancha` +
+      (puladas.length ? ` (${puladas.join(', ')})` : '') +
+      `, ${erros.length} com erro${erros.length ? ` (${erros.join(', ')})` : ''}.`,
+  );
+  if (erros.length > 0) process.exitCode = 1;
 }
 
 async function cmdAutoteste() {
   const { default: autoteste } = await import('./lib/autoteste.mjs');
   await autoteste();
+  await cmdAutotesteLinks();
+}
+
+async function cmdAutotesteLinks() {
+  const { autotesteLinks } = await import('./lib/autoteste-links.mjs');
+  if (!(await autotesteLinks())) process.exitCode = 1;
 }
 
 async function cmdTudo(opt) {
@@ -116,6 +145,8 @@ Comandos:
   sondas [--telas ...]       estilo, geometria, texto, contraste e foco (§14.3) — também sobe o Metro ao vivo
   lado-a-lado [--telas ...]  G-07b: recorte da prancha + captura 390x844 lado a lado
   autoteste                  controle negativo: injeta uma mudança visual e prova que o comparador detecta
+                             (e roda o autoteste-links no fim)
+  autoteste-links            controle negativo da sonda de links (página falsa, sem Metro, segundos)
   tudo                       capturar + sondas + lado-a-lado + comparar (se houver linha de base)
 `);
 }
@@ -129,6 +160,7 @@ try {
     case 'sondas': await cmdSondas(opt); break;
     case 'lado-a-lado': await cmdLadoALado(opt); break;
     case 'autoteste': await cmdAutoteste(); break;
+    case 'autoteste-links': await cmdAutotesteLinks(); break;
     case 'tudo': await cmdTudo(opt); break;
     default: ajuda();
   }

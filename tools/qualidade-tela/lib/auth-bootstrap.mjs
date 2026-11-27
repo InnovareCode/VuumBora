@@ -34,7 +34,9 @@ function contaDeProva(app) {
 async function aguardarConteudo(page, { timeout = 30000 } = {}) {
   await page.evaluate(() => (document.fonts ? document.fonts.ready : null));
   // ver o mesmo comentário em capture.mjs: sem isto, dá para medir uma página em branco.
-  await page.waitForFunction(() => document.body.innerText.trim().length > 10, { timeout });
+  // 2º argumento = argumento da função (null); opções no 3º. Antes o `{ timeout }` ia no
+  // 2º e era ignorado — os 90 s pedidos abaixo nunca valiam (ficava o padrão de 30 s).
+  await page.waitForFunction(() => document.body.innerText.trim().length > 10, null, { timeout });
 }
 
 /**

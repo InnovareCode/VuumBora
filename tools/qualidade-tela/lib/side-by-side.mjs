@@ -24,7 +24,29 @@ const LINHAS_TABELA = [
   'ilustração ou mapa (onde fica e quanto ocupa, ±10% da altura)',
 ];
 
+/**
+ * A tela tem prancha para o G-07b? Várias não têm, por decisão da própria ficha ("sem
+ * recorte na prancha — G-07b não se aplica": P07, P07b, P10, P11b, M10…) e simplesmente
+ * não declaram `pranchaArquivo`/`recortePrancha` em screens.config.mjs. Declarar só um
+ * dos dois é erro de configuração, não "sem prancha".
+ * @returns {boolean}
+ */
+export function temPrancha(tela) {
+  const temArquivo = Boolean(tela.pranchaArquivo);
+  const temRecorte = Boolean(tela.recortePrancha);
+  if (temArquivo !== temRecorte) {
+    throw new Error(
+      `${tela.id}: configuração de prancha incompleta em screens.config.mjs — ` +
+        `pranchaArquivo e recortePrancha vão juntos (ou nenhum dos dois, se G-07b não se aplica).`,
+    );
+  }
+  return temArquivo;
+}
+
+/** Monta o G-07b da tela. Devolve o caminho da imagem, ou `null` se a tela não tem
+ * prancha (ver `temPrancha`) — quem chama decide como avisar. */
 export function montarLadoALado(tela, capturaDir, saidaDir) {
+  if (!temPrancha(tela)) return null;
   const { PNG } = resolveDep('pngjs');
   const pranchaPath = path.join(PRANCHAS_DIR, tela.pranchaArquivo);
   if (!existsSync(pranchaPath)) {

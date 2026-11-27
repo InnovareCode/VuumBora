@@ -2,19 +2,18 @@
 // --web` ao vivo (Metro de desenvolvimento) — ver dev-server.mjs para o porquê de não
 // ser mais um `expo export` servido estaticamente (achado Q9 da Íris, passada 8).
 //
-// Uma captura = abrir um contexto novo do Chromium, navegar até a rota, esperar
-// fontes carregarem, aplicar o estado (hoje: nada, para "padrao"; cortar a rede
-// DEPOIS de carregar, para "sem-rede" — nunca editando código, só
-// `context.setOffline(true)`, que é literalmente o parâmetro de teste que o §14.2
-// pede), e tirar o screenshot no tamanho exato do aparelho (clip), com
-// `deviceScaleFactor: 2` e `reducedMotion: 'reduce'`.
+// Uma captura = abrir a tela num contexto novo do Chromium (abrir-tela.mjs: navegar,
+// esperar fontes e conteúdo, bootstrap de sessão mock, e — no estado "sem-rede" — cortar
+// a rede DEPOIS de carregar e fazer o corte chegar ao NetInfo web, ver sem-rede.mjs) e
+// tirar o screenshot no tamanho exato do aparelho (clip), com `deviceScaleFactor: 2` e
+// `reducedMotion: 'reduce'`.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { getChromium, describeBrowserSetup } from './browsers.mjs';
 import { iniciarServidorDev } from './dev-server.mjs';
-import { garantirSessaoEDestino } from './auth-bootstrap.mjs';
-import { nomeArquivo } from '../screens.config.mjs';
+import { abrirTela } from './abrir-tela.mjs';
+import { nomeArquivo, ESTADOS } from '../screens.config.mjs';
 
 /**
  * @param {object} opts
@@ -42,63 +41,49 @@ export async function capturarMatriz({ telas, tamanhos, saidaDir, mutarEstilo = 
       const { url: baseUrl } = servidoresPorApp.get(tela.app);
 
       for (const estado of tela.estados) {
+        const bannerPorTamanho = [];
+
         for (const tamanho of tamanhos) {
-          const context = await browser.newContext({
-            viewport: { width: tamanho.largura, height: tamanho.altura },
-            deviceScaleFactor: 2,
-            reducedMotion: 'reduce',
-          });
-          const page = await context.newPage();
+          const { page, semRede, fechar } = await abrirTela({ browser, baseUrl, tela, estado, tamanho });
 
-          // timeout generoso: contra o Metro ao vivo, a PRIMEIRA navegação de cada app
-          // paga o custo de compilar o bundle inteiro no servidor (medido: ~11s para um
-          // bundle de ~13MB, não-minificado, em modo --dev) — as rotas seguintes do
-          // MESMO app reaproveitam o cache do Metro e voltam a ser quase instantâneas.
-          await page.goto(baseUrl + tela.rota, { waitUntil: 'load', timeout: 60000 });
-          await page.evaluate(() => (document.fonts ? document.fonts.ready : null));
-          // Achado real (22/11/2026): `waitUntil: 'load'` só garante que o HTML e os
-          // scripts baixaram — o bundle do RN Web (3MB+) ainda leva bem mais que
-          // 150ms para executar e montar a árvore. Sem esperar texto de verdade
-          // aparecer, a captura sai em branco (uma página toda branca passa
-          // despercebida se ninguém abrir o PNG — foi descoberto só ao depurar
-          // uma sonda que achava zero elementos).
-          await page.waitForFunction(() => document.body.innerText.trim().length > 10, { timeout: 30000 });
-          // Folga para o layout assentar E para a identidade mock (latência artificial de
-          // 350ms, `identityClient.ts`) resolver o "Carregando os Termos..." do cadastro —
-          // sem isto, a captura "padrao" do P02b/M02 pega o estado de carregamento por acidente.
-          await page.waitForTimeout(700);
+          try {
+            if (mutarEstilo) {
+              const conteudo = mutarEstilo.css
+                ? mutarEstilo.css
+                : `${mutarEstilo.seletor} { ${mutarEstilo.propriedade}: ${mutarEstilo.valor} !important; }`;
+              await page.addStyleTag({ content: conteudo });
+              await page.waitForTimeout(50);
+            }
 
-          // Telas atrás de `(app)` (P03, P04, M05...) caíram na tela de entrada: cria
-          // conta mock, loga e navega pelo cliente até `tela.rota` (ver auth-bootstrap.mjs).
-          // Não faz nada para telas públicas (P01, P02a, P02b, M01, M02).
-          await garantirSessaoEDestino(page, { app: tela.app, rotaDestino: tela.rota });
+            const arquivo = nomeArquivo(tela, estado, tamanho);
+            const destDir = path.join(saidaDir, tela.app);
+            mkdirSync(destDir, { recursive: true });
+            const destino = path.join(destDir, arquivo);
 
-          if (estado === 'sem-rede') {
-            await context.setOffline(true);
-            await page.waitForTimeout(50);
+            await page.screenshot({
+              path: destino,
+              clip: { x: 0, y: 0, width: tamanho.largura, height: tamanho.altura },
+            });
+
+            const item = { app: tela.app, id: tela.id, estado, tamanho, arquivo: path.join(tela.app, arquivo) };
+            // O que o corte de rede de fato produziu na tela: quem confere G-18 olha
+            // `bannerVisivel` antes de aceitar a captura como prova do estado offline.
+            if (semRede) {
+              item.semRede = semRede;
+              bannerPorTamanho.push(semRede.bannerVisivel);
+            }
+            manifest.push(item);
+          } finally {
+            await fechar();
           }
+        }
 
-          if (mutarEstilo) {
-            const conteudo = mutarEstilo.css
-              ? mutarEstilo.css
-              : `${mutarEstilo.seletor} { ${mutarEstilo.propriedade}: ${mutarEstilo.valor} !important; }`;
-            await page.addStyleTag({ content: conteudo });
-            await page.waitForTimeout(50);
-          }
-
-          const arquivo = nomeArquivo(tela, estado, tamanho);
-          const destDir = path.join(saidaDir, tela.app);
-          mkdirSync(destDir, { recursive: true });
-          const destino = path.join(destDir, arquivo);
-
-          await page.screenshot({
-            path: destino,
-            clip: { x: 0, y: 0, width: tamanho.largura, height: tamanho.altura },
-          });
-
-          manifest.push({ app: tela.app, id: tela.id, estado, tamanho, arquivo: path.join(tela.app, arquivo) });
-
-          await context.close();
+        if (estado === ESTADOS.SEM_REDE) {
+          const comBanner = bannerPorTamanho.filter(Boolean).length;
+          console.log(
+            `[qualidade-tela] ${tela.id} sem-rede: banner "Sem conexão" visível em ${comBanner}/${bannerPorTamanho.length} tamanhos` +
+              (comBanner === 0 ? ' (esperado só se a tela não tiver NetworkBanner)' : ''),
+          );
         }
       }
     }

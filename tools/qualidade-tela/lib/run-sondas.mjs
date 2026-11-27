@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { getChromium } from './browsers.mjs';
 import { iniciarServidorDev } from './dev-server.mjs';
-import { garantirSessaoEDestino } from './auth-bootstrap.mjs';
+import { abrirTela } from './abrir-tela.mjs';
 import { rodarSondas } from './probes/index.mjs';
 
 export async function rodarSondasNaMatriz({ telas, tamanhos, saidaDir }) {
@@ -27,30 +27,24 @@ export async function rodarSondasNaMatriz({ telas, tamanhos, saidaDir }) {
 
       for (const estado of tela.estados) {
         for (const tamanho of tamanhos) {
-          const context = await browser.newContext({
-            viewport: { width: tamanho.largura, height: tamanho.altura },
-            deviceScaleFactor: 2,
-            reducedMotion: 'reduce',
-          });
-          const page = await context.newPage();
-          // timeout generoso: ver o comentário equivalente em capture.mjs (1ª navegação
-          // de cada app paga o custo de compilar o bundle no Metro ao vivo).
-          await page.goto(baseUrl + tela.rota, { waitUntil: 'load', timeout: 60000 });
-          await page.evaluate(() => (document.fonts ? document.fonts.ready : null));
-          // ver o comentário em capture.mjs: sem isto, a sonda roda numa página em branco.
-          await page.waitForFunction(() => document.body.innerText.trim().length > 10, { timeout: 30000 });
-          await page.waitForTimeout(700); // ver o comentário em capture.mjs (latência da identidade mock)
+          // mesma abertura da captura (abrir-tela.mjs): bootstrap de sessão mock para
+          // telas atrás de `(app)` e, em "sem-rede", o corte de rede que chega ao NetInfo.
+          const { page, semRede, fechar } = await abrirTela({ browser, baseUrl, tela, estado, tamanho });
 
-          // ver o comentário equivalente em capture.mjs: bootstrap de sessão mock para
-          // telas atrás de `(app)` (P03, P04, M05...); não faz nada em telas públicas.
-          await garantirSessaoEDestino(page, { app: tela.app, rotaDestino: tela.rota });
-
-          if (estado === 'sem-rede') {
-            await context.setOffline(true);
-            await page.waitForTimeout(50);
+          let resultado;
+          try {
+            // A sonda de ativação de links reabre a MESMA combinação do zero quando um link
+            // navega sem volta (router.replace) — ver probes/ativacao-links.mjs.
+            const reabrir = async () => {
+              const nova = await abrirTela({ browser, baseUrl, tela, estado, tamanho });
+              return { page: nova.page, fechar: nova.fechar };
+            };
+            resultado = await rodarSondas(page, { reabrir });
+          } finally {
+            await fechar();
           }
+          if (semRede) resultado.semRede = semRede;
 
-          const resultado = await rodarSondas(page);
           const nomeBase = `${tela.id}-${estado}-${tamanho.largura}x${tamanho.altura}`;
           const destDir = path.join(saidaDir, tela.app);
           mkdirSync(destDir, { recursive: true });
@@ -61,6 +55,9 @@ export async function rodarSondasNaMatriz({ telas, tamanhos, saidaDir }) {
             id: tela.id,
             estado,
             tamanho,
+            // só no estado sem-rede: o banner apareceu de verdade? (sem isto, "sem-rede"
+            // podia ser a tela online com outro nome — achado da Íris, onda 4)
+            ...(semRede ? { bannerSemRede: semRede.bannerVisivel } : {}),
             achados: {
               ultrapassaViewport: resultado.geometria.ultrapassaViewport.length,
               alvosPequenos: resultado.geometria.alvosPequenos.length,
@@ -77,8 +74,6 @@ export async function rodarSondasNaMatriz({ telas, tamanhos, saidaDir }) {
               possivelLegado: resultado.estilo.possivelLegado.length,
             },
           });
-
-          await context.close();
         }
       }
     }

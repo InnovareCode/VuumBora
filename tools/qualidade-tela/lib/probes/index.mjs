@@ -11,7 +11,7 @@ import { conjuntoDeCoresDosTokens } from '../tokens.mjs';
  * `foco` e `ativacaoLinks` precisam de teclado/mouse de verdade (não são só
  * `page.evaluate`), por isso rodam por último e em sequência — nunca em paralelo
  * com as outras, que mudariam o DOM por baixo do pé desses dois. */
-export async function rodarSondas(page) {
+export async function rodarSondas(page, { reabrir = null } = {}) {
   const cores = conjuntoDeCoresDosTokens();
   const estilo = await sondaEstilo(page, cores);
   const geometria = await sondaGeometria(page);
@@ -22,7 +22,9 @@ export async function rodarSondas(page) {
   // `page.goBack()`, que nem sempre volta ao pixel exato de onde saiu (histórico
   // de 1 entrada, navegação dupla no teste de auto-repeat). Rodar antes do `foco`
   // fazia o Tab seguinte andar sobre uma página diferente da esperada — achado
-  // real ao depurar esta sonda (22/11/2026).
-  const ativacaoLinks = await sondaAtivacaoDeLinks(page);
+  // real ao depurar esta sonda (22/11/2026). `reabrir` (opcional) abre a mesma
+  // combinação do zero numa página nova — usado quando o link navega sem volta
+  // (router.replace), ver ativacao-links.mjs.
+  const ativacaoLinks = await sondaAtivacaoDeLinks(page, { reabrir });
   return { estilo, geometria, texto, contraste, foco, ativacaoLinks };
 }
