@@ -3,7 +3,8 @@ import { BackHandler, Platform, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Circle, MapPin } from 'lucide-react-native';
 import { isRideCancellable } from '@vuumbora/domain/passenger';
-import { AppShell, ConfirmDialog, NetworkBanner, theme, textStyle, tokens } from '@vuumbora/ui';
+import { AppShell, ConfirmDialog, DangerButton, FooterActions, NetworkBanner, theme, textStyle, tokens, useNetworkStatus } from '@vuumbora/ui';
+import { EmergencyCallRow } from '../../src/components/ride/EmergencyCallRow';
 import { RideMapLayout } from '../../src/components/ride/RideMapLayout';
 import { RideVehicleMarker } from '../../src/components/ride/RideVehicleMarker';
 import { SearchingPanel } from '../../src/components/ride/SearchingPanel';
@@ -41,6 +42,7 @@ export default function RideScreen() {
   const refreshQuote = useRideRequestStore((state) => state.refreshQuote);
 
   const [confirmVisible, setConfirmVisible] = useState(false);
+  const online = useNetworkStatus();
 
   // "O motorista cancelou, estamos procurando outro" (ficha P07 §5): detectado comparando a
   // fase ANTERIOR (tinha motorista atribuído) com a ATUAL (voltou para `searching_driver`) —
@@ -127,6 +129,7 @@ export default function RideScreen() {
             category={requestedCategory}
             elapsedSeconds={elapsedSearchSeconds}
             driverCancelledNotice={false}
+            online={online}
             onCancelPress={handleCancelPress}
             onRetry={handleRetry}
             onBackHome={handleBackHome}
@@ -162,6 +165,7 @@ export default function RideScreen() {
             category={requestedCategory}
             elapsedSeconds={elapsedSearchSeconds}
             driverCancelledNotice={driverCancelledNotice}
+            online={online}
             onCancelPress={handleCancelPress}
             onRetry={handleRetry}
             onBackHome={handleBackHome}
@@ -232,7 +236,31 @@ export default function RideScreen() {
   const subphase = phase as AssignedDriverSubphase;
   const cancellable = isRideCancellable(phase);
   return (
-    <AppShell padded={false} scroll testID="ride-screen-assigned">
+    <AppShell
+      padded={false}
+      scroll
+      testID="ride-screen-assigned"
+      footer={
+        // "Ligar 190" e "Cancelar corrida" num rodapé FIXO (G-11-like, achado da Íris onda 4):
+        // com o bloco do código de embarque, os dois ficavam abaixo da dobra em 320-390px no
+        // estado "chegou" dentro do conteúdo que rola.
+        <FooterActions testID="assigned-driver-footer">
+          <EmergencyCallRow testID="assigned-driver-emergency-row" />
+          {cancellable ? (
+            <>
+              <DangerButton
+                label="Cancelar corrida"
+                onPress={handleCancelPress}
+                disabled={!online}
+                accessibilityLabel={online ? 'Cancelar corrida com motorista a caminho' : 'Cancelar corrida, indisponível: sem conexão'}
+                testID="cancel-ride-button"
+              />
+              {!online ? <Text style={footerStyles.offlineHint}>Sem conexão</Text> : null}
+            </>
+          ) : null}
+        </FooterActions>
+      }
+    >
       <RideMapLayout
         mapAccessibilityLabel={
           subphase === 'driver_arrived' ? 'Mapa ilustrativo: motorista no local de embarque' : 'Mapa ilustrativo: motorista a caminho do embarque'
@@ -262,8 +290,6 @@ export default function RideScreen() {
           pickupEtaMinutes={pickupEtaMinutes}
           embarkCode={pickupCode}
           waitingSeconds={waitingSeconds}
-          cancellable={cancellable}
-          onCancelPress={handleCancelPress}
           testID="assigned-driver-panel"
         />
       </RideMapLayout>
@@ -271,7 +297,11 @@ export default function RideScreen() {
       <ConfirmDialog
         visible={confirmVisible}
         title="Cancelar a corrida?"
-        description="O motorista já está a caminho. Cancelar não tem custo."
+        description={
+          subphase === 'driver_arrived'
+            ? 'O motorista já chegou ao local de embarque. Cancelar não tem custo.'
+            : 'O motorista já está a caminho. Cancelar não tem custo.'
+        }
         confirmLabel="Cancelar corrida"
         cancelLabel="Manter corrida"
         destructive
@@ -347,4 +377,8 @@ const mapStyles = StyleSheet.create({
   },
   destinationBalloonIcon: { marginTop: 2 },
   destinationBalloonText: { flex: 1, color: theme.role.textPrimary, ...textStyle('medium', 'small') },
+});
+
+const footerStyles = StyleSheet.create({
+  offlineHint: { color: theme.role.textMuted, ...textStyle('regular', 'caption'), textAlign: 'center' },
 });

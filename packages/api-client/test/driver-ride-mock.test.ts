@@ -488,6 +488,18 @@ describe('D-12 — start EXIGE o código de embarque (decisão do dono, 22/11/20
     if (!blocked.ok) assert.equal(blocked.error.kind, 'rate_limited', 'depois de 5 erros, até o código certo é 429');
   });
 
+  test('depois do bloqueio (429), corpo com formato inválido continua 400 validation: o formato é conferido antes do limite', async () => {
+    // Mutante M4 da Íris (onda 4): checar o 429 antes do formato sobrevivia à suíte. "12" tem formato inválido, não é vazio.
+    const { mock, tripId } = await arrivedTrip({ nextPickupCode: () => '0482' });
+    for (let i = 0; i < 5; i += 1) await mock.tripPort.start(tripId, { pickupCode: '0483' }, `erro-${i}`);
+    const blocked = await mock.tripPort.start(tripId, { pickupCode: '0482' }, 'bloqueado');
+    assert.equal(blocked.ok, false);
+    if (!blocked.ok) assert.equal(blocked.error.kind, 'rate_limited');
+    const malformed = await mock.tripPort.start(tripId, { pickupCode: '12' }, 'formato-invalido');
+    assert.equal(malformed.ok, false);
+    if (!malformed.ok) assert.equal(malformed.error.kind, 'validation', 'formato inválido é 400 mesmo com a corrida bloqueada');
+  });
+
   test('sem nextPickupCode, o offer gera um código de 4 algarismos (mock só do motorista) — e o start confere de verdade', async () => {
     // A store é a fonte única do código; o teste lê dela (o motorista, pela porta, nunca vê o código).
     const store = createTripStore(() => 0);

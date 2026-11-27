@@ -8,6 +8,7 @@ import {
   LinkButton,
   ListRow,
   MockBadge,
+  NetworkBanner,
   PrimaryButton,
   StarRating,
   SurfaceRaised,
@@ -94,7 +95,9 @@ export default function TripCompletedScreen() {
   }
 
   const paymentLabel = MOCK_PAYMENT_METHODS.find((method) => method.id === paymentMethodId)?.label ?? 'forma não informada';
-  const driverFirstName = assignedDriver?.name ?? 'o motorista';
+  // Só o primeiro nome (achado da Íris, onda 4): "Como foi a corrida com Roberto Silva?" é
+  // formal demais pra pergunta de avaliação — "Roberto" basta.
+  const driverFirstName = assignedDriver?.name.split(' ')[0] ?? 'o motorista';
 
   function handleSubmitRating() {
     if (stars === 0) return;
@@ -132,6 +135,10 @@ export default function TripCompletedScreen() {
       }
     >
       <View style={styles.content}>
+        <View style={styles.fullWidth}>
+          <NetworkBanner testID="trip-completed-network-banner" />
+        </View>
+
         <View style={styles.successBadge} accessibilityElementsHidden importantForAccessibility="no">
           <CheckCircle size={32} color={theme.role.success} strokeWidth={1.75} />
         </View>
@@ -220,6 +227,7 @@ export default function TripCompletedScreen() {
 
 const styles = StyleSheet.create({
   content: { gap: theme.spacing['3'], alignItems: 'center' },
+  fullWidth: { width: '100%' },
   successBadge: {
     width: 56,
     height: 56,

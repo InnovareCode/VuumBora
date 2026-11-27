@@ -1,8 +1,7 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { DangerButton, MockBadge, SurfaceRaised, theme, textStyle, tabularNums } from '@vuumbora/ui';
+import { MockBadge, SurfaceRaised, theme, textStyle, tabularNums } from '@vuumbora/ui';
 import { DriverInfoCard } from '../assignedDriver/DriverInfoCard';
-import { EmergencyCallRow } from './EmergencyCallRow';
 import type { AssignedDriverInfo } from '../../data/mockDriverAssignment';
 import { formatElapsedClock } from '../../utils/time';
 
@@ -19,8 +18,6 @@ export interface AssignedDriverPanelProps {
    * valor, o bloco do código não aparece (mesma regra da PP-15, "sem destino real não entra").
    */
   readonly embarkCode?: string | undefined;
-  readonly cancellable: boolean;
-  readonly onCancelPress: () => void;
   readonly testID?: string;
 }
 
@@ -44,12 +41,15 @@ function headline(subphase: AssignedDriverSubphase, driver: AssignedDriverInfo, 
  * embarque — nunca fabricada aqui).
  *
  * Ligar/Mensagem pro MOTORISTA continuam fora (decisão 11, canal de contato mascarado, ainda
- * sem data): um botão sem ação real é pior que nenhum (G-19). "Ligar 190" (PP-11) já está
- * decidido e entrou (`EmergencyCallRow`) — a ligação de emergência é independente do contato
- * com o motorista.
+ * sem data): um botão sem ação real é pior que nenhum (G-19).
  *
  * `embarkCode` (D-12): vem de `snapshot.pickupCode` pela store; o bloco só aparece na chegada do
  * motorista, quando o passageiro precisa dizer o código.
+ *
+ * "Ligar 190" e "Cancelar corrida" NÃO moram aqui — `corrida.tsx` os renderiza no rodapé fixo
+ * (`FooterActions`) da tela inteira, não dentro do conteúdo que rola. Achado da Íris (onda 4):
+ * com o bloco do código de embarque, os dois ficavam abaixo da dobra em 320–390px no estado
+ * "chegou" — fora do rodapé fixo, "visível sem rolar" dependia da altura do conteúdo acima.
  */
 export const AssignedDriverPanel = memo(function AssignedDriverPanel({
   subphase,
@@ -57,8 +57,6 @@ export const AssignedDriverPanel = memo(function AssignedDriverPanel({
   pickupEtaMinutes,
   waitingSeconds,
   embarkCode,
-  cancellable,
-  onCancelPress,
   testID,
 }: AssignedDriverPanelProps) {
   return (
@@ -87,19 +85,6 @@ export const AssignedDriverPanel = memo(function AssignedDriverPanel({
       ) : null}
 
       <MockBadge label="corrida simulada" testID="assigned-driver-mock-badge" />
-
-      {/* Antes do cancelar na ordem de foco (ficha §8): quem navega por teclado não precisa
-          passar por uma ação destrutiva pra chegar na emergência. */}
-      <EmergencyCallRow testID="assigned-driver-emergency-row" />
-
-      {cancellable ? (
-        <DangerButton
-          label="Cancelar corrida"
-          onPress={onCancelPress}
-          accessibilityLabel="Cancelar corrida com motorista a caminho"
-          testID="cancel-ride-button"
-        />
-      ) : null}
     </View>
   );
 });

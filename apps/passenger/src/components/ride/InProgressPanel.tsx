@@ -1,11 +1,11 @@
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { MockBadge, theme, textStyle, tabularNums } from '@vuumbora/ui';
 import { DriverInfoCard } from '../assignedDriver/DriverInfoCard';
 import { TripProgressBar } from '../trip/TripProgressBar';
 import { EmergencyCallRow } from './EmergencyCallRow';
 import type { AssignedDriverInfo } from '../../data/mockDriverAssignment';
-import { formatClockTime, formatEtaMinutes } from '../../utils/time';
+import { formatEtaMinutes } from '../../utils/time';
 
 export interface InProgressPanelProps {
   readonly driver: AssignedDriverInfo;
@@ -20,6 +20,11 @@ export interface InProgressPanelProps {
  * domínio só permite cancelar até `driver_arrived`, `isRideCancellable` em `corrida.tsx`).
  * "Ligar 190" (PP-11, decidida em 22/11/2026) entra no pé do painel — "Compartilhar viagem"
  * continua fora até existir `POST /v1/trips/:id/share` (S4).
+ *
+ * N2 é só "em {n} min" (achado da Íris, onda 4) — a ficha original tinha "{hh:mm} · em {n}
+ * min", mas o horário de chegada (calculado no aparelho a partir de `Date.now()`) é relógio
+ * local simulado, não um dado real; mostrar só os minutos evita um horário que parece oficial
+ * sem ser.
  */
 export const InProgressPanel = memo(function InProgressPanel({
   driver,
@@ -29,16 +34,12 @@ export const InProgressPanel = memo(function InProgressPanel({
   testID,
 }: InProgressPanelProps) {
   const chegando = tripEtaMinutes !== undefined && tripEtaMinutes <= 0;
-  const arrivalClock = useMemo(() => {
-    if (tripEtaMinutes === undefined || chegando) return undefined;
-    return formatClockTime(new Date(Date.now() + tripEtaMinutes * 60_000));
-  }, [tripEtaMinutes, chegando]);
 
   return (
     <View style={styles.content} testID={testID}>
       <Text style={styles.caption}>Chegada ao destino</Text>
       <Text style={styles.headline} accessibilityRole="header">
-        {chegando ? 'Chegando ao destino' : arrivalClock ? `${arrivalClock} · ${formatEtaMinutes(tripEtaMinutes ?? 0)}` : '—'}
+        {chegando ? 'Chegando ao destino' : tripEtaMinutes !== undefined ? `em ${formatEtaMinutes(tripEtaMinutes)}` : '—'}
       </Text>
       <Text style={styles.destination} numberOfLines={2}>
         {destinationAddress ?? 'destino'}

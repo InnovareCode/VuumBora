@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Car, Circle, MapPin } from 'lucide-react-native';
-import type { Place } from '@vuumbora/domain';
+import { SLOW_DRIVER_SEARCH_SECONDS, type Place } from '@vuumbora/domain';
 import type { CategoryQuote } from '@vuumbora/api-client/passenger';
 import { DangerButton, InlineAlert, LinkButton, MockBadge, MoneyText, PrimaryButton, SurfaceRaised, theme, textStyle, tabularNums, tokens } from '@vuumbora/ui';
 import { RouteSummaryRow } from '../confirmation/RouteSummaryRow';
@@ -17,13 +17,13 @@ export interface SearchingPanelProps {
   readonly category?: CategoryQuote | undefined;
   readonly elapsedSeconds: number;
   readonly driverCancelledNotice: boolean;
+  /** `false`: "Cancelar pedido" fica desabilitado com "Sem conexão" embaixo (ficha §5, "Sem rede"). */
+  readonly online: boolean;
   readonly onCancelPress: () => void;
   readonly onRetry: () => void;
   readonly onBackHome: () => void;
   readonly testID?: string;
 }
-
-const SLOW_SEARCH_SECONDS = 120;
 
 /**
  * Painel da P07 (ficha §2/§5/§7) — busca de motorista, com os 3 desfechos possíveis:
@@ -38,6 +38,7 @@ export const SearchingPanel = memo(function SearchingPanel({
   category,
   elapsedSeconds,
   driverCancelledNotice,
+  online,
   onCancelPress,
   onRetry,
   onBackHome,
@@ -67,7 +68,7 @@ export const SearchingPanel = memo(function SearchingPanel({
     );
   }
 
-  const slow = elapsedSeconds >= SLOW_SEARCH_SECONDS;
+  const slow = elapsedSeconds >= SLOW_DRIVER_SEARCH_SECONDS;
 
   return (
     <View style={styles.content} testID={testID}>
@@ -116,9 +117,11 @@ export const SearchingPanel = memo(function SearchingPanel({
       <DangerButton
         label="Cancelar pedido"
         onPress={onCancelPress}
-        accessibilityLabel="Cancelar pedido de corrida"
+        disabled={!online}
+        accessibilityLabel={online ? 'Cancelar pedido de corrida' : 'Cancelar pedido de corrida, indisponível: sem conexão'}
         testID="cancel-search-button"
       />
+      {!online ? <Text style={styles.offlineHint}>Sem conexão</Text> : null}
     </View>
   );
 });
@@ -138,6 +141,7 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: theme.role.border },
   categoryRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['2'] },
   categoryName: { flex: 1, color: theme.role.textPrimary, ...textStyle('semibold', 'body') },
+  offlineHint: { color: theme.role.textMuted, ...textStyle('regular', 'caption'), textAlign: 'center' },
   outcome: { gap: theme.spacing['3'], alignItems: 'stretch' },
   outcomeTitle: { color: theme.role.textPrimary, ...textStyle('bold', 'title'), textAlign: 'center' },
   outcomeSupport: { color: theme.role.textSecondary, ...textStyle('regular', 'small'), textAlign: 'center' },
