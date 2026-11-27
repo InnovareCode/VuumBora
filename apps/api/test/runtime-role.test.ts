@@ -50,8 +50,18 @@ const WRITES: Record<string, readonly ('INSERT' | 'UPDATE' | 'DELETE')[]> = {
   // trocar papel. Nunca DELETE: ninguém é apagado, só desativado (`deactivated_at`). Ver a migração para a
   // compensação (CSRF + reautenticação por senha + nunca derruba o último dono ativo + auditoria).
   admin_users: ['INSERT', 'UPDATE'],
+  // 0024 (D1): catálogo da lista de documentos e configuração do motorista — a API só LÊ; quem muda é o operador.
+  cities: [],
   devices: ['INSERT', 'UPDATE'],
+  document_rejection_reasons: [],
+  document_requirement_versions: [],
+  document_requirements: [],
+  document_types: [],
   driver_applications: ['INSERT', 'UPDATE'],
+  // 0024 (D1): motorista, veículo e documento — a API cria e muda estado, nunca apaga (descarte é do operador).
+  driver_documents: ['INSERT', 'UPDATE'],
+  driver_settings: [],
+  drivers: ['INSERT', 'UPDATE'],
   email_settings: ['INSERT', 'UPDATE'],
   // Catálogo de versões dos Termos/Política (0021): a API só LÊ; quem publica é o operador (`npm run legal:publish`, credencial dona).
   legal_document_versions: [],
@@ -59,6 +69,7 @@ const WRITES: Record<string, readonly ('INSERT' | 'UPDATE' | 'DELETE')[]> = {
   refresh_token_families: ['INSERT', 'UPDATE'],
   refresh_tokens: ['INSERT', 'UPDATE'],
   schema_migrations: [],
+  vehicles: ['INSERT', 'UPDATE'],
   waitlist_signups: ['INSERT'],
 };
 
@@ -121,6 +132,26 @@ describe('matriz de privilégios do papel vuumbora_api', () => {
     assert.equal((await pool.query('SELECT * FROM legal_pending_for_account(gen_random_uuid())')).rowCount, 0);
   });
 
+  test('0024: a view current_document_requirements é só leitura e as funções do motorista só executam para o papel da API', async () => {
+    const view = await owner.query<{ s: boolean; i: boolean; u: boolean; d: boolean; t: boolean }>(
+      `SELECT has_table_privilege('vuumbora_api', 'current_document_requirements', 'SELECT') AS s,
+              has_table_privilege('vuumbora_api', 'current_document_requirements', 'INSERT') AS i,
+              has_table_privilege('vuumbora_api', 'current_document_requirements', 'UPDATE') AS u,
+              has_table_privilege('vuumbora_api', 'current_document_requirements', 'DELETE') AS d,
+              has_table_privilege('vuumbora_api', 'current_document_requirements', 'TRUNCATE') AS t`,
+    );
+    assert.deepEqual(view.rows[0], { s: true, i: false, u: false, d: false, t: false });
+    for (const fn of ['driver_approval_blockers(uuid)', 'link_driver_application(uuid, text)']) {
+      const grants = await owner.query<{ api: boolean; pub: boolean }>(
+        `SELECT has_function_privilege('vuumbora_api', $1, 'EXECUTE') AS api, has_function_privilege('public', $1, 'EXECUTE') AS pub`,
+        [fn],
+      );
+      assert.deepEqual(grants.rows[0], { api: true, pub: false }, `${fn}: EXECUTE só para o papel da API`);
+    }
+    assert.ok((await pool.query('SELECT 1 FROM current_document_requirements LIMIT 1')).rowCount === 1, 'a API lê a lista vigente');
+    assert.deepEqual((await pool.query('SELECT blocker FROM driver_approval_blockers(gen_random_uuid())')).rows, [{ blocker: 'driver_not_found' }]);
+  });
+
   test('a conexão do app é de fato o papel restrito', async () => {
     const who = await pool.query('SELECT current_user AS u');
     assert.equal(who.rows[0].u, 'vuumbora_api');
@@ -157,6 +188,17 @@ describe('matriz de privilégios do papel vuumbora_api', () => {
     await denied(`DELETE FROM admin_audit_log`);
     await denied(`TRUNCATE admin_audit_log`);
     await denied(`INSERT INTO schema_migrations (id) VALUES ('0999_x.sql')`);
+    // 0024 (D1): documento do motorista não se apaga pela API; catálogo e configuração são só leitura.
+    await denied(`DELETE FROM driver_documents`);
+    await denied(`TRUNCATE driver_documents`);
+    await denied(`DELETE FROM drivers`);
+    await denied(`DELETE FROM vehicles`);
+    await denied(`INSERT INTO document_types (code, label, scope) VALUES ('forjado', 'Forjado', 'driver')`);
+    await denied(`INSERT INTO document_requirement_versions (city_code, version, provisional, source) VALUES ('natal', 'forjada', false, 'forjada')`);
+    await denied(`UPDATE document_requirements SET required = false`);
+    await denied(`UPDATE document_rejection_reasons SET driver_text = 'adulterado pelo papel da API'`);
+    await denied(`UPDATE driver_settings SET review_sla_hours = 1`);
+    await denied(`DELETE FROM cities`);
   });
 });
 

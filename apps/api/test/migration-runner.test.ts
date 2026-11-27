@@ -6,6 +6,7 @@
  *  3. UPGRADE de produção: banco parado na 0009 (o que está no ar hoje), COM DADOS,
  *     recebendo 0010 em diante (até a última do diretório) de réplicas concorrentes — os dados sobrevivem e o que a
  *     0013 manda apagar (sessões de dono/financeiro) é o único apagado.
+ *  4. 0024 em diante sobre a 0023 com dados do S1: sobe, desce pelos rollbacks (schema volta igual) e sobe de novo.
  *
  * Usa um banco descartável por cenário (`..._test`), nunca o banco da suíte.
  * Se a credencial não puder criar banco, os cenários se declaram pulados.
@@ -213,5 +214,76 @@ describe('runner de migração com várias réplicas ao mesmo tempo', () => {
 
     const again = await runMany(db, 3);
     for (const r of again) assert.deepEqual(applied(r), []);
+  });
+
+  // Generaliza para as próximas: tudo depois da 0023 sobe, e desce pelos rollbacks em ordem inversa (toda migração nova
+  // precisa de docs/sql/rollback/NNNN_down.sql, senão este cenário falha ao ler o arquivo).
+  test('0024 EM DIANTE SOBRE A 0023 COM DADOS DO S1: sobe por 3 réplicas, o vínculo funciona nos dados antigos, desce pelos rollbacks (schema igual ao da 0023) e sobe de novo', async (t) => {
+    if (!(await ensureCanCreate())) return t.skip('a credencial não cria banco neste ambiente');
+    const db = scratchName();
+    created.push(db);
+    await admin((c) => c.query(`CREATE DATABASE "${db}"`));
+    const upTo23 = FILES.filter((f) => f <= '0023_zzz');
+    assert.equal(upTo23.length, 23);
+    const after23 = FILES.slice(23);
+    assert.ok(after23[0]?.startsWith('0024_'), 'a 0024 existe');
+
+    const snapshot = (c: pg.Client) =>
+      c.query<{ k: string; v: string }>(`
+        SELECT 'rel' AS k, c.relname || ':' || c.relkind::text || ':' || coalesce(c.relacl::text, '') AS v FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace
+        UNION ALL SELECT 'col', table_name || '.' || column_name || ':' || data_type || ':' || is_nullable || ':' || coalesce(column_default, '')
+          FROM information_schema.columns WHERE table_schema = 'public'
+        UNION ALL SELECT 'con', conrelid::regclass::text || '.' || conname || ':' || pg_get_constraintdef(oid) FROM pg_constraint WHERE connamespace = 'public'::regnamespace
+        UNION ALL SELECT 'fn', p.proname || '(' || pg_get_function_identity_arguments(p.oid) || '):' || md5(p.prosrc) || ':' || coalesce(p.proacl::text, '')
+          FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
+        UNION ALL SELECT 'tg', tgrelid::regclass::text || '.' || tgname FROM pg_trigger WHERE NOT tgisinternal
+        UNION ALL SELECT 'idx', pg_get_indexdef(i.indexrelid) FROM pg_index i JOIN pg_class c ON c.oid = i.indrelid WHERE c.relnamespace = 'public'::regnamespace
+        ORDER BY 1, 2`);
+
+    // Banco na 0023 com dados do S1: candidatura aprovada e conta de motorista verificada de mesmo e-mail (o caso de N3).
+    const before = await inDb(db, async (c) => {
+      await c.query(`CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+      for (const f of upTo23) {
+        await c.query('BEGIN');
+        await c.query(readFileSync(join(MIGRATIONS_DIR, f), 'utf8'));
+        await c.query('INSERT INTO schema_migrations (id) VALUES ($1)', [f]);
+        await c.query('COMMIT');
+      }
+      const dono = (await c.query<{ id: string }>(`INSERT INTO admin_users (name, email, password_hash, role) VALUES ('dono', 'dono@teste.vuumbora.dev', $1, 'dono') RETURNING id`, [`$2b$04$${'x'.repeat(53)}`])).rows[0]!.id;
+      await c.query(`INSERT INTO admin_audit_log (admin_id, action, target_type, target_id) VALUES ($1::uuid, 'admin.login', 'admin_user', $1::text)`, [dono]);
+      await c.query(`INSERT INTO driver_applications (name, email, phone, city, state, status, decided_by, decided_at) VALUES ('Motorista Um', 'm1@teste.vuumbora.dev', '84999990001', 'Natal', 'RN', 'approved', $1, now())`, [dono]);
+      await c.query(`INSERT INTO driver_applications (name, email, phone, city, state) VALUES ('Motorista Dois', 'm2@teste.vuumbora.dev', '84999990002', 'Natal', 'RN')`);
+      await c.query(`INSERT INTO accounts (account_type, email, full_name, birth_date, email_verified_at) VALUES ('driver', 'm1@teste.vuumbora.dev', 'Motorista Um', '1990-01-01', now()), ('passenger', 'p1@teste.vuumbora.dev', 'Passageira', '1992-02-02', now())`);
+      await c.query(`INSERT INTO access_log (event) VALUES ('account_deleted')`);
+      return (await snapshot(c)).rows;
+    });
+
+    const up = await runMany(db, 3);
+    for (const r of up) assert.ok(r.report.ok && r.code === 0, `um processo falhou: ${r.report.error}\n${r.report.lines.join('\n')}`);
+    assert.deepEqual(up.flatMap(applied).sort(), after23, 'só o que vem depois da 0023 entra, uma vez cada');
+
+    const rollbackOf = (f: string) => readFileSync(join(HERE, '..', '..', '..', 'docs', 'sql', 'rollback', `${f.slice(0, 4)}_down.sql`), 'utf8');
+    await inDb(db, async (c) => {
+      const n = async (sql: string) => (await c.query<{ n: number }>(sql)).rows[0]!.n;
+      assert.equal(await n('SELECT count(*)::int AS n FROM driver_applications'), 2, 'candidaturas do S1 intactas');
+      assert.equal(await n('SELECT count(*)::int AS n FROM accounts'), 2);
+      assert.equal(await n('SELECT count(*)::int AS n FROM admin_audit_log'), 1);
+      const driver = (await c.query<{ id: string }>(`SELECT id FROM accounts WHERE account_type = 'driver'`)).rows[0]!.id;
+      const linked = await c.query(`SELECT * FROM link_driver_application($1, 'natal')`, [driver]);
+      assert.deepEqual(linked.rows, [{ result: 'linked', driver_status: 'pending' }], 'o vínculo funciona sobre a candidatura aprovada que já existia');
+      await c.query(`INSERT INTO access_log (event, account_id) VALUES ('driver_application_linked', $1)`, [driver]);
+
+      // Desce (ordem inversa): apaga o que é da 0024 em diante e devolve o schema exatamente ao da 0023, sem tocar no resto.
+      for (const f of [...after23].reverse()) await c.query(rollbackOf(f));
+      assert.deepEqual((await snapshot(c)).rows, before, 'schema depois do rollback == schema na 0023');
+      assert.equal(await n('SELECT count(*)::int AS n FROM driver_applications'), 2);
+      assert.equal(await n('SELECT count(*)::int AS n FROM accounts'), 2);
+      assert.equal(await n(`SELECT count(*)::int AS n FROM access_log WHERE event = 'account_deleted'`), 1);
+      assert.equal(await n('SELECT count(*)::int AS n FROM schema_migrations'), 23);
+    });
+
+    const reup = await runMany(db, 2);
+    for (const r of reup) assert.ok(r.report.ok && r.code === 0, `reaplicar falhou: ${r.report.error}`);
+    assert.deepEqual(reup.flatMap(applied).sort(), after23, 'sobe de novo depois do rollback');
   });
 });
