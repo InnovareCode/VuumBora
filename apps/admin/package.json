@@ -10,7 +10,7 @@
     "build": "npm run tokens:css && tsc --noEmit -p . && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p tsconfig.contract.json",
-    "test": "node --import tsx --test --test-concurrency=1 test/*.test.ts"
+    "test": "node --import tsx --import ./test/helpers/register-css.mjs --test --test-concurrency=1 test/*.test.ts"
   },
   "dependencies": {
     "lucide-react": "^1.77.0",

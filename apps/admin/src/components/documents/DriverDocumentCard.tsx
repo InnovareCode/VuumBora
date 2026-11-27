@@ -24,6 +24,7 @@ export const DriverDocumentCard = memo(function DriverDocumentCard({
   canDecide,
   focusTick,
   onDecide,
+  onForbidden,
 }: {
   readonly document: AdminDriverDocument;
   readonly driverName: string;
@@ -31,6 +32,8 @@ export const DriverDocumentCard = memo(function DriverDocumentCard({
   readonly canDecide: boolean;
   readonly focusTick: number;
   readonly onDecide: (kind: DocumentDecisionKind, document: AdminDriverDocument) => void;
+  /** 403 em qualquer chamada do cartão: a página descarta o cadastro inteiro. */
+  readonly onForbidden: () => void;
 }) {
   const headingId = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -104,6 +107,7 @@ export const DriverDocumentCard = memo(function DriverDocumentCard({
           typeLabel={document.typeLabel}
           driverName={driverName}
           contentType={document.contentType}
+          onForbidden={onForbidden}
         />
       </div>
 

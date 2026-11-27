@@ -24,12 +24,15 @@ export function RejectDocumentDialog({
   driverName,
   onRejected,
   onConflict,
+  onForbidden,
   onClose,
 }: {
   readonly document: AdminDriverDocument;
   readonly driverName: string;
   readonly onRejected: (decision: DocumentDecision) => void;
   readonly onConflict: () => void;
+  /** 403 (na recusa OU no catálogo de motivos): a página fecha o diálogo e tira o cadastro da tela. */
+  readonly onForbidden: () => void;
   readonly onClose: () => void;
 }) {
   const api = useApi();
@@ -48,6 +51,9 @@ export function RejectDocumentDialog({
   const [error, setError] = useState<string | null>(null);
   const [errorTick, setErrorTick] = useState(0);
   const reasonGroupRef = useRef<HTMLFieldSetElement>(null);
+  // Em ref: o efeito que carrega os motivos não pode rodar de novo só porque o pai recriou a função.
+  const onForbiddenRef = useRef(onForbidden);
+  onForbiddenRef.current = onForbidden;
   const errorRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
@@ -55,6 +61,10 @@ export function RejectDocumentDialog({
     setReasons({ phase: 'loading' });
     api.documentReview.rejectionReasons().then((result) => {
       if (cancelled) return;
+      if (!result.ok && result.error.kind === 'forbidden') {
+        onForbiddenRef.current();
+        return;
+      }
       setReasons(result.ok ? { phase: 'ready', reasons: result.data } : { phase: 'error', message: errorMessage(result.error) });
     });
     return () => {
@@ -91,6 +101,10 @@ export function RejectDocumentDialog({
       onConflict();
       return;
     }
+    if (result.error.kind === 'forbidden') {
+      onForbidden();
+      return;
+    }
     if (result.error.kind === 'validation' && result.error.fields['reasonCode'] !== undefined) {
       setReasonError(result.error.fields['reasonCode'] || 'Motivo de recusa desconhecido.');
     } else {
@@ -100,7 +114,40 @@ export function RejectDocumentDialog({
   }
 
   return (
-    <Dialog titleId={titleId} title="Recusar documento" onClose={onClose} busy={pending}>
+    <Dialog
+      titleId={titleId}
+      title="Recusar documento"
+      onClose={onClose}
+      busy={pending}
+      // Botões presos ao pé: a 390 px o conteúdo rola e "Confirmar" continua à vista.
+      footer={
+        <div className="flex flex-wrap justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            className="min-h-11 rounded-pill px-4 py-2.5 text-small font-bold text-text-secondary outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleConfirm()}
+            aria-disabled={!canSubmit}
+            // bg-danger-fill + brightness no hover: mesmo par já medido no RejectDialog das candidaturas (contraste AA,
+            // e opacidade nunca dilui o texto — memória bug_opacity_botao_dilui_contraste_texto).
+            className="flex min-h-11 items-center gap-2 rounded-pill bg-danger-fill px-5 py-2.5 text-small font-bold text-white outline-none transition-[filter] hover:brightness-95 focus-visible:ring-2 focus-visible:ring-info aria-disabled:cursor-not-allowed aria-disabled:brightness-75"
+          >
+            {pending ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
+            ) : (
+              <XCircle className="h-4 w-4" aria-hidden="true" />
+            )}
+            {pending ? 'Recusando…' : 'Confirmar recusa'}
+          </button>
+        </div>
+      }
+    >
       <p className="text-small text-text-secondary">
         <strong className="font-bold text-text">{document.typeLabel}</strong> de {driverName}. O motorista recebe o motivo
         escolhido e pode enviar o documento de novo.
@@ -196,31 +243,6 @@ export function RejectDocumentDialog({
         </p>
       )}
 
-      <div className="mt-6 flex flex-wrap justify-end gap-3">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={pending}
-          className="min-h-11 rounded-pill px-4 py-2.5 text-small font-bold text-text-secondary outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Cancelar
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleConfirm()}
-          aria-disabled={!canSubmit}
-          // bg-danger-fill + brightness no hover: mesmo par já medido no RejectDialog das candidaturas (contraste AA,
-          // e opacidade nunca dilui o texto — memória bug_opacity_botao_dilui_contraste_texto).
-          className="flex min-h-11 items-center gap-2 rounded-pill bg-danger-fill px-5 py-2.5 text-small font-bold text-white outline-none transition-[filter] hover:brightness-95 focus-visible:ring-2 focus-visible:ring-info aria-disabled:cursor-not-allowed aria-disabled:brightness-75"
-        >
-          {pending ? (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
-          ) : (
-            <XCircle className="h-4 w-4" aria-hidden="true" />
-          )}
-          {pending ? 'Recusando…' : 'Confirmar recusa'}
-        </button>
-      </div>
     </Dialog>
   );
 }

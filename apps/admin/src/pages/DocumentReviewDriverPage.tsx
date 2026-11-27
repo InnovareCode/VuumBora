@@ -33,7 +33,7 @@ export function DocumentReviewDriverPage() {
   const [searchParams] = useSearchParams();
   const requestedDocumentId = searchParams.get('documento');
   const { admin } = useAuth();
-  const { data, loading, refreshing, error, errorKind, refreshError, reload } = useAdminDriverDetail(driverId);
+  const { data, loading, refreshing, error, errorKind, refreshError, reload, revokeAccess } = useAdminDriverDetail(driverId);
   const [open, setOpen] = useState<OpenDialog | null>(null);
   // Sobrevive ao `reload()` — o aviso fica até a pessoa fechar.
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -43,6 +43,19 @@ export function DocumentReviewDriverPage() {
   const [suspendFocusTick, setSuspendFocusTick] = useState(0);
   const suspensionRef = useRef<HTMLDivElement>(null);
   const canDecide = canReviewDocuments(admin?.role);
+  const forbiddenRef = useRef<HTMLDivElement>(null);
+  const forbidden = errorKind === 'forbidden';
+
+  // 403 em qualquer chamada (recarga, visualizar, decidir, motivos): o hook já tirou o cadastro; aqui sai
+  // também o diálogo (ele cita o nome do motorista) e o foco vai para o erro — o botão que estava focado sumiu
+  // junto com o cartão. O aviso de decisão FICA: diz só o tipo do documento ("Foto de perfil: aprovado.") e
+  // é a única confirmação de que a decisão entrou antes de o acesso cair. Por isso nenhum aviso cita o nome.
+  useEffect(() => {
+    if (!forbidden) return;
+    setOpen(null);
+    setFocusTarget(null);
+    forbiddenRef.current?.focus();
+  }, [forbidden]);
 
   // Chegou pela fila (`?documento=`): o foco começa no documento pedido, uma vez.
   useEffect(() => {
@@ -125,7 +138,10 @@ export function DocumentReviewDriverPage() {
 
       {loading ? <LoadingState label="Carregando motorista…" /> : null}
       {!loading && error ? (
-        <ErrorState message={error} {...(errorKind !== 'forbidden' && errorKind !== 'not_found' ? { onRetry: () => void reload() } : {})} />
+        // Wrapper focável: depois de um 403 com a tela aberta, o foco vem para cá (ver o efeito de `forbidden`).
+        <div ref={forbiddenRef} tabIndex={-1} className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-info">
+          <ErrorState message={error} {...(errorKind !== 'forbidden' && errorKind !== 'not_found' ? { onRetry: () => void reload() } : {})} />
+        </div>
       ) : null}
       {!loading && !error && !data ? <EmptyState title="Motorista não encontrado" /> : null}
 
@@ -176,6 +192,7 @@ export function DocumentReviewDriverPage() {
                       canDecide={canDecide}
                       focusTick={focusTarget?.documentId === document.documentId ? focusTarget.tick : 0}
                       onDecide={onDecide}
+                      onForbidden={revokeAccess}
                     />
                   ))}
                 </div>
@@ -197,6 +214,7 @@ export function DocumentReviewDriverPage() {
           driverName={data.fullName}
           onApproved={(decision) => afterDecision(open.document, decision)}
           onConflict={() => afterConflict(open.document)}
+          onForbidden={revokeAccess}
           onClose={() => setOpen(null)}
         />
       ) : null}
@@ -206,6 +224,7 @@ export function DocumentReviewDriverPage() {
           driverName={data.fullName}
           onRejected={(decision) => afterDecision(open.document, decision)}
           onConflict={() => afterConflict(open.document)}
+          onForbidden={revokeAccess}
           onClose={() => setOpen(null)}
         />
       ) : null}
@@ -214,11 +233,12 @@ export function DocumentReviewDriverPage() {
           driverId={data.driverId}
           driverName={data.fullName}
           onSuspended={() => {
-            setNotice({ tone: 'success', text: `${data.fullName}: motorista suspenso.` });
+            setNotice({ tone: 'success', text: 'Motorista suspenso.' });
             setOpen(null);
             setSuspendFocusTick((tick) => tick + 1);
             void reload();
           }}
+          onForbidden={revokeAccess}
           onClose={() => setOpen(null)}
         />
       ) : null}

@@ -20,7 +20,10 @@ interface Call {
 }
 
 let calls: Call[] = [];
-let reply: (call: Call) => { readonly status: number; readonly body: unknown } = () => ({ status: 200, body: { ok: true, data: {} } });
+let reply: (call: Call) => { readonly status: number; readonly body: unknown; readonly headers?: Readonly<Record<string, string>> } = () => ({
+  status: 200,
+  body: { ok: true, data: {} },
+});
 let logged: string[] = [];
 const realFetch = globalThis.fetch;
 const realError = console.error;
@@ -40,8 +43,8 @@ beforeEach(() => {
       credentials: init?.credentials,
     };
     calls.push(call);
-    const { status, body } = reply(call);
-    return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+    const { status, body, headers } = reply(call);
+    return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } });
   }) as typeof fetch;
   const capture = (...args: unknown[]) => logged.push(args.map(String).join(' '));
   console.error = capture;
@@ -74,10 +77,11 @@ describe('rotas, métodos e cabeçalhos', () => {
   });
 
   test('view-url: POST com CSRF, id codificado na rota', async () => {
-    reply = ok({ url: SIGNED_URL, expiresAt: '2026-11-27T12:05:00Z' });
+    reply = ok({ url: SIGNED_URL, expiresAt: new Date(Date.now() + 300_000).toISOString() });
     const port = createHttpDocumentReviewAdapter(BASE);
     const result = await port.viewUrl('doc/1');
-    assert.deepEqual(result, { ok: true, data: { url: SIGNED_URL, expiresAt: '2026-11-27T12:05:00Z' }, origin: 'real' });
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.data.url, SIGNED_URL);
     assert.equal(calls[0]?.method, 'POST');
     assert.equal(calls[0]?.url, `${BASE}/v1/admin/documents/doc%2F1/view-url`);
     assert.equal(calls[0]?.headers['X-CSRF-Token'], 'csrf-de-teste');
@@ -213,5 +217,35 @@ describe('falha fechada, e a URL assinada nunca no console', () => {
   test('fila aceita nextCursor null como "não há mais"', async () => {
     reply = ok({ items: [], nextCursor: null });
     assert.deepEqual(await createHttpDocumentReviewAdapter(BASE).queue(), { ok: true, data: { items: [] }, origin: 'real' });
+  });
+});
+
+describe('view-url: validade pelo relógio do servidor (cabeçalho Date)', () => {
+  test('servidor 6 min ATRÁS do relógio local: o link vale 300 s a partir de agora, não "já venceu"', async () => {
+    const serverNow = Date.now() - 6 * 60_000;
+    reply = () => ({
+      status: 200,
+      body: { ok: true, data: { url: SIGNED_URL, expiresAt: new Date(serverNow + 300_000).toISOString() } },
+      headers: { Date: new Date(serverNow).toUTCString() },
+    });
+    const before = Date.now();
+    const result = await createHttpDocumentReviewAdapter(BASE).viewUrl('d1');
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      const ttl = Date.parse(result.data.expiresAt) - before;
+      // O cabeçalho Date tem resolução de 1 s: até 1 s a mais, nunca o "vencido" de antes.
+      assert.ok(ttl > 298_000 && ttl <= 301_500, `ttl=${ttl}`);
+    }
+  });
+
+  test('sem cabeçalho Date e relógio local adiantado: teto de 300 s', async () => {
+    reply = ok({ url: SIGNED_URL, expiresAt: new Date(Date.now() - 60_000).toISOString() });
+    const before = Date.now();
+    const result = await createHttpDocumentReviewAdapter(BASE).viewUrl('d1');
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      const ttl = Date.parse(result.data.expiresAt) - before;
+      assert.ok(ttl > 299_000 && ttl <= 300_500, `ttl=${ttl}`);
+    }
   });
 });

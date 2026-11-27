@@ -14,11 +14,14 @@ export function SuspendDriverDialog({
   driverId,
   driverName,
   onSuspended,
+  onForbidden,
   onClose,
 }: {
   readonly driverId: string;
   readonly driverName: string;
   readonly onSuspended: (suspension: DriverSuspension) => void;
+  /** 403: o papel perdeu o acesso — a página fecha o diálogo e tira o cadastro da tela. */
+  readonly onForbidden: () => void;
   readonly onClose: () => void;
 }) {
   const api = useApi();
@@ -55,6 +58,10 @@ export function SuspendDriverDialog({
       onSuspended(result.data);
       return;
     }
+    if (result.error.kind === 'forbidden') {
+      onForbidden();
+      return;
+    }
     if (result.error.kind === 'validation' && result.error.fields['reason'] !== undefined) {
       setFieldError(result.error.fields['reason'] || 'Informe o motivo (10 a 1000 caracteres).');
     } else {
@@ -66,7 +73,38 @@ export function SuspendDriverDialog({
   const describedBy = fieldError ? `${hintId} ${fieldErrorId}` : hintId;
 
   return (
-    <Dialog titleId={titleId} title="Suspender motorista" onClose={onClose} busy={pending}>
+    <Dialog
+      titleId={titleId}
+      title="Suspender motorista"
+      onClose={onClose}
+      busy={pending}
+      // Botões presos ao pé: a 390 px o conteúdo rola e "Confirmar" continua à vista.
+      footer={
+        <div className="flex flex-wrap justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            className="min-h-11 rounded-pill px-4 py-2.5 text-small font-bold text-text-secondary outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleConfirm()}
+            aria-disabled={!canSubmit}
+            className="flex min-h-11 items-center gap-2 rounded-pill bg-danger-fill px-5 py-2.5 text-small font-bold text-white outline-none transition-[filter] hover:brightness-95 focus-visible:ring-2 focus-visible:ring-info aria-disabled:cursor-not-allowed aria-disabled:brightness-75"
+          >
+            {pending ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
+            ) : (
+              <Ban className="h-4 w-4" aria-hidden="true" />
+            )}
+            {pending ? 'Suspendendo…' : 'Confirmar suspensão'}
+          </button>
+        </div>
+      }
+    >
       <p className="text-small text-text-secondary">
         O cadastro de <strong className="font-bold text-text">{driverName}</strong> passa a "Suspenso" e ele não consegue
         ficar disponível para corridas. Este painel ainda não tem como desfazer a suspensão.
@@ -109,29 +147,6 @@ export function SuspendDriverDialog({
         </p>
       )}
 
-      <div className="mt-6 flex flex-wrap justify-end gap-3">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={pending}
-          className="min-h-11 rounded-pill px-4 py-2.5 text-small font-bold text-text-secondary outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Cancelar
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleConfirm()}
-          aria-disabled={!canSubmit}
-          className="flex min-h-11 items-center gap-2 rounded-pill bg-danger-fill px-5 py-2.5 text-small font-bold text-white outline-none transition-[filter] hover:brightness-95 focus-visible:ring-2 focus-visible:ring-info aria-disabled:cursor-not-allowed aria-disabled:brightness-75"
-        >
-          {pending ? (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
-          ) : (
-            <Ban className="h-4 w-4" aria-hidden="true" />
-          )}
-          {pending ? 'Suspendendo…' : 'Confirmar suspensão'}
-        </button>
-      </div>
     </Dialog>
   );
 }

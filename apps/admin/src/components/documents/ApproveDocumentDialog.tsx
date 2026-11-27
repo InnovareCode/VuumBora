@@ -20,12 +20,15 @@ export function ApproveDocumentDialog({
   driverName,
   onApproved,
   onConflict,
+  onForbidden,
   onClose,
 }: {
   readonly document: AdminDriverDocument;
   readonly driverName: string;
   readonly onApproved: (decision: DocumentDecision) => void;
   readonly onConflict: () => void;
+  /** 403: o papel perdeu o acesso — a página fecha o diálogo e tira o cadastro da tela. */
+  readonly onForbidden: () => void;
   readonly onClose: () => void;
 }) {
   const api = useApi();
@@ -64,6 +67,10 @@ export function ApproveDocumentDialog({
       onConflict();
       return;
     }
+    if (result.error.kind === 'forbidden') {
+      onForbidden();
+      return;
+    }
     if (result.error.kind === 'validation' && result.error.fields['expiresOn'] !== undefined) {
       setFieldError(result.error.fields['expiresOn'] || 'Data de validade ausente, inválida ou já passada.');
     } else {
@@ -75,7 +82,38 @@ export function ApproveDocumentDialog({
   const describedBy = fieldError ? `${hintId} ${fieldErrorId}` : hintId;
 
   return (
-    <Dialog titleId={titleId} title="Aprovar documento" onClose={onClose} busy={pending}>
+    <Dialog
+      titleId={titleId}
+      title="Aprovar documento"
+      onClose={onClose}
+      busy={pending}
+      // Botões presos ao pé: a 390 px o conteúdo rola e "Confirmar" continua à vista.
+      footer={
+        <div className="flex flex-wrap justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            className="min-h-11 rounded-pill px-4 py-2.5 text-small font-bold text-text-secondary outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleConfirm()}
+            aria-disabled={pending}
+            className="flex min-h-11 items-center gap-2 rounded-pill bg-cta px-5 py-2.5 text-small font-bold text-on-cta outline-none transition-colors hover:bg-cta-pressed focus-visible:ring-2 focus-visible:ring-info aria-disabled:cursor-wait"
+          >
+            {pending ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-on-cta/40 border-t-on-cta" aria-hidden="true" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+            )}
+            {pending ? 'Aprovando…' : 'Confirmar aprovação'}
+          </button>
+        </div>
+      }
+    >
       <p className="text-small text-text-secondary">
         <strong className="font-bold text-text">{document.typeLabel}</strong> de {driverName}. Aprove só depois de conferir o
         arquivo contra os dados do cadastro.
@@ -116,29 +154,6 @@ export function ApproveDocumentDialog({
         </p>
       )}
 
-      <div className="mt-6 flex flex-wrap justify-end gap-3">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={pending}
-          className="min-h-11 rounded-pill px-4 py-2.5 text-small font-bold text-text-secondary outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Cancelar
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleConfirm()}
-          aria-disabled={pending}
-          className="flex min-h-11 items-center gap-2 rounded-pill bg-cta px-5 py-2.5 text-small font-bold text-on-cta outline-none transition-colors hover:bg-cta-pressed focus-visible:ring-2 focus-visible:ring-info aria-disabled:cursor-wait"
-        >
-          {pending ? (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-on-cta/40 border-t-on-cta" aria-hidden="true" />
-          ) : (
-            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          )}
-          {pending ? 'Aprovando…' : 'Confirmar aprovação'}
-        </button>
-      </div>
     </Dialog>
   );
 }

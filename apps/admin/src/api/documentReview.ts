@@ -40,6 +40,10 @@ export interface DocumentReviewPort {
   /**
    * `404 not_found`. CADA chamada é uma visualização auditada (N5): só no clique de quem vai olhar,
    * nunca para pré-carregar. A URL devolvida não vai para cache, log nem estado persistido.
+   *
+   * No painel, o `expiresAt` devolvido já está no relógio DESTE computador (ver `localViewUrlExpiry`): um
+   * relógio local adiantado fazia o link "vencer" no instante em que chegava e cada clique gastava uma
+   * visualização auditada.
    */
   viewUrl(documentId: string): Promise<Result<DocumentViewUrl>>;
   /** `404` · `409 invalid_transition` · `422 invalid_expires_on` (`fields.expiresOn`). */
@@ -58,6 +62,34 @@ export interface DocumentReviewPort {
 function contractMismatch(reason: string): { readonly ok: false; readonly error: { readonly kind: 'contract_mismatch' } } {
   console.error(`[admin] Resposta da fila de documentos incompatível com este painel (${reason}).`);
   return { ok: false, error: { kind: 'contract_mismatch' } };
+}
+
+/** Teto do contrato para a URL de visualização (≤ 300 s). */
+export const VIEW_URL_MAX_TTL_MS = 300_000;
+
+/**
+ * Validade do link no relógio LOCAL. A validade de verdade é a do servidor (`expiresAt` − agora DELE); o
+ * relógio do revisor pode estar adiantado ou atrasado minutos, então comparar `expiresAt` com `Date.now()`
+ * mede o erro do relógio, não o link.
+ *
+ * - Com o cabeçalho `Date` legível: validade = `expiresAt` − `Date` (exata, resolução de 1 s).
+ * - Sem ele (requisição de outra origem só lê o `Date` se a API mandar `Access-Control-Expose-Headers: Date`):
+ *   validade = `expiresAt` − hora local da chegada. Se der ≤ 0, o relógio local está adiantado (o servidor
+ *   acabou de emitir o link, ele não nasce vencido) e vale o teto do contrato.
+ *
+ * Sempre no máximo 300 s a partir da chegada.
+ */
+export function localViewUrlExpiry(expiresAtIso: string, receivedAtMs: number, serverDateHeader: string | null): string {
+  const expiresAtServerMs = Date.parse(expiresAtIso);
+  const serverNowMs = serverDateHeader ? Date.parse(serverDateHeader) : Number.NaN;
+  let ttlMs: number;
+  if (!Number.isNaN(serverNowMs)) {
+    ttlMs = expiresAtServerMs - serverNowMs;
+  } else {
+    const localTtlMs = expiresAtServerMs - receivedAtMs;
+    ttlMs = localTtlMs > 0 ? localTtlMs : VIEW_URL_MAX_TTL_MS;
+  }
+  return new Date(receivedAtMs + Math.max(0, Math.min(ttlMs, VIEW_URL_MAX_TTL_MS))).toISOString();
 }
 
 function finish<T>(result: Result<unknown>, parse: (raw: unknown) => Parsed<T>): Result<T> {
@@ -88,8 +120,21 @@ export function createHttpDocumentReviewAdapter(baseUrl: string): DocumentReview
     async viewUrl(documentId) {
       // POST (não GET): grava trilha no servidor e não pode ser repetido por cache de navegador nem por
       // pré-busca. O requester já manda `credentials: 'include'` e o CSRF de mutação.
-      const result = await request<unknown>({ path: `/v1/admin/documents/${encodeURIComponent(documentId)}/view-url`, method: 'POST', fieldByCode });
-      return finish(result, parseDocumentViewUrlResponse);
+      // Objeto (e não `let`): atribuição dentro de callback não alarga o tipo estreitado de um `let`.
+      const arrival: { receivedAtMs: number; serverDate: string | null } = { receivedAtMs: 0, serverDate: null };
+      const result = await request<unknown>({
+        path: `/v1/admin/documents/${encodeURIComponent(documentId)}/view-url`,
+        method: 'POST',
+        fieldByCode,
+        onResponse: (response) => {
+          arrival.receivedAtMs = Date.now();
+          arrival.serverDate = response.headers.get('Date');
+        },
+      });
+      const parsed = finish(result, parseDocumentViewUrlResponse);
+      if (!parsed.ok) return parsed;
+      const expiresAt = localViewUrlExpiry(parsed.data.expiresAt, arrival.receivedAtMs || Date.now(), arrival.serverDate);
+      return { ...parsed, data: { url: parsed.data.url, expiresAt } };
     },
     async approve(documentId, input, idempotencyKey) {
       const result = await request<unknown>({

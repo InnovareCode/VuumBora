@@ -27,17 +27,22 @@ type ViewerState =
  *
  * Padrão "disclosure": o botão alterna o painel logo abaixo dele (`aria-expanded`/`aria-controls`), então o
  * foco fica no botão e o próximo Tab já entra na visualização.
+ *
+ * `403 forbidden` não é erro local deste cartão: o papel perdeu o acesso, e a PÁGINA inteira tem de tirar
+ * da tela o cadastro (nome, CPF, CNH). Por isso vai para `onForbidden`, não para a mensagem daqui.
  */
 export function DocumentViewer({
   documentId,
   typeLabel,
   driverName,
   contentType,
+  onForbidden,
 }: {
   readonly documentId: string;
   readonly typeLabel: string;
   readonly driverName: string;
   readonly contentType: string;
+  readonly onForbidden: () => void;
 }) {
   const api = useApi();
   const panelId = useId();
@@ -51,6 +56,11 @@ export function DocumentViewer({
     const result = await api.documentReview.viewUrl(documentId);
     if (id !== requestId.current) return;
     if (!result.ok) {
+      if (result.error.kind === 'forbidden') {
+        setState({ phase: 'idle' });
+        onForbidden();
+        return;
+      }
       setState({ phase: 'error', message: errorMessage(result.error) });
       return;
     }

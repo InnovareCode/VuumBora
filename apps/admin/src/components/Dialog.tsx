@@ -15,18 +15,24 @@ import { useFocusTrap } from '../nav/useFocusTrap';
  *
  * Só deve ser montado enquanto aberto (`{open && <Dialog>...}</Dialog>}`),
  * nunca escondido com CSS — montar de novo já devolve o estado inicial.
+ *
+ * `footer` (opcional): os botões de ação ficam PRESOS ao pé do diálogo e só o meio rola. Sem ele, o
+ * diálogo continua exatamente como antes (tudo rola junto). Nasceu na recusa de documento (D7): a 390 px,
+ * com cinco motivos, "Confirmar recusa" ficava abaixo da dobra.
  */
 export function Dialog({
   titleId,
   title,
   onClose,
   busy = false,
+  footer,
   children,
 }: {
   readonly titleId: string;
   readonly title: string;
   readonly onClose: () => void;
   readonly busy?: boolean;
+  readonly footer?: ReactNode;
   readonly children: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -48,9 +54,13 @@ export function Dialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xxl bg-surface p-6 shadow-2xl ring-1 ring-border"
+        className={
+          footer
+            ? 'relative flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-xxl bg-surface shadow-2xl ring-1 ring-border'
+            : 'relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xxl bg-surface p-6 shadow-2xl ring-1 ring-border'
+        }
       >
-        <div className="mb-4 flex items-start justify-between gap-3">
+        <div className={footer ? 'flex shrink-0 items-start justify-between gap-3 px-6 pb-4 pt-6' : 'mb-4 flex items-start justify-between gap-3'}>
           <h2 id={titleId} className="text-title font-bold text-text">
             {title}
           </h2>
@@ -64,7 +74,15 @@ export function Dialog({
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        {children}
+        {footer ? (
+          <>
+            {/* `min-h-0` + encolher (sem `flex-1`: base 0 num pai de altura automática zera o meio). */}
+            <div className="min-h-0 shrink overflow-y-auto px-6 pb-4">{children}</div>
+            <div className="shrink-0 border-t border-border px-6 py-4">{footer}</div>
+          </>
+        ) : (
+          children
+        )}
       </div>
     </div>
   );

@@ -117,11 +117,16 @@ export interface RequestInput {
   readonly idempotencyKey?: string;
   /** `code` de validação → campo (ver `mapStatusToError`). Ausente = comportamento de sempre. */
   readonly fieldByCode?: Readonly<Record<string, string>>;
+  /**
+   * Chamado com a resposta crua (antes de ler o corpo), só quando ela chega. Existe para quem precisa de um
+   * cabeçalho — hoje só o `view-url`, que lê o `Date` do servidor para medir a validade do link no relógio dele.
+   */
+  readonly onResponse?: (response: Response) => void;
 }
 
 /** `baseUrl` sem barra final. Sempre com cookie (`credentials: 'include'`). */
 export function createHttpRequester(baseUrl: string) {
-  return async function request<T>({ path, method = 'GET', body, idempotencyKey, fieldByCode }: RequestInput): Promise<Result<T>> {
+  return async function request<T>({ path, method = 'GET', body, idempotencyKey, fieldByCode, onResponse }: RequestInput): Promise<Result<T>> {
     try {
       const init: RequestInit = { method, credentials: 'include' };
       const headers: Record<string, string> = {};
@@ -137,6 +142,7 @@ export function createHttpRequester(baseUrl: string) {
       }
       if (Object.keys(headers).length > 0) init.headers = headers;
       const response = await fetch(`${baseUrl}${path}`, init);
+      onResponse?.(response);
       const json: Envelope<T> | undefined = await response.json().catch(() => undefined);
 
       if (!response.ok || !json || json.ok === false) {

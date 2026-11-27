@@ -7,5 +7,5 @@
     "moduleDetection": "force",
     "types": ["node", "vite/client"]
   },
-  "include": ["contract", "test"]
+  "include": ["contract", "test", "src/vite-env.d.ts"]
 }
