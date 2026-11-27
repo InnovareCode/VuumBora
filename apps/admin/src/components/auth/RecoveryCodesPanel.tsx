@@ -30,11 +30,15 @@ export function RecoveryCodesPanel({
   codes,
   continueLabel,
   onContinue,
+  headingLevel = 'h2',
 }: {
   readonly codes: readonly string[];
   readonly continueLabel: string;
   readonly onContinue: () => void;
+  /** `h1` quando o painel É a tela (login, ativação do 2FA); `h2` dentro de um diálogo, que já tem o próprio título. */
+  readonly headingLevel?: 'h1' | 'h2';
 }) {
+  const Heading = headingLevel;
   const headingId = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [saved, setSaved] = useState(false);
@@ -79,14 +83,14 @@ export function RecoveryCodesPanel({
   return (
     <section aria-labelledby={headingId} className="space-y-5 text-left">
       <div className="space-y-2">
-        <h2
+        <Heading
           id={headingId}
           ref={headingRef}
           tabIndex={-1}
           className="text-title font-bold tracking-tight text-text outline-none focus-visible:ring-2 focus-visible:ring-info"
         >
           Guarde seus códigos de recuperação
-        </h2>
+        </Heading>
         <p className="text-small leading-relaxed text-text-secondary">
           Se você perder o acesso ao app autenticador, cada código abaixo entra no lugar dele — uma vez só.
         </p>

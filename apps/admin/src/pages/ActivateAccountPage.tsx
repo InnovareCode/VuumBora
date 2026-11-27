@@ -153,7 +153,7 @@ export function ActivateAccountPage() {
                       onClick={() => setShowPassword((v) => !v)}
                       aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                       aria-pressed={showPassword}
-                      className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-info"
+                      className="flex h-11 w-11 items-center justify-center rounded-lg text-text-muted outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-info"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
                     </button>
@@ -181,8 +181,15 @@ export function ActivateAccountPage() {
               </button>
             </form>
 
-            <p className="mt-8 border-t border-border pt-6 text-center text-small text-text-secondary">
-              Já ativou sua conta? <Link to="/login" className="font-bold text-cta-pressed underline-offset-4 hover:underline">Entrar</Link>
+            {/* O link é um alvo de 44 px (o texto sozinho media 41x18); `pt-5` compensa a altura a mais. */}
+            <p className="mt-8 border-t border-border pt-5 text-center text-small text-text-secondary">
+              Já ativou sua conta?{' '}
+              <Link
+                to="/login"
+                className="inline-flex min-h-11 items-center rounded-lg px-2 font-bold text-cta-pressed underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-info"
+              >
+                Entrar
+              </Link>
             </p>
           </>
         )}

@@ -27,7 +27,7 @@ export function NoAccessPage({ item, role }: { readonly item: NavItem; readonly 
       <button
         type="button"
         onClick={() => navigate(-1)}
-        className="mt-2 rounded-pill bg-cta px-5 py-2.5 text-small font-bold text-on-cta outline-none transition-colors hover:bg-cta-pressed focus-visible:ring-2 focus-visible:ring-info"
+        className="mt-2 min-h-11 rounded-pill bg-cta px-5 py-2.5 text-small font-bold text-on-cta outline-none transition-colors hover:bg-cta-pressed focus-visible:ring-2 focus-visible:ring-info"
       >
         Voltar
       </button>

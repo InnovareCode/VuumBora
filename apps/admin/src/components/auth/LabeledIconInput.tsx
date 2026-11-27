@@ -34,14 +34,15 @@ export const LabeledIconInput = forwardRef<HTMLInputElement, LabeledIconInputPro
             ref={ref}
             className={cn(
               'h-12 w-full rounded-xl border border-border bg-input pl-11 text-body text-text outline-none transition-colors',
-              'placeholder:text-text-muted/70',
+              // Sem `/70`: com o alpha o exemplo media 3,22:1 sobre o fundo do campo (texto de exemplo também é texto).
+              'placeholder:text-text-muted',
               'focus:border-cta-pressed focus-visible:ring-2 focus-visible:ring-info',
-              rightSlot ? 'pr-11' : 'pr-4',
+              rightSlot ? 'pr-12' : 'pr-4',
               className,
             )}
             {...props}
           />
-          {rightSlot && <div className="absolute right-2 top-1/2 -translate-y-1/2">{rightSlot}</div>}
+          {rightSlot && <div className="absolute right-0.5 top-1/2 -translate-y-1/2">{rightSlot}</div>}
         </div>
       </div>
     );

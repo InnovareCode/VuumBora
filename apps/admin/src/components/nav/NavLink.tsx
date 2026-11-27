@@ -25,7 +25,7 @@ export function NavLink({
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'group relative flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-info',
+        'group relative flex min-h-11 items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-bold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-info',
         sidebar
           ? active
             ? 'bg-white/15 text-white'

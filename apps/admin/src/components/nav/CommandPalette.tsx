@@ -108,7 +108,8 @@ export function CommandPalette({
             placeholder="Buscar área do painel…"
             aria-label={label}
             aria-controls="admin-command-results"
-            className="w-full bg-transparent py-4 text-small text-text placeholder:text-text-muted focus:outline-none"
+            // 16 px: abaixo disso o Safari do iOS dá zoom ao focar o campo.
+            className="w-full bg-transparent py-4 text-body text-text placeholder:text-text-muted focus:outline-none"
           />
           <kbd className="hidden shrink-0 rounded-md bg-elevated px-1.5 py-0.5 text-[10px] font-bold text-text-secondary sm:block">
             ESC

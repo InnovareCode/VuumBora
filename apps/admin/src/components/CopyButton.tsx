@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Check, Copy } from 'lucide-react';
 import styles from './CopyButton.module.css';
 
 /** Copia telefone/e-mail para contato (requisito do briefing). Estado 100% local: só este botão precisa saber se copiou. */
@@ -30,8 +31,11 @@ export function CopyButton({ value, label }: { readonly value: string; readonly 
       onClick={handleClick}
       aria-label={`Copiar ${label}: ${value}`}
     >
-      <span>{value}</span>
-      <span aria-live="polite">
+      <span className={styles['value']}>{value}</span>
+      {/* A ação fica à direita, com ícone e cor própria: antes "Copiar" vinha colado ao valor, no mesmo tom, e lia como
+          parte do e-mail. */}
+      <span className={styles['action']} aria-live="polite">
+        {feedback === 'copied' ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
         {feedback === 'copied' ? 'Copiado!' : feedback === 'error' ? 'Não copiou' : 'Copiar'}
       </span>
     </button>

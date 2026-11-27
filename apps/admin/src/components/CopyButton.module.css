@@ -1,9 +1,12 @@
 .button {
-  display: inline-flex;
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-3);
   min-height: var(--layout-touch-target);
-  padding: 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
   border-radius: var(--radius-sm);
   border: 1px solid var(--role-border);
   background: var(--role-surface-elevated);
@@ -19,5 +22,27 @@
 
 .button[data-copied='true'] {
   border-color: var(--role-success);
+}
+
+/* E-mail longo quebra em vez de estourar a 390 px. */
+.value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.action {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--role-text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.button:hover .action {
+  color: var(--role-text-primary);
+}
+
+.button[data-copied='true'] .action {
   color: var(--role-success);
 }

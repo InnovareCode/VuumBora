@@ -31,7 +31,7 @@ export function SourceBadge({ source }: { readonly source: EmailFieldSource }) {
 
 /** Mesmo desenho do `LabeledIconInput` das telas de login, sem o ícone (campos de configuração são mais densos). */
 export const controlClass =
-  'h-12 w-full rounded-xl border border-border bg-input px-4 text-body text-text outline-none transition-colors placeholder:text-text-muted/70 focus:border-cta-pressed focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-danger';
+  'h-12 w-full rounded-xl border border-border bg-input px-4 text-body text-text outline-none transition-colors placeholder:text-text-muted focus:border-cta-pressed focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-danger';
 
 export interface ControlProps {
   readonly id: string;

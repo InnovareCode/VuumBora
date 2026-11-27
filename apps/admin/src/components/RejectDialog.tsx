@@ -80,7 +80,7 @@ export function RejectDialog({
           aria-describedby={hintId}
           disabled={pending}
           placeholder="Ex.: telefone informado não atende e não confirmamos a identidade."
-          className="w-full rounded-xl border border-border-control bg-screen px-3 py-2.5 text-small text-text outline-none placeholder:text-text-muted focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-xl border border-border-control bg-screen px-3 py-2.5 text-body text-text outline-none placeholder:text-text-muted focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-60"
         />
         <p id={hintId} className="mt-1.5 text-caption text-text-muted">
           Obrigatório, mínimo de {REASON_MIN_LENGTH} caracteres — o botão habilita a partir daí.
@@ -98,7 +98,7 @@ export function RejectDialog({
           type="button"
           onClick={onClose}
           disabled={pending}
-          className="rounded-pill px-4 py-2.5 text-small font-bold text-text-secondary outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-11 rounded-pill px-4 py-2.5 text-small font-bold text-text-secondary outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50"
         >
           Cancelar
         </button>
@@ -111,7 +111,7 @@ export function RejectDialog({
           // hover por `brightness` (não `opacity`) para nunca diluir o
           // contraste do texto (ver memória
           // bug_opacity_botao_dilui_contraste_texto).
-          className="flex items-center gap-2 rounded-pill bg-danger-fill px-5 py-2.5 text-small font-bold text-white outline-none transition-[filter] hover:brightness-95 focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex min-h-11 items-center gap-2 rounded-pill bg-danger-fill px-5 py-2.5 text-small font-bold text-white outline-none transition-[filter] hover:brightness-95 focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50"
         >
           {pending ? (
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />

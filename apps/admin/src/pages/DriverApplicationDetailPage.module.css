@@ -2,10 +2,13 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  /* 44 px de alvo (o texto sozinho media 21 px); a margem negativa devolve o respiro visual de antes. */
+  min-height: var(--layout-touch-target);
+  margin-top: calc((var(--layout-touch-target) - 1.5em) / -2);
   color: var(--role-text-secondary);
   text-decoration: none;
   font-size: var(--font-size-small);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-2);
 }
 
 .back:hover {

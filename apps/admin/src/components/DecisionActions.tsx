@@ -31,7 +31,7 @@ export function DecisionActions({
         <button
           type="button"
           onClick={() => setOpen('approve')}
-          className="flex items-center gap-2 rounded-pill bg-cta px-5 py-2.5 text-small font-bold text-on-cta outline-none transition-colors hover:bg-cta-pressed focus-visible:ring-2 focus-visible:ring-info"
+          className="flex min-h-11 items-center gap-2 rounded-pill bg-cta px-5 py-2.5 text-small font-bold text-on-cta outline-none transition-colors hover:bg-cta-pressed focus-visible:ring-2 focus-visible:ring-info"
         >
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
           Aprovar
@@ -39,7 +39,7 @@ export function DecisionActions({
         <button
           type="button"
           onClick={() => setOpen('reject')}
-          className="flex items-center gap-2 rounded-pill border border-danger/40 px-5 py-2.5 text-small font-bold text-danger outline-none transition-colors hover:bg-danger-fill hover:text-white focus-visible:ring-2 focus-visible:ring-info"
+          className="flex min-h-11 items-center gap-2 rounded-pill border border-danger/40 px-5 py-2.5 text-small font-bold text-danger outline-none transition-colors hover:bg-danger-fill hover:text-white focus-visible:ring-2 focus-visible:ring-info"
         >
           <XCircle className="h-4 w-4" aria-hidden="true" />
           Recusar

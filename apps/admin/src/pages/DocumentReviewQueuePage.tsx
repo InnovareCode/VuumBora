@@ -127,14 +127,15 @@ const QueueRow = memo(function QueueRow({ item }: { readonly item: DocumentRevie
       // TEXTO "Prazo vencido" na célula do prazo — nunca só a cor.
       className={item.overdue ? 'border-b border-border bg-danger/5 last:border-0' : 'border-b border-border last:border-0'}
     >
-      <td className={item.overdue ? 'px-4 py-3 align-top shadow-[inset_4px_0_0_var(--color-danger)]' : 'px-4 py-3 align-top'}>
+      {/* `pt-1` + link de 44 px (o nome sozinho media 100x21, achado da Íris): o texto fica onde estava. */}
+      <td className={item.overdue ? 'px-4 pb-3 pt-1 align-top shadow-[inset_4px_0_0_var(--color-danger)]' : 'px-4 pb-3 pt-1 align-top'}>
         <Link
           to={href}
-          className="rounded-sm text-body font-semibold text-text underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-info"
+          className="inline-flex min-h-11 items-center rounded-sm text-body font-semibold text-text underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-info"
         >
           {item.driverName}
         </Link>
-        <p className="mt-0.5 text-caption text-text-secondary">{item.typeLabel}</p>
+        <p className="-mt-2 text-caption text-text-secondary">{item.typeLabel}</p>
       </td>
       <td className="px-4 py-3 align-top">
         {item.status === 'submitted' ? <Deadline item={item} /> : <DocumentStatusPill status={item.status} />}

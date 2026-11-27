@@ -45,8 +45,10 @@ export function NavGroupCollapsible({
         title={locked ? 'Grupo da página atual' : undefined}
         onClick={onToggle}
         className={cn(
-          '-my-1 flex w-full items-center justify-between rounded-lg px-3.5 py-1 text-left text-[10px] font-bold uppercase tracking-widest outline-none transition-colors focus-visible:ring-2 focus-visible:ring-info',
-          dark ? 'text-white/40 hover:text-white/75' : 'text-text-muted hover:text-text',
+          // 44 px de alvo (antes 23 px) — o texto continua pequeno, só a área de toque cresce. Branco a 40% sobre o navy
+          // media 3,82:1 em texto de 10 px; a 70% passa de 4,5:1 (medido com alpha composto).
+          '-my-2 flex min-h-11 w-full items-center justify-between rounded-lg px-3.5 text-left text-[10px] font-bold uppercase tracking-widest outline-none transition-colors focus-visible:ring-2 focus-visible:ring-info',
+          dark ? 'text-white/70 hover:text-white' : 'text-text-muted hover:text-text',
           locked && 'cursor-default hover:text-inherit',
         )}
       >

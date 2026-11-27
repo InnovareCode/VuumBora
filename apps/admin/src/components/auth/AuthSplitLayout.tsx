@@ -64,9 +64,9 @@ export function AuthSplitLayout({
               <Shield className="h-3 w-3" aria-hidden="true" />
               Painel administrativo
             </span>
-            <h1 className="text-heading font-bold leading-[1.15] tracking-tight text-white xl:text-display">
-              {heroTitle}
-            </h1>
+            {/* Frase de marca, não título da tela: o `<h1>` é o do cartão ("Entrar no painel", "Digite o código"...). Com
+                os dois em `<h1>`, a 1024 px ou mais a página tinha dois títulos principais. */}
+            <p className="text-heading font-bold leading-[1.15] tracking-tight text-white xl:text-display">{heroTitle}</p>
             <p className="text-body leading-relaxed text-white/80">{heroSubtitle}</p>
           </div>
 

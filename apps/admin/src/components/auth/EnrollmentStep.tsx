@@ -181,6 +181,7 @@ export function EnrollmentStep({
       <RecoveryCodesPanel
         codes={phase.codes}
         continueLabel="Continuar para o painel"
+        headingLevel="h1"
         onContinue={() => onDone(phase.admin, phase.origin)}
       />
     );

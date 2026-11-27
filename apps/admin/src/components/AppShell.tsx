@@ -129,7 +129,9 @@ export function AppShell() {
           <div className="shrink-0 border-t border-white/10 p-4">
             <div className="flex items-center gap-3 rounded-2xl bg-white/10 p-3 ring-1 ring-white/10">
               <div
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 text-small font-black text-white"
+                // `h-8` = 40 px nesta escala (tokens: 7=32, 8=40, 9=48, 10=64). Com `h-10` o avatar tinha 64 px e
+                // cortava o nome ao lado ("Admin (d…").
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/15 text-small font-black text-white"
                 aria-hidden="true"
               >
                 {(admin?.name ?? 'A').charAt(0).toUpperCase()}
@@ -154,22 +156,23 @@ export function AppShell() {
         {/* ── Conteúdo ───────────────────────────────────────────────── */}
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-screen/90 px-4 backdrop-blur-sm sm:px-6 lg:h-20 lg:px-8">
-            <span className="text-xl lg:hidden" aria-hidden="true">
-              ●
-            </span>
+            {/* Abaixo de 1024 px a sidebar some: a marca vem para o topo (antes era um "●" solto). */}
+            <BrandLogo className="h-6 shrink-0 lg:hidden" />
 
+            {/* Rótulo da área, não título: o `<h1>` é o da tela (`PageHeader`). Um `<h2>` aqui vinha ANTES do `<h1>` na
+                ordem do documento e invertia a hierarquia de títulos para o leitor de tela. */}
             <div className="hidden min-w-0 flex-1 lg:block">
               <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Painel administrativo</p>
-              <h2 className="truncate text-title font-black tracking-tight text-text">
+              <p className="truncate text-title font-black tracking-tight text-text">
                 {deniedItem ? 'Acesso restrito' : current?.label ?? 'Administração'}
-              </h2>
+              </p>
             </div>
 
             <div className="flex flex-1 items-center justify-end gap-2 lg:flex-none">
               <button
                 type="button"
                 onClick={() => setPaletteOpen(true)}
-                className="flex items-center gap-2 rounded-pill border border-border bg-surface px-3 py-2 text-caption font-semibold text-text-secondary outline-none transition-colors hover:border-cta-pressed/40 hover:text-cta-pressed focus-visible:ring-2 focus-visible:ring-info"
+                className="flex h-11 min-w-11 items-center justify-center gap-2 rounded-pill border border-border bg-surface px-3 text-caption font-semibold text-text-secondary outline-none transition-colors hover:border-cta-pressed/40 hover:text-cta-pressed focus-visible:ring-2 focus-visible:ring-info sm:px-4"
                 aria-label="Buscar área do painel"
               >
                 <Search className="h-3.5 w-3.5" aria-hidden="true" />
@@ -182,7 +185,7 @@ export function AppShell() {
               <button
                 type="button"
                 onClick={() => setDrawerOpen(true)}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-text-secondary outline-none focus-visible:ring-2 focus-visible:ring-info lg:hidden"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-text-secondary outline-none focus-visible:ring-2 focus-visible:ring-info lg:hidden"
                 aria-label="Abrir menu"
                 aria-expanded={drawerOpen}
               >

@@ -37,13 +37,15 @@ export function DriverApplicationDetailPage() {
             type="button"
             onClick={() => setConflictNotice(null)}
             aria-label="Fechar aviso"
-            className="shrink-0 text-text-muted outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-info"
+            className="-my-2.5 -mr-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-text-muted outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-info"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       )}
 
+      {/* Sem dados (carregando, erro, não encontrada) a tela ainda precisa de um título: o `<h1>` com o nome só vem depois. */}
+      {!data ? <h1 className="sr-only">Candidatura de motorista</h1> : null}
       {loading ? <LoadingState label="Carregando candidatura…" /> : null}
       {!loading && error ? <ErrorState message={error} onRetry={reload} /> : null}
       {!loading && !error && !data ? <EmptyState title="Candidatura não encontrada" /> : null}
