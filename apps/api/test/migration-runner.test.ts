@@ -7,6 +7,8 @@
  *     recebendo 0010 em diante (até a última do diretório) de réplicas concorrentes — os dados sobrevivem e o que a
  *     0013 manda apagar (sessões de dono/financeiro) é o único apagado.
  *  4. 0024 em diante sobre a 0023 com dados do S1: sobe, desce pelos rollbacks (schema volta igual) e sobe de novo.
+ *  5. 0025 em diante sobre a 0024 com dados de motorista (aprovado, suspenso, excluído com nota de revisor): sobe sem
+ *     perder dado, limpa a nota da conta excluída, desce pelos rollbacks (schema igual ao da 0024) e sobe de novo.
  *
  * Usa um banco descartável por cenário (`..._test`), nunca o banco da suíte.
  * Se a credencial não puder criar banco, os cenários se declaram pulados.
@@ -98,6 +100,23 @@ function runChild(database: string): Promise<ChildResult> {
 }
 
 const runMany = (database: string, n: number) => Promise.all(Array.from({ length: n }, () => runChild(database)));
+
+/** O catálogo do schema public (relações e ACL, colunas, restrições, funções e ACL, gatilhos, índices e comentários). */
+const catalogSnapshot = (c: pg.Client) =>
+  c.query<{ k: string; v: string }>(`
+    SELECT 'rel' AS k, c.relname || ':' || c.relkind::text || ':' || coalesce(c.relacl::text, '') AS v FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace
+    UNION ALL SELECT 'col', table_name || '.' || column_name || ':' || data_type || ':' || is_nullable || ':' || coalesce(column_default, '')
+      FROM information_schema.columns WHERE table_schema = 'public'
+    UNION ALL SELECT 'con', conrelid::regclass::text || '.' || conname || ':' || pg_get_constraintdef(oid) FROM pg_constraint WHERE connamespace = 'public'::regnamespace
+    UNION ALL SELECT 'fn', p.proname || '(' || pg_get_function_identity_arguments(p.oid) || '):' || md5(p.prosrc) || ':' || coalesce(p.proacl::text, '')
+      FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
+    UNION ALL SELECT 'tg', tgrelid::regclass::text || '.' || tgname FROM pg_trigger WHERE NOT tgisinternal
+    UNION ALL SELECT 'idx', pg_get_indexdef(i.indexrelid) FROM pg_index i JOIN pg_class c ON c.oid = i.indrelid WHERE c.relnamespace = 'public'::regnamespace
+    UNION ALL SELECT 'cmt', c.relname || ':' || coalesce(obj_description(c.oid, 'pg_class'), '') FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace
+    UNION ALL SELECT 'fcmt', p.proname || ':' || coalesce(obj_description(p.oid, 'pg_proc'), '') FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
+    ORDER BY 1, 2`);
+
+const rollbackOf = (f: string) => readFileSync(join(HERE, '..', '..', '..', 'docs', 'sql', 'rollback', `${f.slice(0, 4)}_down.sql`), 'utf8');
 const applied = (r: ChildResult) => r.report.lines.filter((l) => l.startsWith('[migrate] aplicada: ')).map((l) => l.slice('[migrate] aplicada: '.length));
 
 after(async () => {
@@ -228,17 +247,7 @@ describe('runner de migração com várias réplicas ao mesmo tempo', () => {
     const after23 = FILES.slice(23);
     assert.ok(after23[0]?.startsWith('0024_'), 'a 0024 existe');
 
-    const snapshot = (c: pg.Client) =>
-      c.query<{ k: string; v: string }>(`
-        SELECT 'rel' AS k, c.relname || ':' || c.relkind::text || ':' || coalesce(c.relacl::text, '') AS v FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace
-        UNION ALL SELECT 'col', table_name || '.' || column_name || ':' || data_type || ':' || is_nullable || ':' || coalesce(column_default, '')
-          FROM information_schema.columns WHERE table_schema = 'public'
-        UNION ALL SELECT 'con', conrelid::regclass::text || '.' || conname || ':' || pg_get_constraintdef(oid) FROM pg_constraint WHERE connamespace = 'public'::regnamespace
-        UNION ALL SELECT 'fn', p.proname || '(' || pg_get_function_identity_arguments(p.oid) || '):' || md5(p.prosrc) || ':' || coalesce(p.proacl::text, '')
-          FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
-        UNION ALL SELECT 'tg', tgrelid::regclass::text || '.' || tgname FROM pg_trigger WHERE NOT tgisinternal
-        UNION ALL SELECT 'idx', pg_get_indexdef(i.indexrelid) FROM pg_index i JOIN pg_class c ON c.oid = i.indrelid WHERE c.relnamespace = 'public'::regnamespace
-        ORDER BY 1, 2`);
+    const snapshot = catalogSnapshot;
 
     // Banco na 0023 com dados do S1: candidatura aprovada e conta de motorista verificada de mesmo e-mail (o caso de N3).
     const before = await inDb(db, async (c) => {
@@ -262,7 +271,6 @@ describe('runner de migração com várias réplicas ao mesmo tempo', () => {
     for (const r of up) assert.ok(r.report.ok && r.code === 0, `um processo falhou: ${r.report.error}\n${r.report.lines.join('\n')}`);
     assert.deepEqual(up.flatMap(applied).sort(), after23, 'só o que vem depois da 0023 entra, uma vez cada');
 
-    const rollbackOf = (f: string) => readFileSync(join(HERE, '..', '..', '..', 'docs', 'sql', 'rollback', `${f.slice(0, 4)}_down.sql`), 'utf8');
     await inDb(db, async (c) => {
       const n = async (sql: string) => (await c.query<{ n: number }>(sql)).rows[0]!.n;
       assert.equal(await n('SELECT count(*)::int AS n FROM driver_applications'), 2, 'candidaturas do S1 intactas');
@@ -285,5 +293,107 @@ describe('runner de migração com várias réplicas ao mesmo tempo', () => {
     const reup = await runMany(db, 2);
     for (const r of reup) assert.ok(r.report.ok && r.code === 0, `reaplicar falhou: ${r.report.error}`);
     assert.deepEqual(reup.flatMap(applied).sort(), after23, 'sobe de novo depois do rollback');
+  });
+
+  test('0025 EM DIANTE SOBRE A 0024 COM DADOS DE MOTORISTA: sobe por 3 réplicas sem perder dado, limpa a nota da conta excluída, desce pelos rollbacks (schema igual ao da 0024) e sobe de novo', async (t) => {
+    if (!(await ensureCanCreate())) return t.skip('a credencial não cria banco neste ambiente');
+    const db = scratchName();
+    created.push(db);
+    await admin((c) => c.query(`CREATE DATABASE "${db}"`));
+    const upTo24 = FILES.filter((f) => f <= '0024_zzz');
+    assert.equal(upTo24.length, 24);
+    const after24 = FILES.slice(24);
+    assert.ok(after24[0]?.startsWith('0025_'), 'a 0025 existe');
+
+    const ids = { kept: '', gone: '', reviewer: '', goneDoc: '' };
+    // Banco na 0024 com motoristas: A aprovado com os 5 documentos e depois suspenso; B com documento recusado (com nota
+    // interna do revisor) e conta excluída — na 0024 a nota fica no documento retirado.
+    const before = await inDb(db, async (c) => {
+      await c.query(`CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+      for (const f of upTo24) {
+        await c.query('BEGIN');
+        await c.query(readFileSync(join(MIGRATIONS_DIR, f), 'utf8'));
+        await c.query('INSERT INTO schema_migrations (id) VALUES ($1)', [f]);
+        await c.query('COMMIT');
+      }
+      const hash = `$2b$04$${'x'.repeat(53)}`;
+      const one = async (sql: string, params: unknown[] = []) => (await c.query<{ id: string }>(sql, params)).rows[0]!.id;
+      const dono = await one(`INSERT INTO admin_users (name, email, password_hash, role) VALUES ('dono', 'dono@teste.vuumbora.dev', $1, 'dono') RETURNING id`, [hash]);
+      ids.reviewer = await one(`INSERT INTO admin_users (name, email, password_hash, role) VALUES ('Revisora', 'revisora@teste.vuumbora.dev', $1, 'revisor_documentos') RETURNING id`, [hash]);
+      for (const [email, name] of [['ma@teste.vuumbora.dev', 'Motorista A'], ['mb@teste.vuumbora.dev', 'Motorista B']] as const) {
+        await c.query(`INSERT INTO driver_applications (name, email, phone, city, state, status, decided_by, decided_at) VALUES ($1, $2, '84999990001', 'Natal', 'RN', 'approved', $3, now())`, [name, email, dono]);
+        const id = await one(`INSERT INTO accounts (account_type, email, full_name, birth_date, email_verified_at) VALUES ('driver', $1, $2, '1990-01-01', now()) RETURNING id`, [email, name]);
+        assert.deepEqual((await c.query(`SELECT result FROM link_driver_application($1, 'natal')`, [id])).rows, [{ result: 'linked' }]);
+        if (email.startsWith('ma')) ids.kept = id;
+        else ids.gone = id;
+      }
+      const doc = (driver: string, type: string, vehicle: string | null = null) =>
+        one(
+          `INSERT INTO driver_documents (driver_id, type_code, vehicle_id, storage_key, content_type, size_bytes, sha256) VALUES ($1, $2, $3, $4, 'image/jpeg', 2048, repeat('a', 64)) RETURNING id`,
+          [driver, type, vehicle, `driver-docs/${driver}/${randomBytes(8).toString('hex')}.jpg`],
+        );
+      await c.query(
+        `UPDATE drivers SET cpf = '52998224725', cnh_number = '12345678901', cnh_category = 'B', cnh_expires_on = current_date + 365,
+                address_postal_code = '59020000', address_street = 'Rua de Teste', address_number = '10',
+                address_neighborhood = 'Tirol', address_city = 'Natal', address_state = 'RN'
+          WHERE account_id = $1`,
+        [ids.kept],
+      );
+      const vehicle = await one(`INSERT INTO vehicles (driver_id, plate, brand, model, manufacture_year, color) VALUES ($1, 'ABC1D23', 'Fiat', 'Argo', 2022, 'Prata') RETURNING id`, [ids.kept]);
+      for (const type of ['cnh', 'crlv', 'criminal_record', 'inss', 'profile_photo']) {
+        const id = await doc(ids.kept, type, type === 'crlv' ? vehicle : null);
+        await c.query(`UPDATE driver_documents SET status = 'submitted' WHERE id = $1`, [id]);
+        await c.query(
+          `UPDATE driver_documents SET status = 'approved', reviewed_by = $2, expires_on = CASE WHEN $3 THEN current_date + 200 END WHERE id = $1`,
+          [id, ids.reviewer, ['cnh', 'crlv', 'criminal_record'].includes(type)],
+        );
+      }
+      await c.query(`UPDATE drivers SET status = 'approved' WHERE account_id = $1`, [ids.kept]);
+      await c.query(`UPDATE drivers SET status = 'suspended', suspended_by = $2, suspension_reason = 'Queixa em análise' WHERE account_id = $1`, [ids.kept, ids.reviewer]);
+
+      ids.goneDoc = await doc(ids.gone, 'cnh');
+      await c.query(`UPDATE driver_documents SET status = 'submitted' WHERE id = $1`, [ids.goneDoc]);
+      await c.query(`UPDATE driver_documents SET status = 'rejected', reviewed_by = $2, rejection_code = 'data_mismatch', review_note = 'nome diverge' WHERE id = $1`, [ids.goneDoc, ids.reviewer]);
+      assert.equal((await c.query<{ r: string }>('SELECT delete_account($1, $2) AS r', [ids.gone, hash])).rows[0]!.r, 'ok');
+      assert.deepEqual((await c.query(`SELECT status, review_note FROM driver_documents WHERE id = $1`, [ids.goneDoc])).rows, [{ status: 'withdrawn', review_note: 'nome diverge' }]);
+      return (await catalogSnapshot(c)).rows;
+    });
+
+    const up = await runMany(db, 3);
+    for (const r of up) assert.ok(r.report.ok && r.code === 0, `um processo falhou: ${r.report.error}\n${r.report.lines.join('\n')}`);
+    assert.deepEqual(up.flatMap(applied).sort(), after24, 'só o que vem depois da 0024 entra, uma vez cada');
+
+    await inDb(db, async (c) => {
+      const n = async (sql: string) => (await c.query<{ n: number }>(sql)).rows[0]!.n;
+      const counts = async () => [await n('SELECT count(*)::int AS n FROM drivers'), await n('SELECT count(*)::int AS n FROM driver_documents'), await n('SELECT count(*)::int AS n FROM vehicles')];
+      assert.deepEqual(await counts(), [2, 6, 1], 'motoristas, documentos e veículo da 0024 intactos');
+      const kept = (await c.query(`SELECT status, suspended_by, suspension_reason FROM drivers WHERE account_id = $1`, [ids.kept])).rows[0];
+      assert.deepEqual(kept, { status: 'suspended', suspended_by: ids.reviewer, suspension_reason: 'Queixa em análise' });
+      assert.deepEqual(
+        (await c.query(`SELECT status, review_note, rejection_code FROM driver_documents WHERE id = $1`, [ids.goneDoc])).rows,
+        [{ status: 'withdrawn', review_note: null, rejection_code: 'data_mismatch' }],
+        'a nota da conta já excluída sai; o motivo fica',
+      );
+      assert.deepEqual((await c.query(`SELECT blocker FROM driver_availability_blockers($1)`, [ids.kept])).rows, [{ blocker: 'driver_suspended' }]);
+      // A suspensão gravada na 0024 só sai com autor.
+      await assert.rejects(
+        c.query(`UPDATE drivers SET status = 'approved' WHERE account_id = $1`, [ids.kept]),
+        (err: { constraint?: string }) => err.constraint === 'drivers_reinstater_role',
+      );
+      await c.query(`UPDATE drivers SET status = 'approved', reinstated_by = $2 WHERE account_id = $1`, [ids.kept, ids.reviewer]);
+
+      // Desce (ordem inversa): o schema volta exatamente ao da 0024, os dados ficam.
+      for (const f of [...after24].reverse()) await c.query(rollbackOf(f));
+      assert.deepEqual((await catalogSnapshot(c)).rows, before, 'schema depois do rollback == schema na 0024');
+      assert.deepEqual(await counts(), [2, 6, 1]);
+      assert.equal(await n('SELECT count(*)::int AS n FROM schema_migrations'), 24);
+      // A reativação sai com a coluna; a linha (aprovado com a suspensão anterior) é válida nas regras da 0024.
+      const row = (await c.query(`SELECT status, suspension_reason FROM drivers WHERE account_id = $1`, [ids.kept])).rows[0];
+      assert.deepEqual(row, { status: 'approved', suspension_reason: 'Queixa em análise' });
+    });
+
+    const reup = await runMany(db, 2);
+    for (const r of reup) assert.ok(r.report.ok && r.code === 0, `reaplicar falhou: ${r.report.error}`);
+    assert.deepEqual(reup.flatMap(applied).sort(), after24, 'sobe de novo depois do rollback');
   });
 });

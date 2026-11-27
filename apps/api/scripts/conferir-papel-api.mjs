@@ -10,6 +10,12 @@
  * por isso este script não testa "INSERT em admin_users falha" (seria falso). A
  * matriz completa de privilégios mora em `apps/api/test/runtime-role.test.ts`.
  *
+ * Migrações 0024/0025 (documentos do motorista): o papel não apaga documento, não escreve no
+ * catálogo de documentos (nem no teto de validade da 0025) e EXECUTA a função de disponibilidade
+ * da 0025. Os grants das migrações não derrubam o boot quando falham (viram aviso no log): por
+ * isso este script confere os dois lados. As provas usam `WHERE false` — o banco confere o
+ * privilégio sem tocar em linha nenhuma. Tabela/coluna/função ausente = migração não aplicada.
+ *
  * Uso (com DATABASE_URL já no ambiente — operador OU dentro do contêiner da API):
  *   node scripts/conferir-papel-api.mjs
  *
@@ -35,10 +41,30 @@ async function checkDenied(client, label, sql) {
     return { label, ok: false, detail: 'a query passou — esperado permission denied (42501)' };
   } catch (err) {
     if (err?.code === '42501') return { label, ok: true };
-    return { label, ok: false, detail: err?.code ?? 'erro inesperado' };
+    return { label, ok: false, detail: describeError(err) };
   } finally {
     await client.query('ROLLBACK TO SAVEPOINT probe').catch(() => undefined);
   }
+}
+
+/** O contrário de `checkDenied`: a query tem de passar e `expect(rows)` tem de ser verdadeiro. */
+async function checkAllowed(client, label, sql, expect) {
+  await client.query('SAVEPOINT probe');
+  try {
+    const res = await client.query(sql);
+    return expect(res.rows) ? { label, ok: true } : { label, ok: false, detail: 'resultado inesperado' };
+  } catch (err) {
+    return { label, ok: false, detail: describeError(err) };
+  } finally {
+    await client.query('ROLLBACK TO SAVEPOINT probe').catch(() => undefined);
+  }
+}
+
+/** Só o SQLSTATE (nunca a mensagem do banco), com a pista do caso comum: schema atrás da versão do código. */
+function describeError(err) {
+  const code = err?.code ?? 'erro inesperado';
+  if (code === '42P01' || code === '42703' || code === '42883') return `${code}: objeto ausente — migração não aplicada?`;
+  return code;
 }
 
 async function main() {
@@ -81,6 +107,31 @@ async function main() {
     results.push(await checkDenied(client, 'DELETE em admin_users é recusado', 'DELETE FROM admin_users'));
     results.push(await checkDenied(client, 'UPDATE em admin_audit_log é recusado', "UPDATE admin_audit_log SET action = 'x'"));
     results.push(await checkDenied(client, 'DDL (CREATE TABLE) é recusado', 'CREATE TABLE conferir_papel_api_ddl_probe (id int)'));
+    // 0024: documento do motorista não se apaga pela API; o catálogo de documentos é só leitura.
+    results.push(await checkDenied(client, 'DELETE em driver_documents é recusado (0024)', 'DELETE FROM driver_documents WHERE false'));
+    results.push(
+      await checkDenied(
+        client,
+        'INSERT no catálogo document_types é recusado (0024)',
+        "INSERT INTO document_types (code, label, scope) SELECT 'conferir_papel', 'Conferir papel', 'driver' WHERE false",
+      ),
+    );
+    // 0025: o teto de validade é catálogo; a função de disponibilidade é da API.
+    results.push(
+      await checkDenied(
+        client,
+        'UPDATE no teto de validade (document_types.max_validity_days) é recusado (0025)',
+        'UPDATE document_types SET max_validity_days = max_validity_days WHERE false',
+      ),
+    );
+    results.push(
+      await checkAllowed(
+        client,
+        'a API executa driver_availability_blockers (0025)',
+        "SELECT blocker FROM driver_availability_blockers('00000000-0000-0000-0000-000000000000'::uuid)",
+        (rows) => rows.length === 1 && rows[0]?.blocker === 'driver_not_found',
+      ),
+    );
   } finally {
     await client.query('ROLLBACK').catch(() => undefined);
     await client.end().catch(() => undefined);

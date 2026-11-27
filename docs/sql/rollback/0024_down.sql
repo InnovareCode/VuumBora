@@ -4,6 +4,9 @@
 -- 'driver_application_linked', senão a lista fechada da 0022 não volta). Exportar antes:
 --   pg_dump --data-only -t drivers -t vehicles -t driver_documents -t document_requirement_versions \
 --           -t document_requirements -t document_types -t document_rejection_reasons -t driver_settings -t cities ...
+--   \copy (SELECT * FROM access_log WHERE event = 'driver_application_linked') TO 'access_log_driver_linked.csv' CSV HEADER
+-- (access_log é trilha: o pg_dump acima não a cobre, e o passo 2 apaga essas linhas.)
+-- Se a 0025 estiver aplicada, rodar 0025_down.sql antes deste.
 -- Os OBJETOS no armazenamento não são tocados (o banco não os alcança): sem os metadados, ficam órfãos.
 -- Exclusões de conta já feitas continuam feitas (anonimização não se desfaz).
 BEGIN;
@@ -56,7 +59,15 @@ BEGIN
 END;
 $$;
 
--- 2) access_log volta à lista da 0022.
+-- 2) access_log volta à lista da 0022 (as linhas do vínculo saem: exportadas antes, ver cabeçalho).
+DO $$
+DECLARE
+    v_n BIGINT;
+BEGIN
+    SELECT count(*) INTO v_n FROM access_log WHERE event = 'driver_application_linked';
+    RAISE NOTICE '[0024_down] apagando % linha(s) de access_log com o evento driver_application_linked', v_n;
+END;
+$$;
 DELETE FROM access_log WHERE event = 'driver_application_linked';
 ALTER TABLE access_log DROP CONSTRAINT IF EXISTS access_log_event_valid;
 ALTER TABLE access_log ADD CONSTRAINT access_log_event_valid CHECK (event IN (

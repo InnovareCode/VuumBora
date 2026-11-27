@@ -93,6 +93,7 @@ abaixo chegarem antes do ponto em que travam. É a soma dos esforços do plano m
 | **Início do M3** | Lista de documentos da **STTU** de Natal | Ação do dono; a estrutura nasce configurável sem ela |
 | **Início do M3** | Provedor de armazenamento no Brasil (custo) | A Nova recomenda na abertura do M3 |
 | **Antes de publicar a M04** | Prazo de análise dos documentos (48 h corridas na 0024; o plano propunha "2 dias úteis", que não é o mesmo no fim de semana), os 11 motivos de recusa propostos e a idade máxima do veículo (10 anos, provisório) | Propostos pela Nova e pelo Cronos em 27/11 |
+| **Antes de publicar a M04** | Teto de validade por documento: CNH 10 anos, CRLV 2 anos, certidão de antecedentes 1 ano (proposta da equipe, ajustável sem deploy) | Cronos, migração 0025 |
 | **Antes do beta** | Motorista excluído que se recadastra pode reaproveitar a candidatura? Guardar uma lista mínima de impedidos (motorista suspenso que exclui a conta e volta com o mesmo CPF) e por quanto tempo (decisão 16, com o advogado) | Levantados pelo Cronos e pelo Órion em 27/11 |
 | **Antes das rotas de cadastro do motorista (D2)** | Concluir a F05c (papel restrito) e pedir no Easypanel `log_error_verbosity = terse` no Postgres; `BACKUP_PASSPHRASE` obrigatória | Órion, revisão M3-D1 (relatório privado) |
 | **Fim do M4** | **Tarifa** e faixas da taxa (decisão 7) | Simulador pronto em `tools/simulador-tarifa/` |

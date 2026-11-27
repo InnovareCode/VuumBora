@@ -152,6 +152,15 @@ describe('matriz de privilégios do papel vuumbora_api', () => {
     assert.deepEqual((await pool.query('SELECT blocker FROM driver_approval_blockers(gen_random_uuid())')).rows, [{ blocker: 'driver_not_found' }]);
   });
 
+  test('0025: driver_availability_blockers (ficar online) só executa para o papel da API, e funciona com ele', async () => {
+    const grants = await owner.query<{ api: boolean; pub: boolean }>(
+      `SELECT has_function_privilege('vuumbora_api', 'driver_availability_blockers(uuid)', 'EXECUTE') AS api,
+              has_function_privilege('public', 'driver_availability_blockers(uuid)', 'EXECUTE') AS pub`,
+    );
+    assert.deepEqual(grants.rows[0], { api: true, pub: false }, 'EXECUTE só para o papel da API');
+    assert.deepEqual((await pool.query('SELECT blocker FROM driver_availability_blockers(gen_random_uuid())')).rows, [{ blocker: 'driver_not_found' }]);
+  });
+
   test('a conexão do app é de fato o papel restrito', async () => {
     const who = await pool.query('SELECT current_user AS u');
     assert.equal(who.rows[0].u, 'vuumbora_api');
@@ -199,6 +208,8 @@ describe('matriz de privilégios do papel vuumbora_api', () => {
     await denied(`UPDATE document_rejection_reasons SET driver_text = 'adulterado pelo papel da API'`);
     await denied(`UPDATE driver_settings SET review_sla_hours = 1`);
     await denied(`DELETE FROM cities`);
+    // 0025: o teto de validade por tipo é catálogo (só o operador muda).
+    await denied(`UPDATE document_types SET max_validity_days = 3653`);
   });
 });
 
