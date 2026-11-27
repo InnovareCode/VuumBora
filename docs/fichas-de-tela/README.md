@@ -193,6 +193,11 @@ porque esta tarefa só podia escrever em `docs/fichas-de-tela/`. O Atlas move pa
   WhatsApp só no web até entrar o `expo-clipboard`.
 - **Rota de histórico do motorista** não existe no plano (`plano-sistema-arquitetura.md:625-640`): pedido de contrato (M12).
 - **Número do WhatsApp para os apps:** o do site é decidido; o dono confirma se o mesmo atende passageiro e motorista (P14, M14).
+- **Amarelo do banner sem conexão: decidido pelo Atlas em 27/11/2026.** O `NetworkBanner` usa `role.warning`, que é cor de
+  estado, não o amarelo da marca. Ele **não conta** no limite de amarelo do portão (a regra de economia vale para CTA e
+  destaque). A sonda ainda o conta; até a ferramenta separar, a Íris desconta o banner nas capturas sem rede.
+- **Linha de base do comparador:** a de 22/11 ficou obsoleta com a reforma das ondas (38 reprovadas por mudança visual
+  aprovada). Uma nova linha de base é promovida depois que a Íris aprovar a onda 4, a partir das capturas dessa aprovação.
 - **Prazos de produto: decididos pelo Atlas em 23/11/2026 para a onda 4, como constantes num lugar só (fáceis de
   mudar):** busca demorada na P07 aos 2 min; proximidade do embarque na M07 a 200 m; finalizar na M09 a até 500 m do
   destino; "passageiro não apareceu" na M08 só depois de 5 min de espera no local (sem taxa de cancelamento, decisão do

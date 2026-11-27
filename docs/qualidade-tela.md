@@ -26,13 +26,26 @@ node cli.mjs capturar                 # sobe o Metro ao vivo dos 2 apps, matriz 
 node cli.mjs linha-base               # promove .saida/capturas -> .baseline (só depois de aprovar)
 node cli.mjs comparar                 # compara .saida/capturas (ou --capturas <dir>) contra .baseline
 node cli.mjs sondas                   # estilo, geometria, texto, contraste, foco e ativação de links (§14.3) — também sobe o Metro ao vivo
-node cli.mjs lado-a-lado              # G-07b: recorte da prancha + captura 390x844 lado a lado
-node cli.mjs autoteste                # controle negativo: prova que o comparador detecta mudança de verdade
+node cli.mjs lado-a-lado              # G-07b: recorte da prancha + captura 390x844 lado a lado (pula telas sem prancha)
+node cli.mjs autoteste                # controle negativo do comparador (sobe o Metro) + roda o autoteste-links no fim
+node cli.mjs autoteste-links          # controle negativo da sonda de links (página falsa, sem Metro, segundos)
 node cli.mjs tudo                     # capturar + sondas + lado-a-lado + comparar (se houver linha de base)
 ```
 
 Todo comando aceita `--telas P01,M01` para rodar só um subconjunto (ver os IDs em
 `screens.config.mjs`). `node cli.mjs ajuda` lista as opções de cada um.
+
+**Códigos de saída:**
+- `capturar` e `sondas` param com erro (código 1) na primeira falha — inclusive o corte
+  de rede que não chega (ver "Estado sem-rede" abaixo).
+- `lado-a-lado` (e portanto `tudo`) pula com aviso as telas sem prancha (`pranchaArquivo`
+  ausente no `screens.config.mjs`) e junta os erros das outras: sai com código 1 se
+  alguma tela der erro, e o `tudo` segue até o `comparar` mesmo assim.
+- `comparar` sai com código 1 se houver reprovada.
+- `autoteste` e `autoteste-links` saem com código 1 se o controle negativo falhar.
+
+**Tempos (informados pelo Atlas, 27/11/2026, a confirmar):** captura completa ~20 min;
+sondas ~39 min. A ferramenta não grava duração em nenhum arquivo de saída.
 
 ## Telas atrás da guarda `(app)` (P03, P04, M05...) — bootstrap de sessão (22/11/2026)
 
@@ -61,6 +74,33 @@ Verificado de ponta a ponta (22/11/2026): `node cli.mjs capturar --telas P03,P04
 e `node cli.mjs sondas --telas P03,P04,M05` rodaram sem erro nas 4 larguras (20
 combinações cada) e os PNGs abertos a olho mostram a Home do passageiro, a tela de
 destino e o painel do motorista com conteúdo real — nunca a tela de login.
+
+## Estado sem-rede: o corte chega à tela (27/11/2026, commit 07580fa)
+
+`context.setOffline(true)` sozinho não chegava à tela: no Chromium, o NetInfo web
+(`@react-native-community/netinfo`, `lib/internal/nativeModule.web.js`) escuta só
+`navigator.connection` `change` quando a Network Information API existe, e ignora
+`online`/`offline` da janela. Por isso `lib/sem-rede.mjs` faz, depois de `setOffline`:
+
+1. dispara `change` em `navigator.connection` (o NetInfo relê `navigator.onLine`, que já
+   é `false`);
+2. confere `navigator.onLine === false`. Se ainda estiver `true`, **lança erro** e a
+   captura para (aborta o `capturar`/`tudo` inteiro, não só a tela);
+3. espera até 2 s pelo `NetworkBanner` (`packages/ui/src/NetworkBanner.tsx`:
+   `role="status"`, texto "Sem conexão. Tentando reconectar…"). **Não ter banner não é
+   erro**: `bannerVisivel` vira `false`, o log avisa "esperado só se a tela não tiver
+   NetworkBanner", e a captura segue.
+
+Onde o resultado aparece:
+
+- `.saida/capturas/manifest.json`: cada item do estado `sem-rede` tem `semRede`:
+  `{ onLine, temConnection, disparouChange, bannerVisivel, textoSemConexao }`.
+- `.saida/sondas/<app>/<ID>-sem-rede-<L>x<A>.sondas.json`: o mesmo objeto em `semRede`.
+- `.saida/sondas/resumo-sondas.json`: campo `bannerSemRede` (true/false) em cada
+  combinação `sem-rede`. É esse campo que diz se "sem-rede" foi de fato a tela offline.
+
+Para confirmar que o corte chegou, leia `bannerSemRede` antes de aceitar a captura
+`sem-rede` como prova do estado offline.
 
 ### Por que Metro ao vivo, e não mais um `expo export` servido estaticamente (22/11/2026)
 
@@ -147,13 +187,13 @@ ou para onde `QUALIDADE_TELA_BASELINE_DIR` apontar) — só rode depois de algu�
 
 | G-xx | O que o padrão pede | Onde está | Status |
 |---|---|---|---|
-| G-02, G-03, G-04, G-05, G-06 | assinatura premium, cor nos tokens, contagem de amarelo, tipografia | `lib/probes/estilo.mjs` | **parcial** — inventaria toda caixa; só G-03 (cor fora do conjunto) e G-04 (contagem de amarelo) viram achado automático. Ver "O que não foi validado": não conta amarelo vindo de gradiente |
+| G-02, G-03, G-04, G-05, G-06 | assinatura premium, cor nos tokens, contagem de amarelo, tipografia | `lib/probes/estilo.mjs` | **parcial** — inventaria toda caixa; só G-03 (cor fora do conjunto) e G-04 (contagem de amarelo) viram achado automático. Ver "O que não foi validado": não conta amarelo vindo de gradiente. **O banner sem conexão ainda conta** como amarelo (`estilo.mjs` não o exclui): a decisão do Atlas de 27/11 (não conta no limite, `docs/fichas-de-tela/README.md`) ainda não está no código; até lá a Íris desconta o banner à mão nas capturas sem rede |
 | G-09, G-11 (indício), G-12, G-13 (indício), G-21 | viewport, CTA visível sem rolar, sobreposição, alvo de toque | `lib/probes/geometria.mjs` | funcional — G-09 recorta pelos ancestrais com `overflow` ≠ `visible` antes de comparar com a viewport (ver item 10 de "O que esta ferramenta NÃO validou"), então uma Image com bleed contida por um `overflow:hidden` não dá falso positivo |
 | G-10 | truncamento de texto | `lib/probes/texto.mjs` | funcional (sem lista de exceção — nenhuma tela desta rodada precisa) |
 | G-20 | contraste de texto | `lib/probes/contraste.mjs` | funcional sobre fundo sólido (compõe alpha de camadas translúcidas empilhadas, ver nota 4 abaixo); fundo com imagem/gradiente fica "não medido" (ver limitações) |
 | G-22 (ordem de tabulação + anel visível) | Tab percorre os interativos, anel de foco visível no Chromium e no WebKit | `lib/probes/foco.mjs` | **adaptação do `ring6.mjs`/`ring.mjs` que a Íris deixou na passada 6** — mede o recorte focado × desfocado e exige contraste ≥ 3:1 em ≥ 60% de cada um dos 4 lados (não só `outline-style !== 'none'`), mais o controle de mouse (pressionar com o mouse não pode acender o mesmo anel). Hoje só roda no Chromium pela matriz principal — ver limitações sobre o WebKit |
-| G-22 (Enter e Espaço ativam) | ativação por teclado, refinada para `role="link"` | `lib/probes/ativacao-links.mjs` | **adaptação do `q4.mjs`** da Íris: Enter ativa; Espaço, Alt+Enter e segurar Enter (auto-repeat) não; controle — o clique de mouse tem que ativar, senão o link está morto e o resto não prova nada |
-| G-07b | comparação lado a lado com o alvo de 22/11 | `lib/side-by-side.mjs`, comando `lado-a-lado` | monta a imagem e o gabarito da tabela de 8 linhas; **quem julga "confere/diverge" é humano** (Íris/Apolo), a ferramenta não decide layout |
+| G-22 (Enter e Espaço ativam) | ativação por teclado, refinada para `role="link"` | `lib/probes/ativacao-links.mjs` | **adaptação do `q4.mjs`** da Íris: Enter ativa; Espaço, Alt+Enter e segurar Enter (auto-repeat) não; controle — o clique de mouse tem que ativar, senão o link está morto e o resto não prova nada. **Reabertura (27/11):** depois de cada tecla, a página tem que voltar à URL de partida (`goBack` se preciso) e o link tem que continuar lá; se não voltar (ex.: `router.replace`), a próxima tecla roda numa página nova, reaberta do zero pelo `abrirTela` (mesmo estado e tamanho). O campo `passosEmPaginaNova` lista as teclas que rodaram em página reaberta. Sem `reabrir`, as teclas que faltam ficam `null` e o link vai para `controleInvalido` |
+| G-07b | comparação lado a lado com o alvo de 22/11 | `lib/side-by-side.mjs`, comando `lado-a-lado` | monta a imagem e o gabarito da tabela de 8 linhas; telas sem `pranchaArquivo` (hoje P07, P07b, P07c, P07d, P10, P10b, P11b, M10, M12b, M13c — 10 de 35 em `screens.config.mjs`) são **puladas com aviso** (G-07b não se aplica); `pranchaArquivo` sem `recortePrancha` (ou o contrário) é erro de configuração. **Quem julga "confere/diverge" é humano** (Íris/Apolo), a ferramenta não decide layout |
 | G-14 a G-16, G-23, G-24 (telas de aparelho/emulador) | fonte 200%, teclado, safe area, TalkBack | — | **fora do escopo desta ferramenta** (ela só roda em navegador/Expo Web) |
 | G-17, G-18, G-19, G-25 a G-28 | estados, honestidade de conteúdo, `onPress` vazio, movimento | — | não automatizado nesta rodada (ver abaixo) |
 
@@ -235,14 +275,19 @@ ou para onde `QUALIDADE_TELA_BASELINE_DIR` apontar) — só rode depois de algu�
    "carregando", "sessão expirada" etc. (`docs/padrao-premium-telas.md` §14.2).
    Esta rodada só cobre os dois que dão para alcançar sem interação com a
    identidade simulada em várias etapas (carregar e, no caso de "sem-rede",
-   `context.setOffline(true)` DEPOIS de carregar — nunca editando código). Os
+   `context.setOffline(true)` DEPOIS de carregar, mais o `change` do
+   `navigator.connection` — ver "Estado sem-rede" — nunca editando código). Os
    demais exigem preencher formulário e observar a resposta do cliente `mock`,
    que fica para uma próxima rodada.
-8. **"Sem-rede" hoje é visualmente idêntico a "padrao"** nestas 5 telas: o
-   `NetworkBanner` (item C-01 do padrão) ainda não existe
-   (`docs/padrao-premium-telas.md` §15, C-01 — confirmado: não há
-   `NetworkBanner`/`useNetworkStatus` em `packages/`). A ferramenta corta a rede
-   de verdade (`context.setOffline(true)`); é a tela que ainda não reage.
+8. **"Sem-rede" chega à tela desde 27/11/2026 (commit 07580fa), mas a prova disso
+   ainda não está registrada aqui.** Antes, `context.setOffline(true)` não chegava
+   ao NetInfo web e a captura "sem-rede" saía igual a "padrao". Agora a captura
+   dispara o `change` do `navigator.connection` e confere `navigator.onLine`
+   (ver "Estado sem-rede"). O `NetworkBanner` existe em
+   `packages/ui/src/NetworkBanner.tsx`. Se a tela mostra o banner ou não, depende
+   da tela: leia `bannerVisivel`/`bannerSemRede` no manifesto, não a foto. **A confirmar:**
+   nenhuma rodada com este commit foi lida e registrada no doc; a "Prova" abaixo é
+   de 22/11, anterior à correção.
 9. **G-14 a G-19, G-23 a G-28** (fonte 200%, teclado nativo, safe area, TalkBack,
    `onPress` vazio, honestidade de conteúdo, movimento): nada disso é
    automatizável em navegador; ficam para prova em aparelho/emulador (fora do
@@ -272,7 +317,9 @@ ou para onde `QUALIDADE_TELA_BASELINE_DIR` apontar) — só rode depois de algu�
 ## Prova do que FOI validado
 
 Rodada de 22/11/2026 (depois da troca para Metro ao vivo), `node cli.mjs tudo` de
-ponta a ponta, sem intervenção manual entre os passos:
+ponta a ponta, sem intervenção manual entre os passos. **Esta prova é anterior ao commit
+07580fa (27/11).** Os itens de sem-rede, reabertura da sonda de links, pulo do G-07b e
+os códigos de saída mudaram depois dela e ainda não têm rodada registrada aqui:
 
 - **40 capturas reais** (5 telas × 2 estados × 4 tamanhos, os dois apps) contra o
   Metro ao vivo — **abertas a olho** (não só "o comando não deu erro"): boas-vindas,
@@ -317,6 +364,9 @@ tools/qualidade-tela/
     paths.mjs                caminhos (apps, linha de base, saída)
     dev-server.mjs            sobe/derruba "expo start --web" ao vivo por app (ver "Por que Metro ao vivo")
     auth-bootstrap.mjs        bootstrap de sessão mock p/ telas atrás de `(app)` (ver seção acima)
+    abrir-tela.mjs            abre UMA combinação tela×estado×tamanho (usado por capturar, sondas e a reabertura da sonda de links)
+    sem-rede.mjs              corte de rede que chega ao NetInfo web e confere o banner (ver "Estado sem-rede")
+    autoteste-links.mjs       controle negativo da sonda de links (página falsa, sem Metro)
     tokens.mjs                 lê vuumbora.tokens.json -> conjunto de cores aprovadas
     capture.mjs                 gera a matriz de capturas
     compare.mjs                   compara contra a linha de base (decodifica PNG com pngjs, diff pixel a pixel)
