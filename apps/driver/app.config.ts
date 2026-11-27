@@ -55,6 +55,22 @@ const config: ExpoConfig = {
     // exigência de auth no download, não precisa de token secreto para funcionar.
     // Detalhes: docs/mapbox.md.
     '@rnmapbox/maps',
+    // Câmera e fotos para os documentos do cadastro (porta nativa: src/onboarding/documentPicker.ts).
+    // Os textos precisam estar aqui: sem eles, o prebuild aplica o plugin sozinho (está na lista de plugins automáticos
+    // do Expo) com os textos padrão em inglês e ainda declara o microfone (RECORD_AUDIO no Android).
+    // `microphonePermission: false`: o app não grava vídeo; remove o texto do iOS e bloqueia RECORD_AUDIO no Android.
+    // expo-document-picker e expo-file-system não pedem permissão de execução (o Android usa o seletor do sistema e
+    // o iOS o UIDocumentPicker), então ficam sem entrada aqui.
+    [
+      'expo-image-picker',
+      {
+        cameraPermission:
+          'O VuumBora Motorista usa a câmera para você fotografar a CNH, o documento do veículo e os outros documentos do seu cadastro.',
+        photosPermission:
+          'O VuumBora Motorista acessa suas fotos para você escolher a imagem de um documento e enviá-la no seu cadastro.',
+        microphonePermission: false,
+      },
+    ],
   ],
   experiments: { typedRoutes: true },
   // Alvo web habilitado só para preview/screenshot em desenvolvimento (pedido do dono) — entrega continua Android/iOS.

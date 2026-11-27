@@ -163,6 +163,7 @@ administrador e desliga trigger) **não estiver no mesmo contêiner**: quem vaza
 |---|---|---|
 | `DATABASE_URL` → `vuumbora_api` | serviço da API (runtime) | atender requisições |
 | `MIGRATION_DATABASE_URL` → dono | **só** em tarefa/terminal de operador | migrar, `create-admin`, `reissue-2fa-enrollment`, `waitlist:delete`, `driver-applications:delete`, `identity:retention` |
+| `DATABASE_URL` → `vuumbora_api` (rotina) | cron diário no contêiner do `vuumbora-backend`, 12:00 UTC (09:00 de Natal) | `npm run documents:expiry -w @vuumbora/api`: documento de motorista aprovado e vencido vira `expired`, aviso por e-mail 30 e 7 dias antes. Dentro da imagem o comando muda — ver "Rotina diária: vencimento dos documentos" abaixo |
 
 Passo a passo (infraestrutura — Vulcano):
 
@@ -194,6 +195,28 @@ Passo a passo (infraestrutura — Vulcano):
 `docs/producao-passo-a-passo-dono.md` (criar o PRIMEIRO administrador por `create-admin.mjs`, com a credencial dona)
 continua necessário do mesmo jeito: sem nenhum admin, não há sessão `dono` para abrir a tela de usuários. Detalhe
 completo em `docs/contrato-admin-usuarios.md`, seção "Decisão de segurança registrada".
+
+### Rotina diária: vencimento dos documentos do motorista (`documents:expiry`)
+
+Fatia D5 (M3). Detalhes e motivos no `apps/api/README.md` e no cabeçalho de `apps/api/scripts/document-expiry.mjs`.
+
+- **Quando:** uma vez por dia, às 09:00 de Natal = **12:00 UTC** (Natal fica em UTC−3 o ano todo, sem horário de verão).
+  Em sintaxe cron, num agendador em UTC: `0 12 * * *`. Confira o fuso do agendador antes de salvar.
+- **Comando, dentro do contêiner da API:** `node scripts/document-expiry.mjs` (ou `npm run documents:expiry`, **sem**
+  `-w`). A forma `npm run documents:expiry -w @vuumbora/api` só serve no monorepo (com `npm run build -w @vuumbora/api`
+  antes, porque o script lê `dist/`). Na imagem, a raiz é o próprio `apps/api` e o npm responde `No workspaces found`:
+  provado em 27/11/2026 reproduzindo a disposição da imagem (o `package.json` da API na raiz), não num contêiner de verdade.
+- **Variáveis:** as do próprio serviço. `DATABASE_URL` com o papel restrito basta (**nunca** a credencial dona);
+  `ADMIN_TOTP_ENCRYPTION_KEY`, para ler a senha SMTP salva no painel; e `SMTP_*`/`EMAIL_FROM`, se o SMTP vier do ambiente.
+  Sem SMTP a rotina ainda vence os documentos e só registra as contagens no log.
+- **Uma vez por dia, de verdade:** rodar de novo no mesmo dia repete o aviso por e-mail. Duas execuções simultâneas não (a
+  segunda desiste).
+- **Falha:** o script sai com código 1, e é assim que o agendador mostra o erro. O log só tem contagens, nenhum dado pessoal.
+  No primeiro dia, confira a execução e o log.
+- **Dia perdido** (agendador fora do ar): rode à mão para aquele dia, para recuperar os avisos dele:
+  `node scripts/document-expiry.mjs --now=2026-11-27T12:00:00Z`.
+
+Ainda sem prova: o agendamento no Easypanel em si, porque não tenho acesso ao painel do servidor.
 
 ### Termos de Uso e Política: `LEGAL_DOCUMENTS_BASE_URL` e a primeira versão publicada
 
@@ -409,6 +432,31 @@ WHERE action = 'email_settings.updated'
   (alguns relays), gire a credencial no provedor: é isso que de fato desfaz a exposição. Apagar o valor da trilha é alterar um
   registro imutável (desligar o gatilho com a credencial dona, `UPDATE`, religar): só com a Vega ou o Cronos, com backup antes,
   anotando o que foi feito.
+
+### Armazenamento dos documentos: a CSP do painel quando o bucket for contratado
+
+Enquanto o dono não contratar o armazenamento (`DOCUMENT_STORAGE_S3_*` em `apps/api/.env.example`), não há nada a fazer
+aqui. Quando contratar, a revisão de documentos do painel vai abrir a URL assinada de visualização (vale até 5 min)
+**direto no host do bucket**, e a CSP de `apps/admin/nginx.conf` hoje só aceita imagem do próprio painel:
+
+```nginx
+set $csp "${csp}img-src 'self' data:; ";
+```
+
+Sem mudar essa linha, a imagem do documento simplesmente não aparece, sem nenhum erro no build. O ajuste:
+
+1. Descubra a **origem exata** do bucket (só `https://host`, sem caminho): abra um documento no painel e copie o começo da
+   URL assinada. Pela configuração: com `DOCUMENT_STORAGE_S3_FORCE_PATH_STYLE=true`, é o próprio
+   `DOCUMENT_STORAGE_S3_ENDPOINT` (ex.: `https://br-se1.magaluobjects.com`); com `false` (padrão), o bucket vira subdomínio
+   (ex.: `https://<bucket>.br-se1.magaluobjects.com`).
+2. Acrescente só essa origem: `set $csp "${csp}img-src 'self' data: https://<host-do-bucket>; ";`. Nada de curinga
+   (`https:` ou `*.magaluobjects.com`): liberaria o bucket de qualquer outro cliente do provedor.
+3. Publique o `vuumbora-admin` de novo (o `nginx.conf` vai dentro da imagem) e confira no navegador que a imagem abre.
+
+`img-src` cobre só documento mostrado como imagem. A tela de revisão ainda não existe (27/11/2026): antes de mexer, confirme
+como ela mostra o arquivo. PDF dentro da página (`<iframe>`) precisa de `frame-src` com o mesmo host (`object-src` é
+`'none'` de propósito, então nada de `<object>`/`<embed>`). Baixar o arquivo por `fetch` precisa do host em `connect-src` e de
+CORS no bucket para `https://admin.vuumbora.com.br`. Abrir em outra aba não depende da CSP.
 
 ### Ordem do primeiro deploy do S1 (API com migrações e painel juntos)
 

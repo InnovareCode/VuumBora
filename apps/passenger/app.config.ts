@@ -26,6 +26,13 @@ const config: ExpoConfig = {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: tokens.color.brand.navy.$value,
     },
+    // Localização só durante o uso: remove do manifesto final as permissões de segundo plano mesmo que alguma
+    // biblioteca (Mapbox, expo-location) as declare. Liberar segundo plano é decisão de produto e exige o formulário
+    // de localização em segundo plano no Play Console; quando vier, tirar daqui e ligar no plugin expo-location.
+    blockedPermissions: [
+      'android.permission.ACCESS_BACKGROUND_LOCATION',
+      'android.permission.FOREGROUND_SERVICE_LOCATION',
+    ],
   },
   plugins: [
     // `sitemap: false`: sem a rota `/_sitemap` (lista TODAS as rotas do app, versão do SDK e origem, e estava aberta no
@@ -55,6 +62,26 @@ const config: ExpoConfig = {
     // exigência de auth no download, não precisa de token secreto para funcionar.
     // Detalhes: docs/mapbox.md.
     '@rnmapbox/maps',
+    // Localização só DURANTE O USO, sem segundo plano por enquanto (porta nativa: src/location/locationPort.ts).
+    // A configuração precisa estar aqui: sem ela, o prebuild aplica o plugin sozinho (está na lista de plugins
+    // automáticos do Expo) com textos em inglês e declara no iOS os textos de "sempre" e de movimento, que a Apple
+    // questiona na revisão quando o app não usa.
+    // `false` remove o texto do Info.plist; `motionUsagePermission: false` também tira o código de movimento do pod.
+    [
+      'expo-location',
+      {
+        locationWhenInUsePermission:
+          'O VuumBora usa sua localização enquanto o app está aberto para marcar o ponto de embarque e calcular a sua corrida.',
+        locationFullAccuracyPermission:
+          'O VuumBora precisa da sua localização exata para o motorista encontrar você no ponto de embarque certo.',
+        locationAlwaysAndWhenInUsePermission: false,
+        locationAlwaysPermission: false,
+        motionUsagePermission: false,
+        isIosBackgroundLocationEnabled: false,
+        isAndroidBackgroundLocationEnabled: false,
+        isAndroidForegroundServiceEnabled: false,
+      },
+    ],
   ],
   experiments: { typedRoutes: true },
   // Alvo web habilitado só para preview/screenshot em desenvolvimento (pedido do dono) — entrega continua Android/iOS.
