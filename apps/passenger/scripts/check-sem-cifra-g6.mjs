@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 /**
- * Aceite D2 da fatia G6 (`docs/plano-m3-m4.md` §4): nenhuma cifra de mockup no código das telas P03-P06 — preço,
- * distância e tempo só do contrato (`FareQuotePort`/`GeoPort`). Procura, fora de comentário, literais como "R$ 23,90",
- * "4 km", "12 min" e números fixos atribuídos a campos de preço/distância/tempo.
+ * Aceite D2 da fatia G6 (`docs/plano-m3-m4.md` §4): nenhuma cifra de mockup no código das telas P03-P07 — preço,
+ * distância e tempo só do contrato (`FareQuotePort`/`GeoPort`). Procura, fora de comentário: literais como "R$ 23,90",
+ * "4 km", "12 min"; texto com "R$" montado à mão ('R$ ' + valor); número solto em valor de dinheiro (`value={23.9}`,
+ * `preco = 2390`, `price: 23.9`); número em template com unidade (`${12} min`); e constante somada a um preço
+ * (`priceCents + 190`). A bateria de mutantes da Íris na G6 (`semcifra-mutantes.mjs`) mostrou essas formas passando vivas.
  *
- * Só olha os arquivos da G6 (as telas P07-P11 ainda têm números simulados do despacho e do histórico, M5/P11 — fora
- * desta fatia). `src/dev/**` fica de fora: só monta cenários de captura, nunca entra no bundle de produção.
+ * Olha os arquivos da G6 e a P07 (painel da busca de motorista, que mostra o preço pedido). As telas P08-P11 ainda têm
+ * números simulados do despacho e do histórico (M5/P11) e ficam de fora. `src/dev/**` também: só monta cenários de
+ * captura, nunca entra no bundle de produção.
  *
  * Uso: node apps/passenger/scripts/check-sem-cifra-g6.mjs  (saída != 0 em qualquer achado)
  */
@@ -31,13 +34,26 @@ const ALVOS = [
   'src/store/useRideRequestStore.ts',
   'src/utils/rideQuoteFormatting.ts',
   'src/data/mockTripReceipt.ts',
+  // P07 (busca de motorista): o painel mostra o preço da cotação pedida.
+  'src/components/ride/SearchingPanel.tsx',
+  'src/components/search',
 ];
+
+const DINHEIRO = '(?:pre[cç]o|valor|tarifa|taxa|total|price|fare|fee|amount|cents|centavos)';
 
 const PADROES = [
   { nome: 'preço em reais', re: /R\$\s?\d/ },
   { nome: 'distância/tempo literal', re: /\b\d+(?:[.,]\d+)?\s?(?:km|min|minutos|metros|quilômetros)\b/ },
   { nome: 'número fixo em campo de preço/distância/tempo', re: /\b(?:amountCents|priceCents|distanceM|durationS|pickupEtaS|etaMinutes)\s*[:=]\s*\d/ },
   { nome: 'constante de preço/tempo', re: /\b[A-Z_]*(?:CENTS|FEE|PRICE|ETA_MINUTES)[A-Z_]*\s*=\s*\d/ },
+  { nome: 'texto com "R$" montado à mão', re: /['"`][^'"`\n]*R\$/ },
+  { nome: 'número solto em valor de dinheiro', re: /\bvalue\s*[:=]\s*\{?\s*\d/ },
+  { nome: 'número fixo em variável de dinheiro', re: new RegExp(`\\b${DINHEIRO}\\w*\\s*[:=]\\s*\\(?\\s*\\d`, 'i') },
+  { nome: 'número em template com unidade', re: /\$\{\s*\d+(?:[.,]\d+)?\s*\}\s*(?:km|min|m|h)\b/ },
+  {
+    nome: 'constante somada a um preço',
+    re: new RegExp(`${DINHEIRO}[^\\n;]*[+-]\\s*\\d{2,}|\\d{2,}\\s*[+-][^\\n;]*${DINHEIRO}`, 'i'),
+  },
 ];
 
 function* arquivos(caminho) {
@@ -70,7 +86,7 @@ for (const alvo of ALVOS) {
 }
 
 if (achados.length > 0) {
-  console.error(`[check-sem-cifra-g6] ${achados.length} cifra(s) de mockup nas telas P03-P06:\n${achados.join('\n')}`);
+  console.error(`[check-sem-cifra-g6] ${achados.length} cifra(s) de mockup nas telas P03-P07:\n${achados.join('\n')}`);
   process.exit(1);
 }
-console.log('[check-sem-cifra-g6] ok: nenhuma cifra de mockup nas telas P03-P06 (preço, distância e tempo só do contrato).');
+console.log('[check-sem-cifra-g6] ok: nenhuma cifra de mockup nas telas P03-P07 (preço, distância e tempo só do contrato).');

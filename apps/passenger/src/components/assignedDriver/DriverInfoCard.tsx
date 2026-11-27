@@ -21,7 +21,8 @@ export const DriverInfoCard = memo(function DriverInfoCard({ driver, variant = '
   const compact = variant === 'compact';
   return (
     <SurfaceRaised style={[styles.card, compact && styles.cardCompact]} testID={testID}>
-      <Avatar name={driver.name} size={compact ? 'sm' : 'md'} {...(driver.photoUri !== undefined ? { imageUri: driver.photoUri } : {})} />
+      {/* Escala do DS (fichas): P08 = 56, P09 = 40. Antes 'md' (44, fora da escala) e 'sm' (32). */}
+      <Avatar name={driver.name} size={compact ? 40 : 56} {...(driver.photoUri !== undefined ? { imageUri: driver.photoUri } : {})} />
       <View style={styles.textBlock}>
         <Text style={styles.name} numberOfLines={1}>
           {driver.name}

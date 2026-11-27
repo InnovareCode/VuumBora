@@ -8,6 +8,7 @@ import { buildMockReceipt, type TripReceipt } from '../data/mockTripReceipt';
 import { geoPort, quotePort } from '../geo/geoClient';
 import { toQuotePoint } from '../geo/geoFormat';
 import { geoProblemKey } from '../geo/geoProblems';
+import { selectCategoryAfterQuote } from './quoteSelection';
 import { cancelActiveRide, startRideSimulation, stopRideSimulation } from '../sim/rideSimulator';
 
 /**
@@ -41,6 +42,8 @@ export type QuoteStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type ConfirmQuoteOutcome =
   | { readonly status: 'ok' }
   | { readonly status: 'price_updated' }
+  /** A cotação nova NÃO tem mais a categoria escolhida: nada foi trocado sozinho; a pessoa escolhe outra na P05. */
+  | { readonly status: 'category_unavailable' }
   | { readonly status: 'error'; readonly error: ApiError }
   | { readonly status: 'no_quote' };
 
@@ -59,6 +62,12 @@ export interface RideRequestState {
   readonly quoteError?: ApiError | undefined;
   /** A cotação venceu (ou sumiu) e foi refeita: a tela avisa "O preço foi atualizado" até a pessoa seguir. */
   readonly priceUpdated: boolean;
+  /**
+   * A categoria escolhida sumiu da cotação nova (desligada entre a cotação e o pedido). `categoryId` fica vazio e as telas
+   * mostram "Essa categoria não está mais disponível. Escolha outra." — a store NUNCA escolhe outra sozinha (achado da
+   * Íris na G6: o preço cobrado mudava sem a pessoa escolher). Regra pura em `./quoteSelection.ts`.
+   */
+  readonly categoryUnavailable: boolean;
   /** Nome/legenda/lugares das categorias ligadas (`GET /v1/categories`). Vazio se ainda não carregou ou falhou. */
   readonly categoryInfo: readonly RideCategory[];
 
@@ -84,7 +93,7 @@ export interface RideRequestState {
   /** Troca os dois de uma vez e cota UMA vez. */
   setRoute(origin: Place, destination: Place): void;
   /** Cota de novo o trajeto atual. Sem origem ou destino, volta a `idle`. `priceUpdated` marca o aviso da P05/P06. */
-  refreshQuote(options?: { readonly priceUpdated?: boolean }): void;
+  refreshQuote(options?: { readonly priceUpdated?: boolean }): Promise<void>;
   /** A pessoa viu o preço novo e seguiu: some o aviso. */
   acknowledgePriceUpdate(): void;
   /** P06, antes de pedir: a cotação escolhida ainda vale no servidor? Vencida → cota de novo (`price_updated`). */
@@ -142,6 +151,7 @@ export const useRideRequestStore = create<RideRequestState>((set, get) => ({
   quoteStatus: 'idle',
   fareQuotes: [],
   priceUpdated: false,
+  categoryUnavailable: false,
   categoryInfo: [],
   tripProgressPercent: 0,
   ratingSubmitted: false,
@@ -163,13 +173,13 @@ export const useRideRequestStore = create<RideRequestState>((set, get) => ({
     const { origin, destination } = get();
     const requestId = ++quoteRequestId;
     if (!origin || !destination) {
-      set({ quoteStatus: 'idle', ...EMPTY_QUOTE, quoteError: undefined, priceUpdated: false, categoryId: undefined });
-      return;
+      set({ quoteStatus: 'idle', ...EMPTY_QUOTE, quoteError: undefined, priceUpdated: false, categoryId: undefined, categoryUnavailable: false });
+      return Promise.resolve();
     }
     set({ quoteStatus: 'loading', quoteError: undefined, priceUpdated: options?.priceUpdated ?? false });
     // A cotação primeiro, as categorias depois (em série): o `failNext` do mock vale para a PRÓXIMA chamada, e duas em
     // paralelo disputariam quem o consome — em série, a prova de erro sempre cai na cotação.
-    quotePort
+    return quotePort
       .createQuotes({ origin: toQuotePoint(origin), destination: toQuotePoint(destination) })
       .then(async (result) => {
         if (requestId !== quoteRequestId) return; // uma cotação mais nova já está em andamento/chegou primeiro
@@ -180,14 +190,20 @@ export const useRideRequestStore = create<RideRequestState>((set, get) => ({
         const info = await loadCategoryInfo();
         if (requestId !== quoteRequestId) return;
         const quotes = result.data.quotes;
-        set((state) => ({
-          quoteStatus: 'ready',
-          fareQuotes: quotes,
-          quoteRoute: result.data.route,
-          ...(info ? { categoryInfo: info } : {}),
-          // Mantém a escolha se ela ainda existir na cotação nova; senão cai na 1ª (ou em nenhuma, se veio vazia).
-          categoryId: quotes.some((quote) => quote.categorySlug === state.categoryId) ? state.categoryId : quotes[0]?.categorySlug,
-        }));
+        set((state) => {
+          // Mantém a escolha se ela ainda existir; se sumiu, NENHUMA + aviso (nunca outra sozinha). Ver `quoteSelection.ts`.
+          const selection = selectCategoryAfterQuote({ categoryId: state.categoryId, categoryUnavailable: state.categoryUnavailable }, quotes);
+          return {
+            quoteStatus: 'ready',
+            fareQuotes: quotes,
+            quoteRoute: result.data.route,
+            ...(info ? { categoryInfo: info } : {}),
+            categoryId: selection.categoryId,
+            categoryUnavailable: selection.categoryUnavailable,
+            // Sem categoria, o aviso que vale é o da categoria; "o preço foi atualizado" não diz o que mudou.
+            ...(selection.categoryUnavailable ? { priceUpdated: false } : {}),
+          };
+        });
       })
       .catch(() => {
         if (requestId !== quoteRequestId) return;
@@ -201,21 +217,20 @@ export const useRideRequestStore = create<RideRequestState>((set, get) => ({
     const quote = selectedFareQuote(get());
     if (!quote) return { status: 'no_quote' };
     // Regra do domínio primeiro (sem rede): vencida no relógio do aparelho já cota de novo.
-    if (isQuoteExpired(quote.expiresAt, Date.now())) {
-      get().refreshQuote({ priceUpdated: true });
-      return { status: 'price_updated' };
-    }
+    // Recota e ESPERA a cotação nova: só ela diz se a categoria escolhida ainda existe.
+    const requote = async (): Promise<ConfirmQuoteOutcome> => {
+      await get().refreshQuote({ priceUpdated: true });
+      return get().categoryUnavailable ? { status: 'category_unavailable' } : { status: 'price_updated' };
+    };
+    if (isQuoteExpired(quote.expiresAt, Date.now())) return requote();
     const result = await quotePort.getQuote(quote.quoteId);
     if (result.ok) return { status: 'ok' };
     const key = geoProblemKey(result.error);
-    if (key === 'quote_expired' || key === 'not_found') {
-      get().refreshQuote({ priceUpdated: true });
-      return { status: 'price_updated' };
-    }
+    if (key === 'quote_expired' || key === 'not_found') return requote();
     return { status: 'error', error: result.error };
   },
 
-  setCategory: (categoryId) => set({ categoryId }),
+  setCategory: (categoryId) => set({ categoryId, categoryUnavailable: false }),
   setPaymentMethod: (paymentMethodId) => set({ paymentMethodId }),
 
   requestRide: () => {
@@ -301,6 +316,7 @@ export const useRideRequestStore = create<RideRequestState>((set, get) => ({
     set({
       destination: undefined,
       categoryId: undefined,
+      categoryUnavailable: false,
       quoteStatus: 'idle',
       ...EMPTY_QUOTE,
       quoteError: undefined,

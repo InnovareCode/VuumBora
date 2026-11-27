@@ -24,7 +24,7 @@ import { PinPicker } from '../../src/components/destination/PinPicker';
 import { PlaceRow } from '../../src/components/destination/PlaceRow';
 import { RouteInputCard } from '../../src/components/destination/RouteInputCard';
 import { MOCK_SAVED_PLACES } from '../../src/data/mockPlaces';
-import { useAddressSearch } from '../../src/destination/useAddressSearch';
+import { SEARCH_MAX_LENGTH, useAddressSearch } from '../../src/destination/useAddressSearch';
 import { useDevGeoParams } from '../../src/dev/devGeo';
 import { CURRENT_LOCATION_LABEL, placeFromSearchResult, placePoint } from '../../src/geo/geoFormat';
 import { describeGeoProblem } from '../../src/geo/geoProblems';
@@ -85,7 +85,7 @@ export default function DestinationScreen() {
   const [originQuery, setOriginQuery] = useState(storeOriginIsCustom ? (storeOrigin?.address ?? '') : '');
 
   const [destinationPlace, setDestinationPlace] = useState<Place | undefined>(storeDestination);
-  const [destinationQuery, setDestinationQuery] = useState(() => (__DEV__ && typeof devBusca === 'string' ? devBusca : (storeDestination?.address ?? '')));
+  const [destinationQuery, setDestinationQuery] = useState(() => (__DEV__ && typeof devBusca === 'string' ? devBusca.slice(0, SEARCH_MAX_LENGTH) : (storeDestination?.address ?? '')));
 
   const [activeField, setActiveField] = useState<ActiveField>('destination');
   const [recentPlaces, setRecentPlaces] = useState<readonly Place[]>([]);
@@ -291,12 +291,14 @@ export default function DestinationScreen() {
             editable: originMode === 'custom',
             onPressLocked: handlePressLockedOrigin,
             inputRef: originInputRef,
+            maxLength: SEARCH_MAX_LENGTH,
           }}
           destination={{
             value: destinationQuery,
             placeholder: 'Para onde você vai?',
             onChangeText: handleChangeDestinationQuery,
             onFocus: () => setActiveField('destination'),
+            maxLength: SEARCH_MAX_LENGTH,
           }}
           onSwap={handleSwap}
         />

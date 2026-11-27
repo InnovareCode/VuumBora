@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Check, type LucideIcon } from 'lucide-react-native';
+import { radioSpaceKeyProps } from '../../lib/radioSpaceKey';
 import { SurfaceRaised, VehicleIllustration, focusRingStyle, theme, textStyle, tabularNums, useKeyboardFocusRing, type VehicleIllustrationVariant } from '@vuumbora/ui';
 
 // Direção de arte §4/§9 item 4: halo do card selecionado. `boxShadow` com cor é a
@@ -57,15 +58,20 @@ export const RideCategoryCard = memo(function RideCategoryCard({
   const { width } = useWindowDimensions();
   const showVehicleArt = width >= VEHICLE_ART_BREAKPOINT;
 
-  const accessibilityLabel = `${name}${detail ? `, ${detail}` : ''}, ${priceDescription} ${priceLabel}${selected ? ', selecionado' : ''}`;
+  // "Selecionado" sai do rótulo: quem anuncia o estado é o `aria-checked` (o leitor diz "marcado").
+  const accessibilityLabel = `${name}${detail ? `, ${detail}` : ''}, ${priceDescription} ${priceLabel}`;
   const { focusVisible, focusProps } = useKeyboardFocusRing();
 
   return (
     <Pressable
       {...focusProps}
+      {...radioSpaceKeyProps(onPress)}
       onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
+      // Opção do `radiogroup` da P05: role `radio` + `aria-checked` DIRETO. O react-native-web 0.21 ignora
+      // `accessibilityState` (o DOM saía sem estado e o leitor não sabia qual categoria estava escolhida); o RN 0.88 lê
+      // `aria-checked` também no iOS/Android.
+      accessibilityRole="radio"
+      aria-checked={selected}
       accessibilityLabel={accessibilityLabel}
       style={focusVisible ? CARD_FOCUS_RING : undefined}
       testID={testID}

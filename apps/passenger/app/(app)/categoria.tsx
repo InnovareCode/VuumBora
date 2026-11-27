@@ -5,8 +5,6 @@ import { ArrowRight, CreditCard, MapPinned } from 'lucide-react-native';
 import { isQuoteExpired } from '@vuumbora/domain';
 import {
   AppShell,
-  EmptyState,
-  ErrorState,
   FooterActions,
   InlineAlert,
   ListRow,
@@ -61,6 +59,7 @@ export default function CategoryScreen() {
   const quoteRoute = useRideRequestStore((state) => state.quoteRoute);
   const quoteError = useRideRequestStore((state) => state.quoteError);
   const priceUpdated = useRideRequestStore((state) => state.priceUpdated);
+  const categoryUnavailable = useRideRequestStore((state) => state.categoryUnavailable);
   const categoryInfo = useRideRequestStore((state) => state.categoryInfo);
   const refreshQuote = useRideRequestStore((state) => state.refreshQuote);
   const acknowledgePriceUpdate = useRideRequestStore((state) => state.acknowledgePriceUpdate);
@@ -68,6 +67,8 @@ export default function CategoryScreen() {
   const setPaymentMethod = useRideRequestStore((state) => state.setPaymentMethod);
 
   const [paymentPickerOpen, setPaymentPickerOpen] = useState(false);
+  /** Quantas vezes "Continuar" foi tocado sem categoria: cada toque remonta o aviso, e o leitor de tela o anuncia de novo. */
+  const [chooseNudges, setChooseNudges] = useState(0);
 
   // `AppShell padded={false}` (o mapa sangra até a borda): é o PAINEL quem aplica o respiro lateral, no mesmo corte
   // (< 375pt) que o `AppShell` usaria.
@@ -77,16 +78,17 @@ export default function CategoryScreen() {
   const selectedQuote = selectedFareQuote({ fareQuotes, categoryId });
   const selectedPayment = MOCK_PAYMENT_METHODS.find((method) => method.id === paymentMethodId);
   const anyTestFare = fareQuotes.some((quote) => quote.isTestFare);
-  const canContinue = online && quoteStatus === 'ready' && selectedQuote !== undefined && selectedPayment !== undefined;
+  // Sem categoria escolhida o "Continuar" NÃO desliga: tocar nele explica o que falta (o aviso é anunciado), em vez de um
+  // botão morto sem motivo. Desliga só sem rede, cotando, sem cotação ou sem pagamento.
+  const canContinue = online && quoteStatus === 'ready' && fareQuotes.length > 0 && selectedPayment !== undefined;
+  const showChooseAlert = quoteStatus === 'ready' && !selectedQuote && (categoryUnavailable || chooseNudges > 0);
   const problem = quoteStatus === 'error' ? describeGeoProblem(quoteError ?? { kind: 'network', retryable: true }, 'quote') : undefined;
 
   const continueBlockedReason = !online
     ? 'sem conexão'
     : quoteStatus === 'loading'
       ? 'calculando o preço'
-      : !selectedQuote
-        ? 'escolha uma categoria'
-        : 'escolha a forma de pagamento';
+      : 'escolha a forma de pagamento';
 
   function handleChangeRoute() {
     goBackOr('/destino');
@@ -127,7 +129,12 @@ export default function CategoryScreen() {
         : undefined;
 
   function handleContinue() {
-    if (!canContinue || !selectedQuote) return;
+    if (!canContinue) return;
+    if (!selectedQuote) {
+      // NUNCA escolhe por ela (achado da Íris na G6): avisa de novo e espera a escolha.
+      setChooseNudges((value) => value + 1);
+      return;
+    }
     // Regra do domínio (sem rede): preço vencido cota de novo e pede o segundo toque, com o valor novo à vista.
     if (isQuoteExpired(selectedQuote.expiresAt, Date.now())) {
       refreshQuote({ priceUpdated: true });
@@ -191,15 +198,28 @@ export default function CategoryScreen() {
             ) : null}
           </View>
 
-          {priceUpdated && quoteStatus === 'ready' ? (
+          {showChooseAlert ? (
+            <InlineAlert
+              key={`escolha-${chooseNudges}`}
+              tone="warning"
+              message={categoryUnavailable ? 'Essa categoria não está mais disponível. Escolha outra.' : 'Escolha uma categoria para continuar.'}
+              announce
+              testID={categoryUnavailable ? 'category-unavailable' : 'category-choose-alert'}
+            />
+          ) : null}
+
+          {priceUpdated && quoteStatus === 'ready' && !categoryUnavailable ? (
             <InlineAlert tone="info" title="O preço foi atualizado." message="Confira o valor novo antes de continuar." announce testID="category-price-updated" />
           ) : null}
 
+          {/* Sem cotação para mostrar, o motivo vem num aviso COMPACTO (não no `EmptyState` de ícone grande): a 320×568 o
+              texto do "ainda não operamos" ficava atrás do rodapé em repouso (achado da Íris na G6). A ação fica no rodapé. */}
           {quoteStatus === 'idle' ? (
             // Defensivo: na navegação real esta tela só é alcançada com origem e destino definidos.
-            <EmptyState
+            <InlineAlert
+              tone="info"
               title="Defina seu trajeto"
-              description="Escolha de onde sai e para onde vai para ver as opções de viagem."
+              message="Escolha de onde sai e para onde vai para ver as opções de viagem."
               testID="category-idle-state"
             />
           ) : quoteStatus === 'loading' ? (
@@ -207,20 +227,23 @@ export default function CategoryScreen() {
               <LoadingSkeleton variant="block" height={66} lines={2} />
             </View>
           ) : problem ? (
-            // A ação mora no rodapé (`recovery`), visível sem rolar.
-            problem.action === 'retry' || problem.action === 'requote' ? (
-              <ErrorState title={problem.title} description={problem.description} testID={`category-problem-${problem.key}`} />
-            ) : (
-              <EmptyState title={problem.title} description={problem.description} testID={`category-problem-${problem.key}`} />
-            )
+            // A ação mora no rodapé (`recovery`), visível sem rolar. "Não operamos" não é falha: tom informativo.
+            <InlineAlert
+              tone={problem.action === 'home' ? 'info' : problem.action === 'retry' || problem.action === 'requote' ? 'danger' : 'warning'}
+              title={problem.title}
+              message={problem.description}
+              announce
+              testID={`category-problem-${problem.key}`}
+            />
           ) : fareQuotes.length === 0 ? (
-            <EmptyState
+            <InlineAlert
+              tone="warning"
               title="Ainda não atendemos este trajeto."
-              description="Nenhuma categoria atende esta rota agora. Escolha outro destino."
+              message="Nenhuma categoria atende esta rota agora. Escolha outro destino."
               testID="category-empty-state"
             />
           ) : (
-            <View style={styles.categoryColumn} accessibilityRole="radiogroup">
+            <View style={styles.categoryColumn} accessibilityRole="radiogroup" accessibilityLabel="Categoria">
               {fareQuotes.map((quote) => {
                 const visual = categoryVisual(quote.categorySlug);
                 return (
@@ -241,34 +264,37 @@ export default function CategoryScreen() {
             </View>
           )}
 
-          <View style={styles.paymentSection}>
-            <ListRow
-              icon={<CreditCard size={20} color={theme.role.textSecondary} strokeWidth={1.75} />}
-              label="Pagamento"
-              value={selectedPayment?.label ?? 'Escolher forma de pagamento'}
-              onPress={() => setPaymentPickerOpen((prev) => !prev)}
-              accessibilityLabel={`Pagamento: ${selectedPayment?.label ?? 'nenhuma forma escolhida'}`}
-              testID="payment-row"
-            />
-            {paymentPickerOpen ? (
-              <View style={styles.paymentList}>
-                <MockBadge label="formas de pagamento fictícias" />
-                {MOCK_PAYMENT_METHODS.map((method) => (
-                  <PaymentMethodOption
-                    key={method.id}
-                    label={method.label}
-                    description={method.description}
-                    selected={paymentMethodId === method.id}
-                    onPress={() => {
-                      setPaymentMethod(method.id);
-                      setPaymentPickerOpen(false);
-                    }}
-                    testID={`payment-method-${method.id}`}
-                  />
-                ))}
-              </View>
-            ) : null}
-          </View>
+          {/* Pagamento só quando há o que pagar: sem cotação, ele só empurrava o motivo para baixo do rodapé. */}
+          {recovery ? null : (
+            <View style={styles.paymentSection}>
+              <ListRow
+                icon={<CreditCard size={20} color={theme.role.textSecondary} strokeWidth={1.75} />}
+                label="Pagamento"
+                value={selectedPayment?.label ?? 'Escolher forma de pagamento'}
+                onPress={() => setPaymentPickerOpen((prev) => !prev)}
+                accessibilityLabel={`Pagamento: ${selectedPayment?.label ?? 'nenhuma forma escolhida'}`}
+                testID="payment-row"
+              />
+              {paymentPickerOpen ? (
+                <View style={styles.paymentList} accessibilityRole="radiogroup" accessibilityLabel="Forma de pagamento">
+                  <MockBadge label="formas de pagamento fictícias" />
+                  {MOCK_PAYMENT_METHODS.map((method) => (
+                    <PaymentMethodOption
+                      key={method.id}
+                      label={method.label}
+                      description={method.description}
+                      selected={paymentMethodId === method.id}
+                      onPress={() => {
+                        setPaymentMethod(method.id);
+                        setPaymentPickerOpen(false);
+                      }}
+                      testID={`payment-method-${method.id}`}
+                    />
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          )}
         </View>
       </View>
     </AppShell>

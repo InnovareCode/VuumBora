@@ -65,10 +65,10 @@ export const useLocationStore = create<LocationState>((set, get) => {
     set({ placeStatus: 'ready', placeLabel: result.data.label, inServiceArea: result.data.inServiceArea });
   }
 
-  async function locate(): Promise<void> {
+  async function locate(fresh: boolean): Promise<void> {
     const myGeneration = ++generation;
     set({ status: 'locating' });
-    const fix = await port.currentPosition();
+    const fix = await port.currentPosition({ fresh });
     if (myGeneration !== generation) return;
     if (!fix.ok) {
       const status: LocationStatus = fix.reason === 'denied' ? 'denied' : fix.reason === 'unavailable' ? 'unavailable' : 'error';
@@ -92,7 +92,7 @@ export const useLocationStore = create<LocationState>((set, get) => {
         .permission()
         .then((permission) => {
           if (myGeneration !== generation) return;
-          if (permission === 'granted') void locate();
+          if (permission === 'granted') void locate(false);
           else if (permission === 'prompt') set({ status: 'needs_permission' });
           else if (permission === 'denied') set({ status: 'denied' });
           else set({ status: 'unavailable' });
@@ -103,11 +103,12 @@ export const useLocationStore = create<LocationState>((set, get) => {
     },
 
     requestPermission: () => {
-      void locate();
+      void locate(false);
     },
 
+    // "Centralizar no meu local" / "Tentar de novo": leitura NOVA, nunca a posição guardada.
     relocate: () => {
-      void locate();
+      void locate(true);
     },
   };
 });

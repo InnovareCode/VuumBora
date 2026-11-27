@@ -1,10 +1,13 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check } from 'lucide-react-native';
-import { SurfaceRaised, theme, textStyle } from '@vuumbora/ui';
+import { SurfaceRaised, focusRingStyle, theme, textStyle, useKeyboardFocusRing } from '@vuumbora/ui';
+import { radioSpaceKeyProps } from '../../lib/radioSpaceKey';
 
 // Direção de arte §4/§9 item 4 — mesmo halo do card de categoria (RideCategoryCard).
 const SELECTED_GLOW = theme.glow.selected;
+/** Anel de foco de teclado (G-22), no raio do cartão — mesmo padrão do `RideCategoryCard`. */
+const OPTION_FOCUS_RING = focusRingStyle('outside', theme.radius.lg);
 
 export interface PaymentMethodOptionProps {
   readonly label: string;
@@ -22,12 +25,18 @@ export const PaymentMethodOption = memo(function PaymentMethodOption({
   onPress,
   testID,
 }: PaymentMethodOptionProps) {
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
   return (
     <Pressable
+      {...focusProps}
+      {...radioSpaceKeyProps(onPress)}
       onPress={onPress}
       accessibilityRole="radio"
-      accessibilityState={{ selected, checked: selected }}
-      accessibilityLabel={`${label}, ${description}${selected ? ', selecionado' : ''}`}
+      // `aria-checked` DIRETO: o react-native-web 0.21 ignora `accessibilityState` (o DOM saía sem estado). O RN 0.88 lê
+      // `aria-checked` também no iOS/Android. "Selecionado" sai do rótulo: quem anuncia é o estado.
+      aria-checked={selected}
+      accessibilityLabel={`${label}, ${description}`}
+      style={focusVisible ? OPTION_FOCUS_RING : undefined}
       testID={testID}
     >
       {({ pressed }) => (

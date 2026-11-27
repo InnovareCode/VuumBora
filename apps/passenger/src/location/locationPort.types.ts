@@ -15,6 +15,9 @@ export type LocationFix =
 export interface LocationPort {
   /** Estado da permissão SEM perguntar nada à pessoa (para mostrar a pré-permissão antes do pedido do sistema). */
   permission(): Promise<LocationPermission>;
-  /** Pede a posição atual. Com permissão `prompt`, é ESTA chamada que abre a pergunta do sistema/navegador. */
-  currentPosition(): Promise<LocationFix>;
+  /**
+   * Pede a posição atual. Com permissão `prompt`, é ESTA chamada que abre a pergunta do sistema/navegador.
+   * `fresh: true` ("Centralizar no meu local", "Tentar de novo") exige uma leitura NOVA, sem reaproveitar a última.
+   */
+  currentPosition(options?: { readonly fresh?: boolean }): Promise<LocationFix>;
 }

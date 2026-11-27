@@ -9,7 +9,11 @@ import type { LocationFix, LocationPermission, LocationPort } from './locationPo
 
 /** Prazo da leitura: além disso, a P03 mostra "Não achamos sua localização" com "Tentar de novo". */
 const POSITION_TIMEOUT_MS = 10_000;
-/** Aceita uma posição de até 1 min: abrir a P04 logo depois da P03 não pergunta de novo. */
+/**
+ * A leitura AUTOMÁTICA (abrir a P03/P04) aceita uma posição de até 1 min. Quem pede de propósito ("Centralizar no meu
+ * local", "Tentar de novo") recebe leitura nova (`fresh`, idade 0) — achado da Íris na G6: o botão devolvia a posição
+ * antiga por até 60 s.
+ */
 const POSITION_MAX_AGE_MS = 60_000;
 
 /** `GeolocationPositionError.code`: 1 = negada, 2 = indisponível, 3 = prazo. */
@@ -51,7 +55,7 @@ async function permission(): Promise<LocationPermission> {
   }
 }
 
-function currentPosition(): Promise<LocationFix> {
+function currentPosition(options?: { readonly fresh?: boolean }): Promise<LocationFix> {
   const api = browserNavigator()?.geolocation;
   if (!api) return Promise.resolve({ ok: false, reason: 'unavailable' });
   return new Promise((resolve) => {
@@ -68,7 +72,7 @@ function currentPosition(): Promise<LocationFix> {
         else if (error.code === TIMEOUT) resolve({ ok: false, reason: 'timeout' });
         else resolve({ ok: false, reason: 'position_unavailable' });
       },
-      { enableHighAccuracy: true, timeout: POSITION_TIMEOUT_MS, maximumAge: POSITION_MAX_AGE_MS },
+      { enableHighAccuracy: true, timeout: POSITION_TIMEOUT_MS, maximumAge: options?.fresh ? 0 : POSITION_MAX_AGE_MS },
     );
   });
 }

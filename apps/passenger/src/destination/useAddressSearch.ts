@@ -14,6 +14,12 @@ export interface AddressSearchState {
   readonly fromMock: boolean;
 }
 
+/**
+ * Teto do texto da busca: o servidor recusa acima de 100 caracteres com `400 invalid_body`, e repetir não resolve (achado da
+ * Íris na G6: "Tentar de novo" repetia o 400 para sempre). O campo da P04 usa este `maxLength`, e a busca corta aqui também.
+ */
+export const SEARCH_MAX_LENGTH = 100;
+
 /** Ficha P04 §5: a busca só sai 300 ms depois de a digitação parar. */
 const DEBOUNCE_MS = 300;
 /** Mesmo teto do servidor (`GET /v1/geo/search`, até 8 resultados). */
@@ -45,7 +51,7 @@ export function useAddressSearch(query: string, options: { readonly enabled: boo
   useEffect(() => {
     const isFirstRun = firstRun.current;
     firstRun.current = false;
-    const trimmed = query.trim();
+    const trimmed = query.trim().slice(0, SEARCH_MAX_LENGTH).trim();
     if (!enabled || !trimmed) {
       setState(IDLE);
       return;

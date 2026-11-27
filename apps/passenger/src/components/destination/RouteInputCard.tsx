@@ -16,6 +16,8 @@ export interface RouteFieldProps {
   readonly editable?: boolean;
   readonly onPressLocked?: () => void;
   readonly inputRef?: Ref<ComponentRef<typeof RNTextInput>>;
+  /** Teto de caracteres do campo (a busca do servidor recusa acima de 100 com `400 invalid_body`). */
+  readonly maxLength?: number;
 }
 
 export interface RouteInputCardProps {
@@ -81,6 +83,7 @@ function RouteFieldRow({
   editable = true,
   onPressLocked,
   inputRef,
+  maxLength,
   icon,
   accessibilityLabel,
   testID,
@@ -110,7 +113,7 @@ function RouteFieldRow({
     );
   }
 
-  return <EditableRow {...{ value, placeholder, onChangeText, onFocus, inputRef, icon, accessibilityLabel, testID }} />;
+  return <EditableRow {...{ value, placeholder, onChangeText, onFocus, inputRef, maxLength, icon, accessibilityLabel, testID }} />;
 }
 
 /**
@@ -125,11 +128,13 @@ function EditableRow({
   onChangeText,
   onFocus,
   inputRef,
+  maxLength,
   icon,
   accessibilityLabel,
   testID,
 }: Pick<RouteFieldProps, 'value' | 'placeholder' | 'onChangeText' | 'onFocus'> & {
   readonly inputRef?: RouteFieldProps['inputRef'] | undefined;
+  readonly maxLength?: number | undefined;
   readonly icon: ReactNode;
   readonly accessibilityLabel: string;
   readonly testID?: string | undefined;
@@ -148,6 +153,7 @@ function EditableRow({
         }}
         onBlur={() => setFocused(false)}
         placeholder={placeholder}
+        {...(maxLength !== undefined ? { maxLength } : {})}
         placeholderTextColor={theme.role.textMuted}
         autoCapitalize="none"
         autoCorrect={false}

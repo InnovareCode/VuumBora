@@ -62,6 +62,7 @@ export default function ConfirmationScreen() {
   const quoteStatus = useRideRequestStore((state) => state.quoteStatus);
   const quoteError = useRideRequestStore((state) => state.quoteError);
   const priceUpdated = useRideRequestStore((state) => state.priceUpdated);
+  const categoryUnavailable = useRideRequestStore((state) => state.categoryUnavailable);
   const categoryInfo = useRideRequestStore((state) => state.categoryInfo);
   const setPaymentMethod = useRideRequestStore((state) => state.setPaymentMethod);
   const confirmSelectedQuote = useRideRequestStore((state) => state.confirmSelectedQuote);
@@ -78,7 +79,8 @@ export default function ConfirmationScreen() {
   const missing: string[] = [];
   if (!origin) missing.push('origem');
   if (!destination) missing.push('destino');
-  if (!categoryId) missing.push('categoria');
+  // Categoria que SUMIU da cotação nova tem aviso próprio (abaixo); não é "falta escolher".
+  if (!categoryId && !categoryUnavailable) missing.push('categoria');
   if (!paymentMethodId) missing.push('forma de pagamento');
 
   const problem: GeoProblemView | undefined = sendError
@@ -101,6 +103,9 @@ export default function ConfirmationScreen() {
     }
     setSubmitting(false);
     if (outcome.status === 'error') setSendError(outcome.error);
+    // A categoria escolhida sumiu da cotação nova: nada foi trocado; volta à P05, que mostra o aviso, para escolher outra
+    // (achado da Íris na G6: antes o app pedia a 1ª categoria da lista, com outro preço).
+    if (outcome.status === 'category_unavailable') goBackOr('/categoria');
     // `price_updated`: a store já cotou de novo e marcou o aviso; o próximo toque segue com o preço novo.
   }
 
@@ -127,7 +132,18 @@ export default function ConfirmationScreen() {
     }
   }
 
-  const blockedReason = !online ? 'sem conexão' : quoting ? 'atualizando o preço' : `falta escolher ${missing.join(', ') || 'a categoria'}`;
+  // O leitor de tela ouve o motivo REAL do botão desligado (achado da Íris: com 503 ele dizia "falta escolher a categoria").
+  const blockedReason = !online
+    ? 'sem conexão'
+    : quoting
+      ? 'atualizando o preço'
+      : problem
+        ? problem.title.replace(/\.$/, '').toLowerCase()
+        : categoryUnavailable
+          ? 'a categoria escolhida não está mais disponível'
+          : missing.length > 0
+            ? `falta escolher ${missing.join(', ')}`
+            : 'escolha uma categoria';
   const selo = quote?.isTestFare ? 'tarifa de teste' : 'corrida de demonstração';
 
   return (
@@ -139,6 +155,12 @@ export default function ConfirmationScreen() {
         <FooterActions testID="confirmation-footer">
           {missing.length > 0 ? (
             <InlineAlert tone="warning" message={`Falta escolher: ${missing.join(', ')}.`} testID="confirmation-missing-alert" />
+          ) : null}
+          {categoryUnavailable && !quoting ? (
+            <View style={styles.problem}>
+              <InlineAlert tone="warning" message="Essa categoria não está mais disponível. Escolha outra." announce testID="confirmation-category-unavailable" />
+              <LinkButton label="Escolher outra categoria" onPress={() => goBackOr('/categoria')} role="button" align="flex-start" testID="confirmation-choose-category" />
+            </View>
           ) : null}
           {priceUpdated && !quoting && quote ? (
             <InlineAlert tone="info" title="O preço foi atualizado." message="Confira o valor novo antes de solicitar." announce testID="confirmation-price-updated" />
@@ -220,7 +242,7 @@ export default function ConfirmationScreen() {
 
         <View style={styles.section}>
           <SectionHeader title="Forma de pagamento" testID="payment-section-header" />
-          <View style={styles.paymentList}>
+          <View style={styles.paymentList} accessibilityRole="radiogroup" accessibilityLabel="Forma de pagamento">
             {MOCK_PAYMENT_METHODS.map((method) => (
               <PaymentMethodOption
                 key={method.id}
