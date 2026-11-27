@@ -4,6 +4,28 @@ Estado do projeto entre sessões. Atualizar ao fim de cada marco.
 
 **Ordem do que falta e estimativa por etapa: [`docs/cronograma.md`](docs/cronograma.md)** (27/11/2026).
 
+## Estado em 27/11/2026 (noite): pausado pelo dono para revisar o desempenho
+
+**Entrou na main hoje (até `dcb5eed`), cada fatia com veredito da Íris e, quando há segurança, revisão do Órion:**
+onda 4 (a corrida, com PIN de embarque e Ligar 190), M3 inteiro no servidor (migrações 0024 a 0026, armazenamento,
+rotas do motorista e da revisão, rotina de vencimento), telas de cadastro e documentos do motorista (D6), fila de revisão
+no painel (D7), busca com pino e cotação do passageiro (G6), preço, busca e cotação no servidor (G2 a G4, com teto diário
+de gasto no Mapbox), dívidas de acessibilidade e rede do design system, onda 6 do painel admin, módulos nativos de câmera,
+arquivo e localização, patches do Expo, cronograma (`docs/cronograma.md`) e galeria de telas para o dono
+(https://claude.ai/artifact/L7o7s7K4yHBiDQAFGFnPcD).
+
+**Produção:** papel restrito `vuumbora_api` ativo, migrações até 0026, `RUN_MIGRATIONS_ON_BOOT=false`. Adiado pelo dono:
+`ADMIN_TOTP_ENCRYPTION_KEY` (ainda o antigo), conferir `AUTH_JWT_SECRET`, refazer o 2FA, SMTP, textos legais.
+
+**Interrompido pela pausa (trabalho parcial em disco, sem commit):** Íris validando a onda 6 do painel e a G2-G4 (a suíte da
+API já tinha dado 709/709); Vulcano consertando a sonda de foco e o sem-rede da ferramenta; Lyra nas ressalvas do design
+system (anel sob a sombra do rodapé, teste do `useNetworkStatus`, StarRating, OnlineToggle, scroll-padding). Antes de
+retomar, conferir `git status` e as worktrees de QA no scratchpad (apagar as que sobraram: o disco anda perto do limite).
+
+**Para a revisão de desempenho pedida pelo dono:** as fatias desta sessão passaram, em média, por 1 a 2 reprovações da Íris
+antes de aprovar (onda 4 duas vezes, D7, G6), cada rodada de QA leva de 20 a 50 min (cópia limpa + npm ci + Metro + portão),
+o relatório da Íris ficou preso na entrega duas vezes, e o limite de 5 horas parou 4 agentes de uma vez.
+
 ## Estado em 23/11/2026 (madrugada): S1 EM PRODUÇÃO e onda 5 na main
 
 **Produção (publicada pelo dono em 22-23/11, conferida por `tools/producao/verificar-pos-deploy.mjs`):**
