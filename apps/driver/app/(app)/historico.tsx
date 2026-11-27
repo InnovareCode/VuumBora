@@ -46,7 +46,7 @@ const EMPTY_PERIOD_LABEL: Record<TripHistoryPeriod, string> = {
 
 /**
  * Só de PROVA/QA (`__DEV__`, removido do bundle de produção pelo Metro — mesmo padrão de
- * `?devAprovado=false` da M05): força um dos estados da ficha §5 sem precisar de rede nem de
+ * `?devCenario=` da M05): força um dos estados da ficha §5 sem precisar de rede nem de
  * esperar a lista real existir. Nunca alcançável em produção.
  */
 type DevState = 'carregando' | 'vazio' | 'vazio-periodo' | 'sem-aprovacao' | 'erro';
@@ -119,7 +119,7 @@ export default function DriverTripHistoryScreen() {
           <EmptyState
             icon={({ size, color }) => <Car size={size} color={color} strokeWidth={1.75} />}
             title="Nenhuma corrida ainda"
-            description="O cadastro de motorista é outra etapa e só abre depois que as regras de taxa e repasse forem publicadas."
+            description="Suas corridas aparecem aqui depois que o seu cadastro de motorista for aprovado."
             testID="historico-sem-aprovacao"
           />
         ) : groups.length === 0 ? (

@@ -12,6 +12,7 @@ import { AppState } from 'react-native';
 import type { SessionState } from '@vuumbora/api-client/identity';
 import { identity } from '../identity/identityClient';
 import { useAuthFlowStore } from '../identity/authFlowStore';
+import { resetOnboarding } from '../onboarding/onboardingStore';
 
 /**
  * Sessão do motorista = a sessão do cliente de identidade (`identity.session`, `@vuumbora/api-client`): quem tem o
@@ -19,7 +20,8 @@ import { useAuthFlowStore } from '../identity/authFlowStore';
  * guarda o que é de tela (o aviso depois de sair). O app nunca decide estado de sessão (plano, princípio 1).
  *
  * Ter sessão é ter uma CONTA de motorista. Não é ter o cadastro de motorista aprovado: isso é outra etapa e nenhum
- * campo deste contexto o afirma (a Home de demonstração marca o que é de exemplo).
+ * campo deste contexto o afirma — o estado do cadastro mora em `src/onboarding/onboardingStore.ts` (fatia D6), que é
+ * zerado aqui ao sair (outra conta no mesmo aparelho não herda o cadastro da anterior).
  *
  * `status`:
  *  - `loading`    lendo o cofre (antes do 1º estado). Com a memória é instantâneo; com o SecureStore (A3) leva um
@@ -79,6 +81,8 @@ export function SessionProvider({ children }: { readonly children: ReactNode }) 
       setServerUnconfirmed(false);
       useAuthFlowStore.getState().clearAll();
     }
+    // Saiu: o cadastro lido para a conta anterior não pode aparecer para a próxima.
+    if (status === 'signedOut') resetOnboarding();
   }, [status]);
 
   const signOut = useCallback(async () => {

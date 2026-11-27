@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import { HelpCircle, LogOut, Shield, User } from 'lucide-react-native';
+import { ClipboardList, HelpCircle, LogOut, Shield, User } from 'lucide-react-native';
 import {
   AppShell,
   Avatar,
@@ -13,15 +13,18 @@ import {
   ListRow,
   LoadingSkeleton,
   MockBadge,
+  NetworkBanner,
   ScreenHeader,
   theme,
   textStyle,
 } from '@vuumbora/ui';
 import { buildDriverTabs } from '../../src/navigation/driverTabs';
+import { useOnboarding } from '../../src/onboarding/useOnboarding';
+import { useSummaryAction } from '../../src/onboarding/useSummaryAction';
+import { notStartedSummary, shortStatusLabel } from '../../src/onboarding/verificationModel';
 import { useSession } from '../../src/session/SessionProvider';
 
 const DRIVER_NAME = 'Carlos Santos';
-const CADASTRO_FACT = 'O cadastro de motorista é outra etapa e só abre depois que as regras de taxa e repasse forem publicadas.';
 
 type DevState = 'carregando' | 'erro' | 'aprovado';
 
@@ -36,9 +39,11 @@ function isDevState(value: string | undefined): value is DevState {
  * listava (tela provisória; "Sair" como linha; abas sem ação; nome/e-mail de exemplo; sem estado
  * do cadastro).
  *
- * Linhas por PP-15 ("sem destino real não aparece"): só **Dados pessoais**, **Privacidade e
- * termos** e **Ajuda e suporte** entram — Veículo, Documentos (decisão 9), Forma de recebimento
- * (D-25) e Notificações (D5) ficam de fora até a decisão/dado existir.
+ * Linhas por PP-15 ("sem destino real não aparece"): **Dados pessoais**, **Privacidade e
+ * termos** e **Ajuda e suporte**; e, desde a fatia D6, **Cadastro e documentos** (a M03 existe e
+ * serve também para manter os documentos — ficha M03 §2), com o estado vindo do servidor. Some
+ * quando o cadastro não existe para a conta: aí entra o aviso "ainda não aberto" com o fato
+ * público, como na Home. Forma de recebimento (D-25) e Notificações (D5) continuam de fora.
  *
  * Avatar `lg` (64pt), não os 88pt da prancha: `packages/ui` `Avatar` só tem `sm`/`md`/`lg` — pedido
  * de tamanho novo é mudança de DS, fora da zona desta fatia (mesma régua do `VehicleIconBox`/C-11
@@ -47,6 +52,9 @@ function isDevState(value: string | undefined): value is DevState {
  */
 export default function DriverProfileScreen() {
   const { signOut, mode: sessionMode } = useSession();
+  const { view: onboarding } = useOnboarding();
+  const summaryAction = useSummaryAction();
+  const notStarted = onboarding.status === 'not_started' ? notStartedSummary(onboarding.reason) : undefined;
   const { devEstado } = useLocalSearchParams<{ devEstado?: string }>();
   const forcedState = __DEV__ && isDevState(devEstado) ? devEstado : undefined;
 
@@ -70,6 +78,8 @@ export default function DriverProfileScreen() {
   return (
     <AppShell scroll glow footer={<BottomTabBar items={tabs} activeKey="perfil" testID="driver-tab-bar" />} testID="perfil-screen">
       <View style={styles.content}>
+        {/* O estado do cadastro nesta tela vem do servidor: sem rede, o aviso diz por que ele pode estar velho. */}
+        <NetworkBanner testID="perfil-network-banner" />
         <ScreenHeader title="Meu Perfil" testID="perfil-header" />
 
         {loading ? (
@@ -100,19 +110,40 @@ export default function DriverProfileScreen() {
                   testID="perfil-erro-tentar-de-novo"
                 />
               </InlineAlert>
-            ) : !approved ? (
+            ) : notStarted ? (
               <InlineAlert
-                tone="info"
-                title="Cadastro de motorista ainda não aberto"
-                message={CADASTRO_FACT}
+                tone={notStarted.tone === 'warning' ? 'warning' : 'info'}
+                title={notStarted.title}
+                message={notStarted.message}
                 announce={false}
                 testID="perfil-registration-notice"
-              />
+              >
+                {notStarted.action ? (
+                  <LinkButton
+                    label={notStarted.action.label}
+                    role="button"
+                    align="flex-start"
+                    onPress={() => {
+                      if (notStarted.action) summaryAction.run(notStarted.action.target);
+                    }}
+                    testID="perfil-registration-notice-acao"
+                  />
+                ) : null}
+              </InlineAlert>
             ) : null}
           </>
         )}
 
         <View style={styles.rows}>
+          {onboarding.status === 'ready' || onboarding.status === 'error' ? (
+            <ListRow
+              icon={<ClipboardList size={20} color={theme.role.textSecondary} strokeWidth={1.75} />}
+              label="Cadastro e documentos"
+              {...(onboarding.status === 'ready' ? { value: shortStatusLabel(onboarding.verification) } : {})}
+              onPress={() => router.push('/cadastro')}
+              testID="perfil-row-cadastro"
+            />
+          ) : null}
           <ListRow
             icon={<User size={20} color={theme.role.textSecondary} strokeWidth={1.75} />}
             label="Dados pessoais"

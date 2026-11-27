@@ -74,7 +74,7 @@ const LONG_DESTINATION_LABEL = 'Shopping Midway Mall, Av. Bernardo Vieira';
  * pelo formato do contrato (`@vuumbora/api-client/driver`, B4: só aparecem porque o motorista já
  * foi atribuído). `?devFase=`/`?devEstado=`/`?devPerto=` (`__DEV__`) forçam os estados que dependem
  * do servidor ou do GPS, para a ferramenta de qualidade-tela fotografar sem precisar de nenhum dos
- * dois — mesmo padrão de `?devAprovado=`/`?devEstado=` já usado na M05/M08/M12.
+ * dois — mesmo padrão de `?devCenario=`/`?devEstado=` já usado na M05/M08/M12.
  *
  * C-12 (mapa real) e C-02 (`BottomSheet` arrastável) não existem em `packages/ui` ainda: o mapa é
  * `MapPreviewBackground variant="motorista"` (placeholder) e o painel de baixo é um `SurfaceRaised`

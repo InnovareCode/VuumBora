@@ -1,12 +1,9 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SignalHigh } from 'lucide-react-native';
 import { PrimaryButton, SecondaryButton, SurfaceRaised, focusRingStyle, theme, textStyle, useKeyboardFocusRing } from '@vuumbora/ui';
 
 export interface OnlineToggleProps {
   readonly online: boolean;
-  /** Cadastro/documentação aprovados (MOTORISTA.md). Sem isso o controle fica escondido. */
-  readonly approved: boolean;
   /** Entre o toque e a confirmação (sem servidor ainda, ver nota) — spinner no CTA, chave não muda. */
   readonly loading?: boolean;
   readonly onToggle: (next: boolean) => void;
@@ -20,9 +17,11 @@ const FOCUS_RING = focusRingStyle('outside', theme.radius.pill);
  * `DriverStatusCard` da ficha — mantido neste arquivo por ser a mesma peça que já
  * existia, agora reescrita). Duas regras de domínio (MOTORISTA.md) que o código
  * respeita, não só a aparência:
- * 1. "Não permitir online antes de cadastro e documentação aprovados" — sem
- *    `approved`, não existe chave nem CTA: só o aviso do motivo (igual ao cartão
- *    "não iniciado" da M04, sem reconstruir a tela inteira aqui).
+ * 1. "Não permitir online antes de cadastro e documentação aprovados" — a Home só
+ *    monta este cartão com o cadastro APROVADO e sem documento vencido (fatia D6:
+ *    `canGoOnline`, a mesma regra do servidor); antes disso o lugar é do cartão do
+ *    cadastro (`VerificationStatusCard`, M04). O ramo "não aprovado" que morava aqui
+ *    ("Cadastro em análise...", fixo, inalcançável) saiu: era o Q5.
  * 2. "Atualizar status com confirmação do backend; não assumir sucesso otimista" —
  *    como não há backend ainda, o pai simula a confirmação (`loading`) antes de
  *    comitar o novo estado; aqui dentro, a chave só reflete `online` quando
@@ -34,24 +33,9 @@ const FOCUS_RING = focusRingStyle('outside', theme.radius.pill);
  * (pílula na linha do título + botão cheio embaixo), e manter a chave interativa
  * evita esconder o papel de acessibilidade que a ficha pede.
  */
-export const OnlineToggle = memo(function OnlineToggle({ online, approved, loading = false, onToggle }: OnlineToggleProps) {
+export const OnlineToggle = memo(function OnlineToggle({ online, loading = false, onToggle }: OnlineToggleProps) {
   const { focusVisible, focusProps } = useKeyboardFocusRing();
-  const checked = approved && online;
-
-  if (!approved) {
-    return (
-      <SurfaceRaised style={styles.card} testID="online-toggle-card">
-        <Text style={styles.statusLabel}>Você está</Text>
-        <Text style={styles.statusTitle}>Offline</Text>
-        <View style={styles.pendingRow}>
-          <SignalHigh size={16} color={theme.role.textSecondary} strokeWidth={2} />
-          <Text style={styles.statusText} numberOfLines={3}>
-            Cadastro em análise. Você poderá ficar online após a aprovação.
-          </Text>
-        </View>
-      </SurfaceRaised>
-    );
-  }
+  const checked = online;
 
   return (
     <SurfaceRaised style={styles.card} testID="online-toggle-card">
@@ -125,6 +109,4 @@ const styles = StyleSheet.create({
   switchDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 6 },
   thumb: { width: 24, height: 24, borderRadius: 12, backgroundColor: theme.role.surface },
   thumbOn: { backgroundColor: theme.role.ctaText },
-  pendingRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  statusText: { flex: 1, color: theme.role.textSecondary, ...textStyle('regular', 'small') },
 });
