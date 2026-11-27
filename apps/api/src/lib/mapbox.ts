@@ -51,7 +51,7 @@ export interface DrivingRoute {
   readonly polyline: string;
 }
 
-export type GeoProviderFailure = 'timeout' | 'network' | 'http_status' | 'bad_response' | 'no_route';
+export type GeoProviderFailure = 'timeout' | 'network' | 'http_status' | 'bad_response' | 'no_route' | 'budget_exhausted';
 
 export class GeoProviderError extends Error {
   constructor(

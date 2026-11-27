@@ -45,8 +45,8 @@ const PONTA_NEGRA = { lat: -5.88, lng: -35.169, label: 'Ponta Negra' };
 const MIDWAY_NEIGHBOUR = { lat: -5.8112, lng: -35.2056, label: 'Do outro lado da rua' };
 /** No mar a leste da Via Costeira: DENTRO da caixa da área, FORA do polígono (prova que a rota usa o polígono). */
 const SEA = { lat: -5.85, lng: -35.13, label: 'Mar' };
-/** Directions fictícia de MIDWAY → PRAIA_SHOPPING: 8657.603 m e 1285.755 s, arredondados à vista. */
-const RECORDED = { distanceM: 8658, durationS: 1286 };
+/** Directions fictícia de MIDWAY → PRAIA_SHOPPING (`SYNTHETIC_ROUTES`): 9 km em 20 min, números redondos inventados. */
+const ROUTE = { distanceM: 9000, durationS: 1200 };
 const SEED_RATES = {
   vuumbora: { baseCents: 400, perKmCents: 150, perMinuteCents: 25, minimumFareCents: 800 },
   conforto: { baseCents: 550, perKmCents: 210, perMinuteCents: 35, minimumFareCents: 1100 },
@@ -200,6 +200,11 @@ describe('portões e validação', () => {
       { origin: MIDWAY, destination: PRAIA_SHOPPING, categorySlugs: 'vuumbora' },
       { origin: MIDWAY, destination: PRAIA_SHOPPING, categorySlugs: [1] },
       { origin: MIDWAY, destination: PRAIA_SHOPPING, categorySlugs: Array.from({ length: 21 }, () => 'vuumbora') },
+      // Rótulo com controle C1, marca/isolamento de direção do texto ou caractere de largura zero.
+      ...[0x85, 0x9f, 0x200e, 0x202e, 0x2066, 0x061c, 0x200b, 0x2060, 0xfeff].map((code) => ({
+        origin: { ...MIDWAY, label: `Casa${String.fromCharCode(code)}1` },
+        destination: PRAIA_SHOPPING,
+      })),
     ];
     for (const body of cases) assertRefused(await quote(main.app, passenger.token, body), 'invalid_body');
     assert.equal(main.replay.calls.length, before);
@@ -212,15 +217,15 @@ describe('cotação', () => {
     assert.equal(reply.status, 200, reply.raw);
     assert.equal(reply.headers['cache-control'], 'no-store');
     const { route, quotes } = reply.body.data;
-    assert.equal(route.distanceM, RECORDED.distanceM);
-    assert.equal(route.durationS, RECORDED.durationS);
+    assert.equal(route.distanceM, ROUTE.distanceM);
+    assert.equal(route.durationS, ROUTE.durationS);
     assert.equal(typeof route.polyline, 'string');
     assert.ok(route.polyline.length > 100);
 
     assert.deepEqual(quotes.map((q: { categorySlug: string }) => q.categorySlug), ['vuumbora', 'conforto']);
-    // 400 + 150 × 8,658 + 25 × 1286/60 = 2234,53… → 2235 · 550 + 210 × 8,658 + 35 × 1286/60 = 3118,35 → 3118
-    assert.deepEqual(quotes.map((q: { priceCents: number }) => q.priceCents), [2235, 3118]);
-    assert.equal(computeFare(SEED_RATES.vuumbora, RECORDED).totalCents, 2235);
+    // 400 + 150 × 9 + 25 × 20 = 2250 · 550 + 210 × 9 + 35 × 20 = 3140
+    assert.deepEqual(quotes.map((q: { priceCents: number }) => q.priceCents), [2250, 3140]);
+    assert.equal(computeFare(SEED_RATES.vuumbora, ROUTE).totalCents, 2250);
     for (const issued of quotes) {
       assert.match(issued.quoteId, /^[0-9a-f-]{36}$/);
       assert.equal(issued.currency, 'BRL');
@@ -243,8 +248,8 @@ describe('cotação', () => {
       assert.equal(row.account_id, passenger.accountId);
       assert.equal(row.origin_label, 'Midway Mall', 'o texto confirmado é gravado aparado');
       assert.equal(row.destination_label, 'Praia Shopping');
-      assert.equal(row.distance_m, RECORDED.distanceM);
-      assert.equal(row.duration_s, RECORDED.durationS);
+      assert.equal(row.distance_m, ROUTE.distanceM);
+      assert.equal(row.duration_s, ROUTE.durationS);
       assert.equal(row.dyn, '1.00');
       assert.equal(row.price_cents, quotes[index].priceCents);
       assert.equal(row.signature, quotes[index].signature);
@@ -269,10 +274,10 @@ describe('cotação', () => {
     const reply = await quote(main.app, passenger.token, { origin: AEROPORTO, destination: PONTA_NEGRA });
     assert.equal(reply.status, 200, reply.raw);
     const { route, quotes } = reply.body.data;
-    assert.deepEqual([route.distanceM, route.durationS], [35089, 3631]);
+    assert.deepEqual([route.distanceM, route.durationS], [35000, 3600]);
     assert.deepEqual(quotes.map((q: { priceCents: number }) => q.priceCents), [
-      computeFare(SEED_RATES.vuumbora, { distanceM: 35089, durationS: 3631 }).totalCents,
-      computeFare(SEED_RATES.conforto, { distanceM: 35089, durationS: 3631 }).totalCents,
+      computeFare(SEED_RATES.vuumbora, { distanceM: 35000, durationS: 3600 }).totalCents,
+      computeFare(SEED_RATES.conforto, { distanceM: 35000, durationS: 3600 }).totalCents,
     ]);
   });
 
@@ -283,7 +288,7 @@ describe('cotação', () => {
     const none = await quote(main.app, passenger.token, { origin: MIDWAY, destination: PRAIA_SHOPPING, categorySlugs: ['pet', 'inexistente'] });
     assert.equal(none.status, 200, none.raw);
     assert.deepEqual(none.body.data.quotes, []);
-    assert.equal(none.body.data.route.distanceM, RECORDED.distanceM);
+    assert.equal(none.body.data.route.distanceM, ROUTE.distanceM);
     assert.equal(await quoteCount(passenger.accountId), before, 'nada gravado');
   });
 
@@ -318,7 +323,7 @@ describe('cotação', () => {
     assert.equal(main.replay.calls.length, before);
   });
 
-  test('422 route_too_short (rota de 97 m)', async () => {
+  test('422 route_too_short (rota de 100 m)', async () => {
     const before = await quoteCount(passenger.accountId);
     assertRefused(await quote(main.app, passenger.token, { origin: MIDWAY, destination: MIDWAY_NEIGHBOUR }), 'route_too_short');
     assert.equal(await quoteCount(passenger.accountId), before);
@@ -341,6 +346,46 @@ describe('cotação', () => {
     const t = await startQuoteApp({ provider: (_replay, inner) => ({ ...inner, directions: async () => parseDirections({ code: 'NoRoute', routes: [] }) }) });
     const p = await sessionOn(t.app);
     assertRefused(await quote(t.app, p.token, { origin: MIDWAY, destination: PRAIA_SHOPPING }), 'route_unavailable');
+  });
+
+  test('rótulo gravado em NFC: a forma decomposta vira a composta (e o tamanho conta a composta)', async () => {
+    const decomposed = 'Jose\u0301 da Silva'; // "José" com o acento solto
+    const long = 'e\u0301'.repeat(200); // 400 unidades decompostas, 200 caracteres compostos
+    const reply = await quote(main.app, passenger.token, { origin: { ...MIDWAY, label: decomposed }, destination: { ...PRAIA_SHOPPING, label: long } });
+    assert.equal(reply.status, 200, reply.raw);
+    const row = await owner.query<{ origin_label: string; destination_label: string }>(`SELECT origin_label, destination_label FROM fare_quotes WHERE id = $1`, [reply.body.data.quotes[0].quoteId]);
+    assert.equal(row.rows[0]?.origin_label, 'José da Silva');
+    assert.equal(row.rows[0]?.destination_label, 'é'.repeat(200));
+  });
+
+  test('Directions devolve distância e duração quebradas: arredonda à vista e grava o inteiro', async () => {
+    const t = await startQuoteApp({ provider: (_replay, inner) => ({ ...inner, directions: async () => ({ distanceM: 5000.5, durationS: 600.4, polyline: 'abc' }) }) });
+    const p = await sessionOn(t.app);
+    const reply = await quote(t.app, p.token, { origin: MIDWAY, destination: PRAIA_SHOPPING });
+    assert.equal(reply.status, 200, reply.raw);
+    assert.deepEqual([reply.body.data.route.distanceM, reply.body.data.route.durationS], [5001, 600]);
+    assert.equal(reply.body.data.quotes[0].priceCents, computeFare(SEED_RATES.vuumbora, { distanceM: 5001, durationS: 600 }).totalCents);
+    const row = await owner.query<{ distance_m: number; duration_s: number }>(`SELECT distance_m, duration_s FROM fare_quotes WHERE id = $1`, [reply.body.data.quotes[0].quoteId]);
+    assert.deepEqual([row.rows[0]?.distance_m, row.rows[0]?.duration_s], [5001, 600]);
+  });
+
+  test('teto diário da Directions esgotado: 503 geo_unavailable, sem chamar a Directions', async () => {
+    const t = await startQuoteApp({ config: { dailyBudget: { geocoding: 1000, searchbox: 1000, reverse: 1000, directions: 1 } } });
+    const p = await sessionOn(t.app);
+    assert.equal((await quote(t.app, p.token, { origin: MIDWAY, destination: PRAIA_SHOPPING })).status, 200);
+    const calls = t.replay.calls.length;
+    assertRefused(await quote(t.app, p.token, { origin: MIDWAY, destination: PRAIA_SHOPPING }), 'geo_unavailable', 503);
+    assert.equal(t.replay.calls.length, calls);
+    assert.match(t.logs(), /"event":"geo_budget_exhausted","engine":"directions","dailyLimit":1/);
+  });
+
+  test('cota DIÁRIA de cotações por conta: 429 com Retry-After de horas', async () => {
+    const t = await startQuoteApp({ config: { quotesPerDay: 1 } });
+    const p = await sessionOn(t.app);
+    assert.equal((await quote(t.app, p.token, { origin: MIDWAY, destination: PRAIA_SHOPPING })).status, 200);
+    const limited = await quote(t.app, p.token, { origin: MIDWAY, destination: PRAIA_SHOPPING });
+    assertRefused(limited, 'rate_limited');
+    assert.ok(Number(limited.headers['retry-after']) > 3600);
   });
 
   test('429 por conta, com Retry-After', async () => {
@@ -405,7 +450,7 @@ describe('versão nova de tarifa', () => {
 
     const fresh = (await quote(main.app, passenger.token, { origin: MIDWAY, destination: PRAIA_SHOPPING })).body.data.quotes[0];
     assert.equal(fresh.fareVersionId, newVersion);
-    assert.equal(fresh.priceCents, computeFare(newRates.vuumbora, RECORDED).totalCents);
+    assert.equal(fresh.priceCents, computeFare(newRates.vuumbora, ROUTE).totalCents);
     assert.notEqual(fresh.priceCents, issued.priceCents);
     await dropTemporaryVersions();
   });
@@ -428,7 +473,7 @@ describe('versão nova de tarifa', () => {
     assert.equal(reply.status, 200, reply.raw);
     assert.ok(published);
     assert.deepEqual(reply.body.data.quotes.map((q: { fareVersionId: string }) => q.fareVersionId), [published, published]);
-    assert.equal(reply.body.data.quotes[0].priceCents, computeFare(newRates.vuumbora, RECORDED).totalCents);
+    assert.equal(reply.body.data.quotes[0].priceCents, computeFare(newRates.vuumbora, ROUTE).totalCents);
     assert.match(t.logs(), /"event":"quote_fare_changed_retry","constraint":"fare_quotes_version_current"/);
     assert.equal(await quoteCount(p.accountId), 2, 'só as da segunda tentativa (a primeira foi desfeita inteira)');
     await dropTemporaryVersions();

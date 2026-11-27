@@ -1,7 +1,9 @@
 /**
- * Respostas FICTÍCIAS do Mapbox para a suíte (M4, fatias G3/G4). NADA aqui veio do Mapbox: nomes, coordenadas, distâncias e
- * polilinhas foram INVENTADOS no formato das APIs (Geocoding v6, Search Box, Geocoding v6 reverso, Directions), só para
- * exercitar o adaptador, as rotas e a cotação. Por isso vão para o repositório (público) e rodam no CI.
+ * Respostas FICTÍCIAS do Mapbox para a suíte (M4, fatias G3/G4). NADA aqui veio do Mapbox: nomes, coordenadas e polilinhas
+ * foram inventados no formato das APIs (Geocoding v6, Search Box, Geocoding v6 reverso, Directions), e a distância e a duração
+ * das rotas são números REDONDOS escolhidos à mão (9 km em 20 min, 35 km em 1 h, 100 m em 30 s), só para exercitar o
+ * adaptador, as rotas e a cotação. Por isso vão para o repositório (público) e rodam no CI. Regra para quem mexer aqui:
+ * nenhum número copiado de resposta real (a gravação local existe só para medir a amostra da F10).
  *
  * As respostas REAIS (amostra da F10) ficam fora do git, em `recorded.local.json` (decisão do Atlas, 27/11/2026: os termos da
  * geocodificação temporária restringem guardar resultados). Ver `scripts/record-mapbox-fixtures.ts`.
@@ -20,9 +22,9 @@ export const SYNTHETIC_AREA_BBOX = [-35.42, -6.02, -35.12, -5.66] as const;
 
 /** Pontos das rotas fictícias da cotação (os testes usam estes). */
 export const SYNTHETIC_ROUTES = {
-  midwayToPraiaShopping: { origin: { lat: -5.811, lng: -35.2065 }, destination: { lat: -5.871, lng: -35.1825 }, distance: 8657.603, duration: 1285.755 },
-  aeroportoToPontaNegra: { origin: { lat: -5.7686, lng: -35.3721 }, destination: { lat: -5.88, lng: -35.169 }, distance: 35089.402, duration: 3631.423 },
-  midwayShortHop: { origin: { lat: -5.811, lng: -35.2065 }, destination: { lat: -5.8112, lng: -35.2056 }, distance: 97.185, duration: 26.871 },
+  midwayToPraiaShopping: { origin: { lat: -5.811, lng: -35.2065 }, destination: { lat: -5.871, lng: -35.1825 }, distance: 9000, duration: 1200 },
+  aeroportoToPontaNegra: { origin: { lat: -5.7686, lng: -35.3721 }, destination: { lat: -5.88, lng: -35.169 }, distance: 35000, duration: 3600 },
+  midwayShortHop: { origin: { lat: -5.811, lng: -35.2065 }, destination: { lat: -5.8112, lng: -35.2056 }, distance: 100, duration: 30 },
 } as const;
 
 /** Pinos fictícios do reverso. */

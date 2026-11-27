@@ -87,6 +87,9 @@ export function testGeoConfig(overrides: Partial<GeoConfig> = {}): GeoConfig {
     GEO_SEARCH_PER_MINUTE: '10000',
     GEO_REVERSE_PER_MINUTE: '10000',
     QUOTES_PER_MINUTE: '10000',
+    GEO_SEARCH_PER_DAY: '100000',
+    GEO_REVERSE_PER_DAY: '100000',
+    QUOTES_PER_DAY: '100000',
   });
   return { ...config, ...overrides };
 }

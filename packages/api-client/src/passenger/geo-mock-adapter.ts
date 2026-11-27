@@ -119,14 +119,15 @@ const MAX_QUERY_LENGTH = 100;
 const MAX_LABEL_LENGTH = 200;
 const MAX_CATEGORY_SLUGS = 20;
 const MAX_SLUG_LENGTH = 64;
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+/** Controle C0/DEL/C1, marcas de direção do texto e largura zero: o mesmo conjunto que o servidor recusa no rótulo. */
+const FORBIDDEN_IN_LABEL = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/;
 const REVERSE_MATCH_RADIUS_M = 150;
 /** Linha reta × fator de rua, a 25 km/h médios: só para o mock ter números plausíveis. */
 const ROAD_FACTOR = 1.3;
 const AVERAGE_SPEED_MPS = 25_000 / 3600;
 
 function normalize(value: string): string {
-  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 }
 
 function isLatLng(value: unknown): value is LatLng {
@@ -141,8 +142,10 @@ function isLatLng(value: unknown): value is LatLng {
 function isQuotePoint(value: unknown): value is QuotePoint {
   if (!isLatLng(value)) return false;
   const { label } = value as unknown as Record<string, unknown>;
-  if (typeof label !== 'string' || CONTROL_CHARACTERS.test(label)) return false;
-  const trimmed = label.trim();
+  if (typeof label !== 'string') return false;
+  const normalized = label.normalize('NFC'); // como o servidor: o tamanho conta a forma composta
+  if (FORBIDDEN_IN_LABEL.test(normalized)) return false;
+  const trimmed = normalized.trim();
   return trimmed.length > 0 && trimmed.length <= MAX_LABEL_LENGTH;
 }
 

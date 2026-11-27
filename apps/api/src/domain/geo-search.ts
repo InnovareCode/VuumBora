@@ -70,7 +70,7 @@ const GENERIC_WORDS = new Set([
 export function normalizeSearchText(text: string): string {
   return text
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/ç/g, 'c')
     .replace(/[^a-z0-9]+/g, ' ')
@@ -116,7 +116,11 @@ function single(value: unknown): string | undefined | null {
   return typeof value === 'string' ? value : null;
 }
 
-const NUMBER_PATTERN = /^-?\d{1,3}(\.\d{1,10})?$/;
+/**
+ * Até 15 casas decimais: é o que um `double` de GPS vira em texto (`String(-5.812345678901234)`). O app do api-client manda
+ * 6 casas (~11 cm); aceitar até 15 aqui evita que um cliente que mande o valor cru caia em 400.
+ */
+const NUMBER_PATTERN = /^-?\d{1,3}(\.\d{1,15})?$/;
 
 export function parseLatLng(latRaw: string, lngRaw: string): LatLng | null {
   if (!NUMBER_PATTERN.test(latRaw) || !NUMBER_PATTERN.test(lngRaw)) return null;
@@ -177,6 +181,18 @@ export function looksLikeAddress(q: string): boolean {
 /** Arredonda a coordenada de proximidade (privacidade e chave de cache): 2 casas ≈ 1,1 km. */
 export function roundNear(point: LatLng): LatLng {
   return { lat: Math.round(point.lat * 100) / 100, lng: Math.round(point.lng * 100) / 100 };
+}
+
+/**
+ * Margem em volta da caixa da área (graus; 0,1° ≈ 11 km): o pino e a posição do passageiro só vão ao Mapbox perto da área
+ * atendida. Fora disso o pino recebe o rótulo genérico sem chamada nenhuma, e a posição é ignorada (vale o centro de Natal).
+ */
+export const AREA_MARGIN_DEGREES = 0.1;
+
+/** O ponto está na caixa `[oeste, sul, leste, norte]` alargada pela margem? */
+export function isNearBox(point: LatLng, bbox: readonly [number, number, number, number], margin: number = AREA_MARGIN_DEGREES): boolean {
+  const [west, south, east, north] = bbox;
+  return point.lng >= west - margin && point.lng <= east + margin && point.lat >= south - margin && point.lat <= north + margin;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

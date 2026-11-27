@@ -123,6 +123,12 @@ function parseQuoteResult(data: unknown): FareQuoteResult | null {
 
 const pointBody = (point: QuotePoint) => ({ lat: point.lat, lng: point.lng, label: point.label });
 
+/**
+ * Coordenada na querystring com 6 casas (~11 cm): o GPS entrega `double` com até 15 casas, e `String(-5.812345678901234)`
+ * mandaria a precisão toda. `Number(…toFixed(6))` também evita notação exponencial (`1e-7` vira `0`).
+ */
+const coordinateParam = (value: number): string => String(Number(value.toFixed(6)));
+
 export function createPassengerGeoHttpAdapter(options: PassengerGeoHttpOptions): { readonly geoPort: GeoPort; readonly quotePort: FareQuotePort } {
   const request = createAuthedRequester(options, 'createPassengerGeoHttpAdapter');
 
@@ -130,11 +136,11 @@ export function createPassengerGeoHttpAdapter(options: PassengerGeoHttpOptions):
     search(input: GeoSearchInput) {
       const params = new URLSearchParams({ q: input.q });
       if (input.kind !== undefined) params.set('kind', input.kind);
-      if (input.near !== undefined) params.set('near', `${input.near.lat},${input.near.lng}`);
+      if (input.near !== undefined) params.set('near', `${coordinateParam(input.near.lat)},${coordinateParam(input.near.lng)}`);
       return request({ method: 'GET', path: `/v1/geo/search?${params.toString()}`, fields: FIELDS, parse: parseSearch });
     },
     reverse(point: LatLng) {
-      const params = new URLSearchParams({ lat: String(point.lat), lng: String(point.lng) });
+      const params = new URLSearchParams({ lat: coordinateParam(point.lat), lng: coordinateParam(point.lng) });
       return request({ method: 'GET', path: `/v1/geo/reverse?${params.toString()}`, fields: FIELDS, parse: parseReverse });
     },
     serviceArea: () => request({ method: 'GET', path: '/v1/service-area', fields: FIELDS, parse: parseServiceArea }),

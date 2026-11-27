@@ -26,6 +26,17 @@ export class AccountRateLimiter {
     private readonly maxKeys: number = 50_000,
   ) {}
 
+  /**
+   * O que `take` responderia, SEM consumir. Serve para conferir duas janelas (minuto e dia) antes de gastar qualquer uma: a
+   * recusa numa não pode comer a cota da outra.
+   */
+  check(accountId: string): TakeResult {
+    const now = this.now();
+    const window = this.windows.get(accountId);
+    if (!window || now - window.startedAt >= this.windowMs || window.count < this.max) return { allowed: true };
+    return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((window.startedAt + this.windowMs - now) / 1000)) };
+  }
+
   /** Conta UMA chamada da conta. Recusada não consome (quem martela não estende a própria espera). */
   take(accountId: string): TakeResult {
     const now = this.now();

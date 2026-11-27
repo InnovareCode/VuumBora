@@ -8,7 +8,12 @@ import type { CreateQuotesInput, QuotePointInput } from '../services/quote-servi
 const MAX_LABEL_LENGTH = 200;
 const MAX_CATEGORY_SLUGS = 20;
 const MAX_SLUG_LENGTH = 64;
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+/**
+ * Caractere que não pode estar num rótulo de endereço (o texto vai ser mostrado a outra pessoa no M5): controle C0 e DEL,
+ * controle C1, marcas e isolamentos de DIREÇÃO do texto (mudam a ordem em que o rótulo aparece na tela) e caracteres de
+ * LARGURA ZERO (texto que parece igual a outro sem ser).
+ */
+const FORBIDDEN_IN_LABEL = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -20,8 +25,11 @@ function parsePoint(value: unknown): QuotePointInput | null {
   const { lat, lng, label } = value;
   if (typeof lat !== 'number' || !Number.isFinite(lat) || lat < -90 || lat > 90) return null;
   if (typeof lng !== 'number' || !Number.isFinite(lng) || lng < -180 || lng > 180) return null;
-  if (typeof label !== 'string' || CONTROL_CHARACTERS.test(label)) return null;
-  const trimmed = label.trim();
+  if (typeof label !== 'string') return null;
+  // NFC: o mesmo rótulo tem UMA forma gravada ("José" composto, não "Jose" + acento solto), e o tamanho conta caracteres de verdade.
+  const normalized = label.normalize('NFC');
+  if (FORBIDDEN_IN_LABEL.test(normalized)) return null;
+  const trimmed = normalized.trim();
   if (trimmed.length === 0 || trimmed.length > MAX_LABEL_LENGTH) return null;
   return { lat, lng, label: trimmed };
 }

@@ -33,7 +33,7 @@ const options = (impl: typeof fetch) => ({ baseUrl: 'https://api.teste.vuumbora.
 const ok = (data: unknown) => ({ status: 200, body: { ok: true, data } });
 
 const QUOTE = {
-  quoteId: '6f1d3c2a-0000-4000-8000-000000000001', categorySlug: 'vuumbora', priceCents: 2235, currency: 'BRL',
+  quoteId: '6f1d3c2a-0000-4000-8000-000000000001', categorySlug: 'vuumbora', priceCents: 2250, currency: 'BRL',
   fareVersionId: '6f1d3c2a-0000-4000-8000-0000000000aa', isTestFare: true, expiresAt: '2026-11-27T20:05:00.000Z', signature: 'a'.repeat(43),
 };
 const MIDWAY = { lat: -5.811, lng: -35.2065, label: 'Midway Mall' };
@@ -89,8 +89,21 @@ describe('createPassengerGeoHttpAdapter', () => {
     assert.equal(calls[2]!.url, 'https://api.teste.vuumbora.dev/v1/geo/reverse?lat=-5.8&lng=-35.2');
   });
 
+  test('coordenada de GPS (até 15 casas) vai com 6 casas no pino e no near; sem notação exponencial', async () => {
+    const { impl, calls } = fakeFetch((seen) =>
+      seen.url.includes('/reverse') ? ok({ label: 'Rua X', lat: -5.812346, lng: -35.209877, inServiceArea: true }) : ok({ results: [] }),
+    );
+    const { geoPort } = createPassengerGeoHttpAdapter(options(impl));
+    await geoPort.reverse({ lat: -5.812345678901234, lng: -35.20987654321098 });
+    await geoPort.search({ q: 'midway', kind: 'any', near: { lat: -5.812345678901234, lng: 0.0000001 } });
+    const reverse = new URL(calls[0]!.url);
+    assert.equal(reverse.searchParams.get('lat'), '-5.812346');
+    assert.equal(reverse.searchParams.get('lng'), '-35.209877');
+    assert.equal(new URL(calls[1]!.url).searchParams.get('near'), '-5.812346,0');
+  });
+
   test('fio da cotação: corpo campo a campo (sobra não vai), categorySlugs só se pedido, id codificado no GET', async () => {
-    const { impl, calls } = fakeFetch((seen) => (seen.method === 'POST' ? ok({ route: { distanceM: 8658, durationS: 1286, polyline: 'abc' }, quotes: [QUOTE] }) : ok(QUOTE)));
+    const { impl, calls } = fakeFetch((seen) => (seen.method === 'POST' ? ok({ route: { distanceM: 9000, durationS: 1200, polyline: 'abc' }, quotes: [QUOTE] }) : ok(QUOTE)));
     const { quotePort } = createPassengerGeoHttpAdapter(options(impl));
     const extra = { apelido: 'casa', confirmado: true } as object;
     await quotePort.createQuotes({ origin: { ...MIDWAY, ...extra }, destination: PRAIA, ...extra });
@@ -104,16 +117,16 @@ describe('createPassengerGeoHttpAdapter', () => {
   });
 
   test('sucesso conferido: a forma certa vem com origin real; forma errada (portal cativo, proxy) vira unknown', async () => {
-    const good = fakeFetch(() => ok({ route: { distanceM: 8658, durationS: 1286, polyline: 'abc' }, quotes: [QUOTE] }));
+    const good = fakeFetch(() => ok({ route: { distanceM: 9000, durationS: 1200, polyline: 'abc' }, quotes: [QUOTE] }));
     const created = await createPassengerGeoHttpAdapter(options(good.impl)).quotePort.createQuotes({ origin: MIDWAY, destination: PRAIA });
     assert.ok(created.ok && created.origin === 'real');
     assert.deepEqual(created.ok && created.data.quotes[0], QUOTE);
 
     const malformed: unknown[] = [
-      { route: { distanceM: 8658.5, durationS: 1286, polyline: 'abc' }, quotes: [] },
-      { route: { distanceM: 8658, durationS: 1286, polyline: 'abc' }, quotes: [{ ...QUOTE, currency: 'USD' }] },
-      { route: { distanceM: 8658, durationS: 1286, polyline: 'abc' }, quotes: [{ ...QUOTE, priceCents: 22.35 }] },
-      { route: { distanceM: 8658, durationS: 1286, polyline: 'abc' }, quotes: [{ ...QUOTE, expiresAt: 'amanhã' }] },
+      { route: { distanceM: 9000.5, durationS: 1200, polyline: 'abc' }, quotes: [] },
+      { route: { distanceM: 9000, durationS: 1200, polyline: 'abc' }, quotes: [{ ...QUOTE, currency: 'USD' }] },
+      { route: { distanceM: 9000, durationS: 1200, polyline: 'abc' }, quotes: [{ ...QUOTE, priceCents: 22.35 }] },
+      { route: { distanceM: 9000, durationS: 1200, polyline: 'abc' }, quotes: [{ ...QUOTE, expiresAt: 'amanhã' }] },
       '<html>login do wi-fi</html>',
     ];
     for (const data of malformed) {

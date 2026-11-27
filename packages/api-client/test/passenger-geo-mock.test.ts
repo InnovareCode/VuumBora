@@ -217,8 +217,12 @@ describe('POST /v1/quotes', () => {
       { origin: { ...MIDWAY, label: 'x'.repeat(201) }, destination: PONTA_NEGRA },
       { origin: MIDWAY, destination: PONTA_NEGRA, categorySlugs: Array.from({ length: 21 }, () => 'vuumbora') },
       { origin: MIDWAY, destination: PONTA_NEGRA, categorySlugs: ['x'.repeat(65)] },
+      // Controle C1, marca de direção do texto, isolamento de direção e largura zero.
+      ...[0x85, 0x200f, 0x2066, 0x200b, 0xfeff].map((code) => ({ origin: { ...MIDWAY, label: `Casa${String.fromCharCode(code)}1` }, destination: PONTA_NEGRA })),
     ];
     for (const input of bad) expectError(await quotePort.createQuotes(input as never), 'validation', 'invalid_body');
+    // NFC: 200 caracteres compostos passam mesmo que a forma decomposta tenha 400.
+    assert.ok((await quotePort.createQuotes({ origin: { ...MIDWAY, label: 'e\u0301'.repeat(200) }, destination: PONTA_NEGRA })).ok);
     // Rótulo com espaço em volta: vale o texto aparado (até 200), como no servidor.
     assert.ok((await quotePort.createQuotes({ origin: { ...MIDWAY, label: `  ${'x'.repeat(200)}  ` }, destination: PONTA_NEGRA })).ok);
   });

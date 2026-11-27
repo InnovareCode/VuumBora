@@ -38,7 +38,7 @@ interface GeoApp {
 
 const opened: FastifyInstance[] = [];
 
-async function startGeoApp(options: { config?: Partial<GeoConfig>; provider?: (replay: ReplayFetch) => GeoProvider | null } = {}): Promise<GeoApp> {
+async function startGeoApp(options: { config?: Partial<GeoConfig>; provider?: (replay: ReplayFetch) => GeoProvider | null; now?: () => number } = {}): Promise<GeoApp> {
   const replay = replayFetch();
   const config = testGeoConfig(options.config);
   const provider = options.provider ? options.provider(replay) : replayProvider(replay, config);
@@ -46,7 +46,7 @@ async function startGeoApp(options: { config?: Partial<GeoConfig>; provider?: (r
   const app = await buildApp({
     logStream: new Writable({ write: (chunk, _encoding, callback) => { buffer += chunk.toString(); callback(); } }),
     mail: mailbox,
-    geo: { config, provider },
+    geo: { config, provider, ...(options.now ? { now: options.now } : {}) },
   });
   await app.ready();
   opened.push(app);
@@ -171,13 +171,100 @@ describe('busca', () => {
     assert.deepEqual(main.replay.calls.slice(before).map((url) => url.includes('/geocode/v6/forward')), [true]);
   });
 
-  test('cache curto: a mesma busca de novo não chama o Mapbox', async () => {
+  test('cache DESLIGADO por padrão (termos do Mapbox): a mesma busca de novo chama o Mapbox de novo', async () => {
+    assert.equal(testGeoConfig().searchCacheTtlMs, 0);
     const q = 'Av. Hermes da Fonseca, 721, Tirol, Natal, RN';
     await get(main.app, search({ q, kind: 'any' }), passenger);
     const before = main.replay.calls.length;
     const again = await get(main.app, search({ q, kind: 'any' }), passenger);
     assert.equal(again.status, 200);
-    assert.equal(main.replay.calls.length, before);
+    assert.equal(main.replay.calls.length, before + 2);
+  });
+
+  test('cache ligado por configuração explícita: a mesma busca de novo não chama o Mapbox', async () => {
+    const t = await startGeoApp({ config: { searchCacheTtlMs: 300_000 } });
+    const token = await sessionOn(t.app);
+    const q = 'Av. Hermes da Fonseca, 721, Tirol, Natal, RN';
+    await get(t.app, search({ q, kind: 'any' }), token);
+    const before = t.replay.calls.length;
+    assert.equal((await get(t.app, search({ q, kind: 'any' }), token)).status, 200);
+    assert.equal(t.replay.calls.length, before);
+  });
+
+  test('teto diário GLOBAL por motor: esgotado, 503 geo_unavailable SEM chamar o Mapbox, um evento geo_budget_exhausted por dia', async () => {
+    let clock = Date.parse('2026-11-27T15:00:00Z'); // meio-dia em Natal
+    const t = await startGeoApp({ config: { dailyBudget: { geocoding: 2, searchbox: 1000, reverse: 1000, directions: 1000 } }, now: () => clock });
+    const token = await sessionOn(t.app);
+    const other = await sessionOn(t.app);
+    assert.equal((await get(t.app, search({ q: 'Rua Potengi, 300, Tirol, Natal, RN', kind: 'address' }), token)).status, 200);
+    assert.equal((await get(t.app, search({ q: 'Rua Chile, 50, Cidade Alta, Natal, RN', kind: 'address' }), other)).status, 200, 'o teto é da soma das contas');
+    const calls = t.replay.calls.length;
+    for (const who of [token, other, token]) {
+      assertRefused(await get(t.app, search({ q: 'Rua Mossoró, 480, Petrópolis, Natal, RN', kind: 'address' }), who), 'geo_unavailable', 503);
+    }
+    assert.equal(t.replay.calls.length, calls, 'nenhuma chamada passou do teto');
+    assert.equal(t.logs().match(/"event":"geo_budget_exhausted","engine":"geocoding","dailyLimit":2/g)?.length, 1, 'o evento sai uma vez por dia');
+    assert.doesNotMatch(t.logs(), /"reason":"budget_exhausted"/, 'o teto não vira aviso de falha a cada chamada');
+    // A Search Box tem o próprio teto: segue servindo.
+    assert.equal((await get(t.app, search({ q: 'Hospital do Coracao Natal', kind: 'place' }), token)).status, 200);
+    // Virou o dia em Natal (03:00 UTC): o motor volta.
+    clock = Date.parse('2026-11-28T03:00:00Z');
+    assert.equal((await get(t.app, search({ q: 'Rua Mossoró, 480, Petrópolis, Natal, RN', kind: 'address' }), token)).status, 200);
+  });
+
+  test('teto do pino zerado: 503 geo_unavailable', async () => {
+    const t = await startGeoApp({ config: { dailyBudget: { geocoding: 1000, searchbox: 1000, reverse: 0, directions: 1000 } } });
+    const token = await sessionOn(t.app);
+    assertRefused(await get(t.app, '/v1/geo/reverse?lat=-5.7982&lng=-35.2034', token), 'geo_unavailable', 503);
+    assert.equal(t.replay.calls.length, 0);
+    assert.match(t.logs(), /"event":"geo_budget_exhausted","engine":"reverse","dailyLimit":0/);
+  });
+
+  test('cota DIÁRIA por conta (além da por minuto): 429 com Retry-After de horas; outra conta segue', async () => {
+    const t = await startGeoApp({ config: { searchPerDay: 2, reversePerDay: 1 } });
+    const token = await sessionOn(t.app);
+    const other = await sessionOn(t.app);
+    const q = { q: 'Via Costeira Natal', kind: 'any' };
+    assert.equal((await get(t.app, search(q), token)).status, 200);
+    assert.equal((await get(t.app, search(q), token)).status, 200);
+    const limited = await get(t.app, search(q), token);
+    assertRefused(limited, 'rate_limited');
+    assert.ok(Number(limited.headers['retry-after']) > 3600, String(limited.headers['retry-after']));
+    assert.equal((await get(t.app, search(q), other)).status, 200);
+    assert.equal((await get(t.app, '/v1/geo/reverse?lat=-5.7982&lng=-35.2034', token)).status, 200, 'cada rota tem a sua cota');
+    assertRefused(await get(t.app, '/v1/geo/reverse?lat=-5.7982&lng=-35.2034', token), 'rate_limited');
+  });
+
+  test('recusa por minuto não come a cota do dia (as duas janelas são conferidas antes de gastar)', async () => {
+    let clock = Date.parse('2026-11-27T15:00:00Z');
+    const t = await startGeoApp({ config: { searchPerMinute: 1, searchPerDay: 2 }, now: () => clock });
+    const token = await sessionOn(t.app);
+    const q = { q: 'Via Costeira Natal', kind: 'any' };
+    assert.equal((await get(t.app, search(q), token)).status, 200);
+    for (let i = 0; i < 5; i++) {
+      const limited = await get(t.app, search(q), token);
+      assertRefused(limited, 'rate_limited');
+      assert.ok(Number(limited.headers['retry-after']) <= 60, 'é o minuto que segura');
+    }
+    clock += 61_000;
+    assert.equal((await get(t.app, search(q), token)).status, 200, 'as 5 recusas não gastaram a cota do dia');
+    clock += 61_000;
+    const daily = await get(t.app, search(q), token);
+    assertRefused(daily, 'rate_limited');
+    assert.ok(Number(daily.headers['retry-after']) > 3600, 'agora é o dia que segura');
+  });
+
+  test('near longe da área (caixa + margem) é ignorado: o Mapbox recebe o centro de Natal', async () => {
+    const sent: { lat: number; lng: number }[] = [];
+    const t = await startGeoApp({ provider: () => ({
+      forward: async (_engine, request) => { sent.push(request.proximity); return []; },
+      reverse: async () => ({ label: null }),
+      directions: async () => { throw new Error('não usado'); },
+    }) });
+    const token = await sessionOn(t.app);
+    assert.equal((await get(t.app, search({ q: 'Rua Potengi 300', near: '-23.5505,-46.6333' }), token)).status, 200);
+    assert.equal((await get(t.app, search({ q: 'Rua Potengi 300', near: '-5.6,-35.5' }), token)).status, 200, 'dentro da margem de 0,1°');
+    assert.deepEqual(sent, [{ lat: -5.79, lng: -35.21 }, { lat: -5.6, lng: -35.5 }]);
   });
 
   test('autocompletar: "midw" já traz o Midway Mall (ponto próprio) sem depender do Mapbox', async () => {
@@ -313,6 +400,27 @@ describe('pino (reverso)', () => {
     assert.deepEqual(reply.body.data, { label: 'Ceará-Mirim', lat: -5.63, lng: -35.42, inServiceArea: false });
   });
 
+  test('pino longe da área (caixa + margem): rótulo genérico, fora da área, SEM chamar o Mapbox', async () => {
+    const t = await startGeoApp();
+    const token = await sessionOn(t.app);
+    for (const [lat, lng] of [['-23.5505', '-46.6333'], ['48.8566', '2.3522'], ['-6.2', '-35.2']]) {
+      const reply = await get(t.app, `/v1/geo/reverse?lat=${lat}&lng=${lng}`, token);
+      assert.equal(reply.status, 200, reply.raw);
+      assert.deepEqual(reply.body.data, { label: 'Local marcado no mapa', lat: Number(lat), lng: Number(lng), inServiceArea: false });
+    }
+    assert.equal(t.replay.calls.length, 0);
+  });
+
+  test('coordenada de GPS com até 15 casas é aceita; 16 casas é 400', async () => {
+    const t = await startGeoApp({ provider: () => ({ forward: async () => [], reverse: async () => ({ label: 'Rua X' }), directions: async () => { throw new Error('não usado'); } }) });
+    const token = await sessionOn(t.app);
+    const ok15 = await get(t.app, '/v1/geo/reverse?lat=-5.812345678901234&lng=-35.209876543210987', token);
+    assert.equal(ok15.status, 200, ok15.raw);
+    assert.equal(ok15.body.data.lat, -5.812345678901234);
+    assertRefused(await get(t.app, '/v1/geo/reverse?lat=-5.8123456789012345&lng=-35.2', token), 'invalid_body');
+    assert.equal((await get(t.app, search({ q: 'Rua Potengi 300', near: '-5.812345678901234,-35.209876543210987' }), token)).status, 200);
+  });
+
   test('Mapbox fora: 502 geo_unavailable', async () => {
     const t = await startGeoApp();
     const token = await sessionOn(t.app);
@@ -333,6 +441,14 @@ describe('área e categorias (semente da 0026)', () => {
     assert.equal(area.polygon.type, 'Polygon');
     assert.deepEqual(area.polygon.coordinates[0][0], [-35.42, -5.7]);
     assert.deepEqual(area.bbox, [-35.42, -6.02, -35.12, -5.66]);
+  });
+
+  test('/healthz informa se a tarifa de teste pode cotar (só o booleano)', async () => {
+    const allowed = await main.app.inject({ method: 'GET', url: '/healthz' });
+    assert.deepEqual(JSON.parse(allowed.body), { status: 'ok', testFaresAllowed: true });
+    const t = await startGeoApp({ config: { allowTestFares: false } });
+    const blocked = await t.app.inject({ method: 'GET', url: '/healthz' });
+    assert.deepEqual(JSON.parse(blocked.body), { status: 'ok', testFaresAllowed: false });
   });
 
   test('GET /v1/categories: só as LIGADAS, na ordem da tela, na forma do contrato', async () => {

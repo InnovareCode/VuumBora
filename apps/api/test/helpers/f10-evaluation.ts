@@ -17,7 +17,7 @@ const METRO_PLACES = [
 ];
 
 function normalize(text: string | null | undefined): string {
-  return (text ?? '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return (text ?? '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 const GENERIC_WORDS = new Set([

@@ -1,10 +1,23 @@
 /**
+ * ===================================================================================================================
+ * PARA QUEM FIZER O `POST /v1/trips` (M5), que CONSOME a cotação — checklist da revisão de segurança da G2-G4:
+ *   1. Buscar a cotação por (id, account_id) da sessão: de outra conta é igual a inexistente (404, sem distinguir).
+ *   2. Validade pelo relógio do BANCO (`clock_timestamp() >= expires_at` = vencida, 409 `quote_expired`), como o GET daqui.
+ *   3. Uso ÚNICO: a corrida grava o `quote_id` com restrição única; a segunda tentativa com a mesma cotação é recusada.
+ *   4. Recomputar o HMAC (`signQuote`, `lib/quote-signature.ts`) sobre os campos GRAVADOS (id, categoria, preço, versão,
+ *      validade), com o segredo atual e o anterior (troca de segredo durante a validade), e comparar em tempo constante com o
+ *      que o app devolveu; não basta comparar com a assinatura gravada.
+ *   5. Recusar cotação de tarifa de TESTE (`is_test`) quando `ALLOW_TEST_FARES` estiver desligada (produção), mesmo que ela
+ *      tenha sido emitida: a trava daqui (N8) não pode ser a única.
+ * ===================================================================================================================
+ *
  * Cotação do passageiro (M4, fatia G4; N8 e N9 do `docs/plano-m3-m4.md`; D-06 do dono: preço fechado).
  *
  * `POST /v1/quotes`, na ordem do contrato K0 (`FareQuotePort.createQuotes`):
  *   400 (a rota) → 503 `fare_not_configured` (sem tarifa vigente, ou só a de TESTE com `ALLOW_TEST_FARES` desligada, N8)
  *   → 503 `geo_unavailable` (sem token do Mapbox) → 422 `outside_service_area` (origem ou destino, polígono da área ativa)
- *   → 502 `route_unavailable` (Directions falhou ou não achou rota) → 422 `route_too_short` (< 300 m).
+ *   → 503 `geo_unavailable` (teto diário da Directions, `lib/geo-budget.ts`) → 502 `route_unavailable` (Directions falhou ou
+ *   não achou rota) → 422 `route_too_short` (< 300 m).
  *
  * Preço: `computeFare` (G2) sobre a distância e a duração da Directions ARREDONDADAS À VISTA para metro e segundo inteiros —
  * os mesmos inteiros gravados em `fare_quotes`, com os quais a auditoria refaz a conta e chega no mesmo centavo. Dinâmica 1
@@ -170,6 +183,7 @@ export function createQuoteService(deps: QuoteServiceDeps): QuoteService {
       route = { distanceM: Math.round(raw.distanceM), durationS: Math.max(1, Math.round(raw.durationS)), polyline: raw.polyline };
     } catch (err) {
       if (!(err instanceof GeoProviderError)) throw err;
+      if (err.reason === 'budget_exhausted') return { kind: 'geo_unavailable' }; // o evento do teto já saiu, uma vez por dia
       deps.log.warn({ event: 'geo_provider_failed', engine: 'directions', reason: err.reason, ...(err.status !== undefined ? { status: err.status } : {}) });
       return { kind: 'route_unavailable' };
     }

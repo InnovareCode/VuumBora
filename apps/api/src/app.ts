@@ -250,7 +250,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       credentials: false,
     });
 
-    registerHealthRoute(instance, { ttlMs: env.HEALTHZ_CACHE_SECONDS * 1000 });
+    registerHealthRoute(instance, { ttlMs: env.HEALTHZ_CACHE_SECONDS * 1000, testFaresAllowed: geo.config.allowTestFares });
     registerWaitlistRoute(instance);
     registerDriverApplicationRoute(instance);
     // Documentos legais (M-3): uma leitura da configuração serve ao catálogo público e ao aceite da identidade.
