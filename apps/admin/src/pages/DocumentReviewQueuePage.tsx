@@ -1,9 +1,10 @@
-import { memo, useState } from 'react';
+import { memo, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlarmClock, FileCheck2 } from 'lucide-react';
 import { useDocumentReviewQueue } from '../hooks/useDocumentReviewQueue';
 import { EmptyState, ErrorState, LoadingState } from '../components/RequestState';
 import { PageHeader } from '../components/PageHeader';
+import { FilterTabs, filterTabId } from '../components/FilterTabs';
 import { DocumentStatusPill } from '../components/documents/DocumentStatusPills';
 import { formatDateTime } from '../lib/format';
 import { formatRelativeHours } from '../lib/documentFormat';
@@ -29,6 +30,9 @@ export function DocumentReviewQueuePage() {
   const { items, loading, loadingMore, error, errorKind, nextCursor, reload, loadMore } = useDocumentReviewQueue(status);
   const tab = TABS.find((candidate) => candidate.value === status) ?? TABS[0]!;
   const overdueCount = status === 'submitted' ? items.filter((item) => item.overdue).length : 0;
+  const empty = !loading && !error && items.length === 0;
+  const idPrefix = useId();
+  const panelId = `${idPrefix}-panel`;
 
   return (
     <section>
@@ -39,81 +43,84 @@ export function DocumentReviewQueuePage() {
         className="mb-6"
       />
 
-      <div role="tablist" aria-label="Filtrar documentos por situação" className="mb-4 flex flex-wrap gap-2">
-        {TABS.map((candidate) => (
-          <button
-            key={candidate.value}
-            type="button"
-            role="tab"
-            aria-selected={status === candidate.value}
-            onClick={() => setStatus(candidate.value)}
-            className={
-              status === candidate.value
-                ? 'min-h-11 rounded-pill bg-cta px-4 py-2 text-caption font-bold text-on-cta outline-none focus-visible:ring-2 focus-visible:ring-info'
-                : 'min-h-11 rounded-pill border border-border px-4 py-2 text-caption font-semibold text-text-secondary outline-none transition-colors hover:border-cta-pressed/40 hover:text-cta-pressed focus-visible:ring-2 focus-visible:ring-info'
-            }
-          >
-            {candidate.label}
-          </button>
-        ))}
-      </div>
+      {/* Mesmo padrão completo do pré-cadastro e dos usuários: uma aba no Tab, setas só movem o foco (trocar a
+          situação chama a API), conteúdo num `tabpanel` rotulado pela aba ativa. */}
+      <FilterTabs
+        label="Filtrar documentos por situação"
+        options={TABS}
+        value={status}
+        onChange={setStatus}
+        idPrefix={idPrefix}
+        panelId={panelId}
+        className="mb-4"
+      />
 
-      {!loading && !error && overdueCount > 0 ? (
-        <p className="mb-4 flex items-start gap-2 rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-small font-semibold text-text">
-          <AlarmClock className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
-          {overdueCount === 1
-            ? '1 documento desta lista passou do prazo de análise.'
-            : `${overdueCount} documentos desta lista passaram do prazo de análise.`}
-        </p>
-      ) : null}
+      {/* Sem nada focável dentro (carregando, vazio, erro sem "tentar de novo"), o próprio painel entra no Tab. */}
+      <div
+        role="tabpanel"
+        id={panelId}
+        aria-labelledby={filterTabId(idPrefix, status)}
+        tabIndex={loading || empty || (error && errorKind === 'forbidden') ? 0 : undefined}
+        className="rounded-xxl"
+      >
+        {!loading && !error && overdueCount > 0 ? (
+          <p className="mb-4 flex items-start gap-2 rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-small font-semibold text-text">
+            <AlarmClock className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
+            {overdueCount === 1
+              ? '1 documento desta lista passou do prazo de análise.'
+              : `${overdueCount} documentos desta lista passaram do prazo de análise.`}
+          </p>
+        ) : null}
 
-      {loading ? <LoadingState label="Carregando documentos…" /> : null}
-      {/* 403 não ganha "tentar de novo": papel não muda com retry. */}
-      {!loading && error ? <ErrorState message={error} {...(errorKind !== 'forbidden' ? { onRetry: () => void reload() } : {})} /> : null}
-      {!loading && !error && items.length === 0 ? <EmptyState title={tab.empty} hint="Troque o filtro para ver outras situações." /> : null}
+        {loading ? <LoadingState label="Carregando documentos…" /> : null}
+        {/* 403 não ganha "tentar de novo": papel não muda com retry. */}
+        {!loading && error ? <ErrorState message={error} {...(errorKind !== 'forbidden' ? { onRetry: () => void reload() } : {})} /> : null}
+        {empty ? <EmptyState title={tab.empty} hint="Troque o filtro para ver outras situações." /> : null}
 
-      {!loading && !error && items.length > 0 ? (
-        <>
-          <div className="overflow-x-auto rounded-xxl border border-border bg-surface">
-            <table className="w-full text-left text-small">
-              <caption className="sr-only">
-                {tab.label}: documentos do mais antigo para o mais novo
-              </caption>
-              <thead>
-                <tr className="border-b border-border text-caption font-bold uppercase tracking-wider text-text-muted">
-                  <th scope="col" className="px-4 py-3">
-                    Motorista e documento
-                  </th>
-                  <th scope="col" className="px-4 py-3">
-                    {status === 'submitted' ? 'Prazo da análise' : 'Situação'}
-                  </th>
-                  <th scope="col" className="hidden px-4 py-3 sm:table-cell">
-                    Enviado em
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <QueueRow key={item.documentId} item={item} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {nextCursor ? (
-            <div className="mt-4 flex justify-center">
-              <button
-                type="button"
-                onClick={() => void loadMore()}
-                disabled={loadingMore}
-                className="min-h-11 rounded-pill border border-border px-5 py-2.5 text-small font-bold text-text-secondary outline-none transition-colors hover:border-cta-pressed/40 hover:text-cta-pressed focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loadingMore ? 'Carregando…' : 'Carregar mais'}
-              </button>
+        {!loading && !error && items.length > 0 ? (
+          <>
+            {/* `relative`: a legenda `sr-only` (absoluta) fica presa a este contêiner, não alarga a página. */}
+            <div className="relative overflow-x-auto rounded-xxl border border-border bg-surface">
+              <table className="w-full text-left text-small">
+                <caption className="sr-only">
+                  {tab.label}: documentos do mais antigo para o mais novo
+                </caption>
+                <thead>
+                  <tr className="border-b border-border text-caption font-bold uppercase tracking-wider text-text-muted">
+                    <th scope="col" className="px-4 py-3">
+                      Motorista e documento
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      {status === 'submitted' ? 'Prazo da análise' : 'Situação'}
+                    </th>
+                    <th scope="col" className="hidden px-4 py-3 sm:table-cell">
+                      Enviado em
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <QueueRow key={item.documentId} item={item} />
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ) : null}
-        </>
-      ) : null}
+
+            {nextCursor ? (
+              <div className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                  className="min-h-11 rounded-pill border border-border px-5 py-2.5 text-small font-bold text-text-secondary outline-none transition-colors hover:border-cta-pressed/40 hover:text-cta-pressed focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loadingMore ? 'Carregando…' : 'Carregar mais'}
+                </button>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </div>
     </section>
   );
 }
