@@ -1,0 +1,405 @@
+{
+ "source": "apps/api/scripts/geocoding-sample-natal.mjs (F10, 22/11/2026), mesma ordem",
+ "sample": [
+  {
+   "category": "bairro",
+   "query": "Rua Potengi, 300, Tirol, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Av. Afonso Pena, 1100, Tirol, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Av. Hermes da Fonseca, 721, Tirol, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Rua Mossoró, 480, Petrópolis, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Av. Rio Branco, 1200, Petrópolis, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Rua Jundiaí, 150, Petrópolis, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Av. Senador Salgado Filho, 2500, Lagoa Nova, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Av. Bernardo Vieira, 3100, Lagoa Nova, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Av. Engenheiro Roberto Freire, 4200, Capim Macio, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Rua Elisa Vilaça, 230, Capim Macio, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Av. Prudente de Morais, 1800, Candelária, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Rua Catavento, 190, Candelária, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Av. Prudente de Morais, 3200, Neópolis, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Rua Juvenal Lamartine, 500, Neópolis, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Rua Amaro Bezerra, 870, Alecrim, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Rua Teixeira de Freitas, 400, Alecrim, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Rua Chile, 50, Cidade Alta, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Av. Rio Branco, 500, Ribeira, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Rua Dr. Sóstenes Rocha, 320, Quintas, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Av. Gustavo Cordeiro de Farias, 1500, Nova Descoberta, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Rua João XXIII, 600, Felipe Camarão, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Rua Chapeuzinho Vermelho, 120, Cidade Nova, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Av. Antônio Basílio, 2200, Lagoa Nova, Natal, RN"
+  },
+  {
+   "category": "bairro",
+   "query": "Rua Dr. João Medeiros Filho, 700, Igapó, Natal, RN"
+  },
+  {
+   "category": "praia",
+   "query": "Av. Engenheiro Roberto Freire, 8790, Ponta Negra, Natal, RN"
+  },
+  {
+   "category": "praia",
+   "query": "Rua Erivan França, 1199, Ponta Negra, Natal, RN"
+  },
+  {
+   "category": "praia",
+   "query": "Via Costeira, s/n, Areia Preta, Natal, RN"
+  },
+  {
+   "category": "praia",
+   "query": "Av. Presidente Café Filho, s/n, Praia do Meio, Natal, RN"
+  },
+  {
+   "category": "praia",
+   "query": "Rua Francisco Gurgel, 1000, Ponta Negra, Natal, RN"
+  },
+  {
+   "category": "praia",
+   "query": "Av. Maestro Francisco Castelo Branco, Redinha, Natal, RN"
+  },
+  {
+   "category": "praia",
+   "query": "Praia de Genipabu, Extremoz, RN"
+  },
+  {
+   "category": "praia",
+   "query": "Rua Apodi, s/n, Praia dos Artistas, Natal, RN"
+  },
+  {
+   "category": "condominio",
+   "query": "Alphaville Natal, Nova Parnamirim, RN"
+  },
+  {
+   "category": "condominio",
+   "query": "Condomínio Soul Ponta Negra, Rua Francisco Gurgel, Ponta Negra, Natal, RN"
+  },
+  {
+   "category": "condominio",
+   "query": "Condomínio Vivaz Ponta Negra, Av. Engenheiro Roberto Freire, Ponta Negra, Natal, RN"
+  },
+  {
+   "category": "condominio",
+   "query": "Residencial Reserva do Atlântico, Via Costeira, Natal, RN"
+  },
+  {
+   "category": "condominio",
+   "query": "Condomínio residencial, Rua Erivan França, 1199, Ponta Negra, Natal, RN"
+  },
+  {
+   "category": "condominio",
+   "query": "Condomínio residencial, Av. Antônio Basílio, 1200, Lagoa Nova, Natal, RN"
+  },
+  {
+   "category": "condominio",
+   "query": "Condomínio residencial, Rua Elisa Vilaça, 300, Capim Macio, Natal, RN"
+  },
+  {
+   "category": "condominio",
+   "query": "Condomínio residencial, Av. Prudente de Morais, 1500, Candelária, Natal, RN"
+  },
+  {
+   "category": "shopping",
+   "query": "Midway Mall, Av. Rio Branco, 536, Petrópolis, Natal, RN"
+  },
+  {
+   "category": "shopping",
+   "query": "Natal Shopping, Av. Engenheiro Roberto Freire, Capim Macio, Natal, RN"
+  },
+  {
+   "category": "shopping",
+   "query": "Partage Norte Shopping, Av. Maestro Francisco Castelo Branco, Lagoa Azul, Natal, RN"
+  },
+  {
+   "category": "shopping",
+   "query": "Praia Shopping, Av. Engenheiro Roberto Freire, Ponta Negra, Natal, RN"
+  },
+  {
+   "category": "shopping",
+   "query": "Midway Mall Natal RN"
+  },
+  {
+   "category": "shopping",
+   "query": "Natal Shopping, Capim Macio, Natal-RN"
+  },
+  {
+   "category": "hospital",
+   "query": "Hospital Universitário Onofre Lopes, Av. Nilo Peçanha, 620, Petrópolis, Natal, RN"
+  },
+  {
+   "category": "hospital",
+   "query": "Hospital Monsenhor Walfredo Gurgel, Av. Senador Salgado Filho, Tirol, Natal, RN"
+  },
+  {
+   "category": "hospital",
+   "query": "Maternidade Escola Januário Cicco, Rua Alexandrino de Alencar, Tirol, Natal, RN"
+  },
+  {
+   "category": "hospital",
+   "query": "Hospital Giselda Trigueiro, Rua Cônego Monte, Quintas, Natal, RN"
+  },
+  {
+   "category": "hospital",
+   "query": "Liga Norte Riograndense Contra o Câncer, Rua Mossoró, Petrópolis, Natal, RN"
+  },
+  {
+   "category": "hospital",
+   "query": "Hospital Rio Grande, Av. Hermes da Fonseca, Tirol, Natal, RN"
+  },
+  {
+   "category": "hospital",
+   "query": "Hospital do Coração, Av. Engenheiro Roberto Freire, Capim Macio, Natal, RN"
+  },
+  {
+   "category": "hospital",
+   "query": "Hospital Santa Catarina, Rua Potengi, Petrópolis, Natal, RN"
+  },
+  {
+   "category": "aeroporto",
+   "query": "Aeroporto Internacional Governador Aluízio Alves, São Gonçalo do Amarante, RN"
+  },
+  {
+   "category": "aeroporto",
+   "query": "Aeroporto de Natal, São Gonçalo do Amarante, RN"
+  },
+  {
+   "category": "rodoviaria",
+   "query": "Terminal Rodoviário Nelson Mandela, Av. Capitão-Mor Gouveia, Cidade da Esperança, Natal, RN"
+  },
+  {
+   "category": "rodoviaria",
+   "query": "Rodoviária de Natal, RN"
+  },
+  {
+   "category": "ponto",
+   "query": "Praça André de Albuquerque, Cidade Alta, Natal, RN"
+  },
+  {
+   "category": "ponto",
+   "query": "UFRN, Campus Central, Lagoa Nova, Natal, RN"
+  },
+  {
+   "category": "ponto",
+   "query": "Parque das Dunas, Tirol, Natal, RN"
+  },
+  {
+   "category": "ponto",
+   "query": "Catedral Metropolitana de Natal, Praia do Meio, Natal, RN"
+  },
+  {
+   "category": "ponto",
+   "query": "Forte dos Reis Magos, Praia do Forte, Natal, RN"
+  },
+  {
+   "category": "ponto",
+   "query": "Mercado Público de Natal, Cidade Alta, Natal, RN"
+  },
+  {
+   "category": "ponto",
+   "query": "Prefeitura Municipal do Natal, Av. Prudente de Morais, Tirol, Natal, RN"
+  },
+  {
+   "category": "ponto",
+   "query": "Teatro Alberto Maranhão, Cidade Alta, Natal, RN"
+  },
+  {
+   "category": "ponto",
+   "query": "Centro de Convenções de Natal, Capim Macio, Natal, RN"
+  },
+  {
+   "category": "ponto",
+   "query": "Estádio Arena das Dunas, Lagoa Nova, Natal, RN"
+  },
+  {
+   "category": "ponto",
+   "query": "Fórum Miguel Seabra Fagundes, Lagoa Nova, Natal, RN"
+  },
+  {
+   "category": "ponto",
+   "query": "IFRN Campus Natal Central, Cidade Alta, Natal, RN"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Av Eng Roberto Freire 8790 Ponta Negra Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "R. Potengi 300 Tirol Natal RN"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Av Pres Cafe Filho Praia do Meio Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Av. Sen. Salgado Filho, Lagoa Nova, Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Capim Maçio, Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Petropoles, Natal RN"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Av Rio Branco Petropolis Natal-RN"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "midway mall natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "natal shopping capim macio"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Pç André Albuquerque Cid Alta Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "UFRN Lagoa Nova"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "aeroporto internacional de natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "rodoviaria nova natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Av Engenheiro Roberto Freire s/n Ponta Negra"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "R Erivan Franca Ponta Negra Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Via Costeira Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Hospital Walfredo Gurgel Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Hospital do Coracao Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Forte dos Reis Magos Natal RN"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Mercado Publico Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Teatro Alberto Maranhao Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Arena das Dunas Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Catedral de Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Parque das Dunas Tirol Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Alphaville Natal RN"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Condominio Soul Ponta Negra Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Terminal Rodoviario Nelson Mandela Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Partage Norte Shopping Natal RN"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Praia Shopping Ponta Negra Natal"
+  },
+  {
+   "category": "erro_abreviacao",
+   "query": "Genipabu Natal RN"
+  }
+ ]
+}

@@ -17,10 +17,9 @@
  */
 import type { DriverPhase } from '@vuumbora/domain/driver';
 import type { ApiError, Result } from '../index';
-import { APP_VERSION_PATTERN, DEFAULT_TIMEOUT_MS } from '../identity/http-adapter';
-import { NETWORK_ERROR, UNEXPECTED_RESPONSE } from '../identity/errors';
-import type { SessionManager } from '../identity/session-manager';
-import { apiErrorFromServerReply, fieldsOfCatalog, type FieldByCode } from '../server-error';
+import { createAuthedRequester, type AuthedHttpOptions } from '../http/authed-requester';
+import { NETWORK_ERROR } from '../identity/errors';
+import { fieldsOfCatalog, type FieldByCode } from '../server-error';
 import { failWith, succeed } from '../trip/result';
 import type { DocumentRequirement, DriverDocumentSummary, DriverVehicleInput } from '../documents/types';
 import type { DriverAvailabilityInput, DriverJourneyPort } from './types';
@@ -37,17 +36,8 @@ import {
   type UploadSource,
 } from './onboarding-types';
 
-export interface DriverHttpOptions {
-  readonly baseUrl: string;
-  /** Versão do app (vai em `X-App-Version`). */
-  readonly appVersion: string;
-  /** Quem executa a chamada com o access token válido (o `SessionManager` da identidade). */
-  readonly session: Pick<SessionManager, 'run'>;
-  readonly fetch?: typeof fetch;
-  readonly timeoutMs?: number;
-  /** Aceita `http:` (texto claro). SÓ desenvolvimento. */
-  readonly allowInsecureHttp?: boolean;
-}
+/** Opções dos adaptadores http do motorista (as mesmas de toda porta autenticada: `http/authed-requester.ts`). */
+export type DriverHttpOptions = AuthedHttpOptions;
 
 const VERIFICATION_STATUSES = new Set(['not_started', 'pending_documents', 'under_review', 'changes_requested', 'approved', 'suspended']);
 const DOCUMENT_STATUSES = new Set(['submitted', 'approved', 'rejected', 'expired']);
@@ -131,73 +121,8 @@ function parseUploadTarget(value: unknown, allowInsecureHttp: boolean): Document
   return { documentId: value['documentId'], uploadUrl: value['uploadUrl'], method: 'PUT', headers, expiresAt: value['expiresAt'] as string };
 }
 
-/** Base validada (https, sem query nem fragmento). Lança na montagem: URL errada é erro de configuração do app. */
-function originOf(options: DriverHttpOptions, factory: string): string {
-  let base: URL;
-  try {
-    base = new URL(options.baseUrl);
-  } catch {
-    throw new Error(`${factory}: baseUrl não é uma URL válida.`);
-  }
-  if ((base.protocol !== 'http:' && base.protocol !== 'https:') || base.search || base.hash) {
-    throw new Error(`${factory}: baseUrl deve ser http(s) sem query nem fragmento.`);
-  }
-  if (base.protocol === 'http:' && options.allowInsecureHttp !== true) {
-    throw new Error(`${factory}: baseUrl deve ser https. http só com allowInsecureHttp (apenas desenvolvimento).`);
-  }
-  if (!APP_VERSION_PATTERN.test(options.appVersion)) throw new Error(`${factory}: appVersion inválida (use algo como "1.4.0").`);
-  return base.origin + base.pathname.replace(/\/+$/, '');
-}
-
-interface Call<T> {
-  readonly method: 'GET' | 'POST' | 'PUT';
-  readonly path: string;
-  readonly body?: Record<string, unknown>;
-  readonly fields: FieldByCode;
-  readonly parse: (data: unknown) => T | null;
-}
-
-function createRequester(options: DriverHttpOptions, factory: string) {
-  const origin = originOf(options, factory);
-  const fetchImpl = options.fetch ?? fetch;
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-
-  async function once<T>(call: Call<T>, accessToken: string): Promise<Result<T>> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const headers: Record<string, string> = { Accept: 'application/json', 'X-App-Version': options.appVersion, Authorization: `Bearer ${accessToken}` };
-      const init: RequestInit = { method: call.method, headers, signal: controller.signal, credentials: 'omit' };
-      if (call.method !== 'GET') {
-        headers['Content-Type'] = 'application/json';
-        init.body = JSON.stringify(call.body ?? {}); // corpo vazio com JSON no cabeçalho é 400 no Fastify
-      }
-      const response = await fetchImpl(`${origin}${call.path}`, init);
-      const text = await response.text();
-      let json: unknown;
-      try {
-        json = text.length > 0 ? (JSON.parse(text) as unknown) : undefined;
-      } catch {
-        json = undefined;
-      }
-      if (!response.ok) {
-        return failWith(apiErrorFromServerReply({ status: response.status, body: json, retryAfterHeader: response.headers.get('retry-after') }, call.fields));
-      }
-      if (!isRecord(json) || json['ok'] !== true) return failWith(UNEXPECTED_RESPONSE);
-      const data = call.parse(json['data']);
-      return data === null ? failWith(UNEXPECTED_RESPONSE) : succeed(data, 'real');
-    } catch {
-      return failWith(NETWORK_ERROR);
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  return <T>(call: Call<T>): Promise<Result<T>> => options.session.run((accessToken) => once(call, accessToken));
-}
-
 export function createDriverOnboardingHttpAdapter(options: DriverHttpOptions): DriverOnboardingPort {
-  const request = createRequester(options, 'createDriverOnboardingHttpAdapter');
+  const request = createAuthedRequester(options, 'createDriverOnboardingHttpAdapter');
   const fields = ONBOARDING_FIELDS;
 
   return {
@@ -274,7 +199,7 @@ export function createDriverOnboardingHttpAdapter(options: DriverHttpOptions): D
  * (`driver_not_approved`, `document_expired`, `consent_outdated`), igual ao `availabilityConflict` do mock.
  */
 export function createDriverJourneyHttpAdapter(options: DriverHttpOptions): DriverJourneyPort {
-  const request = createRequester(options, 'createDriverJourneyHttpAdapter');
+  const request = createAuthedRequester(options, 'createDriverJourneyHttpAdapter');
   return {
     setAvailability: (input: DriverAvailabilityInput) =>
       request<{ readonly phase: DriverPhase }>({

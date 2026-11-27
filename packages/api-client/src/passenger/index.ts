@@ -49,6 +49,9 @@ export type {
   ServiceArea,
 } from './geo-types';
 export { createMockPassengerGeo, MOCK_GEO_PLACES } from './geo-mock-adapter';
+/** G3/G4: o adaptador `http` das mesmas portas (mesmos erros do mock). */
+export { createPassengerGeoHttpAdapter } from './geo-http-adapter';
+export type { PassengerGeoHttpOptions } from './geo-http-adapter';
 export type { MockFareVersion, MockGeoPlace, MockPassengerGeo, MockPassengerGeoControl, MockPassengerGeoOptions } from './geo-mock-adapter';
 export { MOCK_RIDE_CATEGORIES, MOCK_SERVICE_AREA, MOCK_TEST_FARE_VERSION } from '../geo/mock-data';
 export type { MockRideCategory } from '../geo/mock-data';

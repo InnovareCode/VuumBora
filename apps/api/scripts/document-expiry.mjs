@@ -7,13 +7,16 @@
  *
  * COMO O OPERADOR RODA (Easypanel, serviço `vuumbora-backend`):
  *   - agendar UM cron diário, por exemplo às 09:00 de Natal (12:00 UTC), com o comando
- *       npm run documents:expiry -w @vuumbora/api
- *     no MESMO contêiner da API. Usa as variáveis do serviço: `DATABASE_URL` (o papel restrito `vuumbora_api` basta;
+ *       node scripts/document-expiry.mjs
+ *     (ou `npm run documents:expiry`, SEM `-w`) no MESMO contêiner da API. Dentro da imagem a raiz é o próprio `apps/api` e
+ *     `npm run documents:expiry -w @vuumbora/api` responde `No workspaces found` (achado do Vulcano, 27/11/2026,
+ *     `docs/publicar-o-backend.md`); a forma com `-w` só serve no monorepo, depois de `npm run build -w @vuumbora/api`.
+ *     Usa as variáveis do serviço: `DATABASE_URL` (o papel restrito `vuumbora_api` basta;
  *     NÃO precisa da credencial dona), `ADMIN_TOTP_ENCRYPTION_KEY` (lê a senha SMTP salva no painel) e, se o SMTP for
  *     do ambiente, `SMTP_*`/`EMAIL_FROM`.
  *   - uma vez por dia: rodar duas vezes no mesmo dia repete o aviso (duas execuções SIMULTÂNEAS não: a segunda desiste).
  *   - dia perdido (cron fora do ar): rode à mão para aquele dia, para recuperar os avisos dele:
- *       npm run documents:expiry -w @vuumbora/api -- --now=2026-11-27T12:00:00Z
+ *       node scripts/document-expiry.mjs --now=2026-11-27T12:00:00Z
  *
  * Requer `dist/` construído (`npm run build`; a imagem Docker já traz). Não imprime dado pessoal: só contagens.
  * Sai com código 1 se a rotina falhar (o cron do Easypanel mostra a falha).

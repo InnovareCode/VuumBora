@@ -3,12 +3,13 @@
  * G5). Só o papel `dono` passa (`403 forbidden` para os outros, antes de tudo).
  *
  * - Versão nunca é editada: `createFareTable` cria outra e fecha a vigente (`validTo`), N8.
- * - O simulador usa `calculateFare` e `splitFare` (`@vuumbora/domain`), os mesmos do simulador do dono.
+ * - O simulador usa `computeFare` (o preço da cotação real, G2: arredonda uma vez, no total, sobre metros e segundos
+ *   INTEIROS: a rota quebrada é arredondada à vista antes) e `splitFare` (`@vuumbora/domain`).
  *   O arredondamento definitivo da cotação ("meio para cima, uma vez, no total") é a fatia G2.
  * - Idempotência de `createFareTable` por `idempotencyKey` (mesmo corpo = mesma versão; corpo
  *   diferente = `409 idempotency_key_reused`).
  */
-import { calculateFare, splitFare, type ServiceArea } from '@vuumbora/domain';
+import { computeFare, splitFare, type ServiceArea } from '@vuumbora/domain';
 import type { CursorPage, Result } from '../index';
 import { catalogError, NETWORK_FAILURE } from '../server-error';
 import { failWith, succeed } from '../trip/result';
@@ -165,11 +166,7 @@ export function createMockFareAdmin(options: MockFareAdminOptions): MockFareAdmi
     const rows: FareSimulationRow[] = [];
     routes.forEach((route, routeIndex) => {
       for (const rates of input.versionDraft.categories) {
-        const total = calculateFare(rates, {
-          distanceKm: route.distanceM / 1000,
-          durationMinutes: route.durationS / 60,
-          dynamicMultiplier: 1,
-        }).totalCents;
+        const total = computeFare(rates, { distanceM: Math.round(route.distanceM), durationS: Math.round(route.durationS) }).totalCents;
         rows.push({
           routeIndex,
           categorySlug: rates.categorySlug,

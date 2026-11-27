@@ -63,6 +63,14 @@ describe('GET /v1/geo/search', () => {
     assert.ok(place.data.results.some((item) => item.id === 'sb-morro'));
   });
 
+  test('kind any: as duas fontes numa chamada só (G3), pontos próprios primeiro', async () => {
+    const { geoPort } = setup();
+    const result = await geoPort.search({ q: 'ponta negra', kind: 'any' });
+    assert.ok(result.ok);
+    const sources = new Set(result.data.results.map((item) => item.source));
+    assert.ok(sources.has('geocoding') && sources.has('searchbox'), [...sources].join(','));
+  });
+
   test('near ordena os não-próprios por distância', async () => {
     const { geoPort } = setup();
     const result = await geoPort.search({ q: 'tirol', kind: 'address', near: { lat: -5.8053, lng: -35.2012 } });
@@ -204,8 +212,15 @@ describe('POST /v1/quotes', () => {
       { origin: { ...MIDWAY, lat: 120 }, destination: PONTA_NEGRA },
       { origin: { ...MIDWAY, label: '  ' }, destination: PONTA_NEGRA },
       { origin: MIDWAY, destination: PONTA_NEGRA, categorySlugs: [1] },
+      // Os mesmos limites do servidor (apps/api/src/domain/quote-input.ts): mesmo corpo, mesmo 400.
+      { origin: { ...MIDWAY, label: 'linha' + String.fromCharCode(10) + 'quebrada' }, destination: PONTA_NEGRA },
+      { origin: { ...MIDWAY, label: 'x'.repeat(201) }, destination: PONTA_NEGRA },
+      { origin: MIDWAY, destination: PONTA_NEGRA, categorySlugs: Array.from({ length: 21 }, () => 'vuumbora') },
+      { origin: MIDWAY, destination: PONTA_NEGRA, categorySlugs: ['x'.repeat(65)] },
     ];
     for (const input of bad) expectError(await quotePort.createQuotes(input as never), 'validation', 'invalid_body');
+    // Rótulo com espaço em volta: vale o texto aparado (até 200), como no servidor.
+    assert.ok((await quotePort.createQuotes({ origin: { ...MIDWAY, label: `  ${'x'.repeat(200)}  ` }, destination: PONTA_NEGRA })).ok);
   });
 });
 

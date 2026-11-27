@@ -15,7 +15,7 @@
  * com prefixo `mock-`: no servidor é HMAC com segredo que nunca sai de lá.
  */
 import {
-  calculateFare,
+  computeFare,
   encodePolyline,
   isFareVersionQuotable,
   isPointInServiceArea,
@@ -115,6 +115,11 @@ export const MOCK_GEO_PLACES: readonly MockGeoPlace[] = [
 const MAX_RESULTS = 8;
 const MIN_QUERY_LENGTH = 2;
 const MAX_QUERY_LENGTH = 100;
+/** Limites do servidor (`apps/api/src/domain/quote-input.ts`): mesmo corpo, mesmo 400 no mock e na API. */
+const MAX_LABEL_LENGTH = 200;
+const MAX_CATEGORY_SLUGS = 20;
+const MAX_SLUG_LENGTH = 64;
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 const REVERSE_MATCH_RADIUS_M = 150;
 /** Linha reta × fator de rua, a 25 km/h médios: só para o mock ter números plausíveis. */
 const ROAD_FACTOR = 1.3;
@@ -136,7 +141,9 @@ function isLatLng(value: unknown): value is LatLng {
 function isQuotePoint(value: unknown): value is QuotePoint {
   if (!isLatLng(value)) return false;
   const { label } = value as unknown as Record<string, unknown>;
-  return typeof label === 'string' && label.trim().length > 0 && label.length <= 200;
+  if (typeof label !== 'string' || CONTROL_CHARACTERS.test(label)) return false;
+  const trimmed = label.trim();
+  return trimmed.length > 0 && trimmed.length <= MAX_LABEL_LENGTH;
 }
 
 const toGeoPoint = (point: LatLng): GeoPoint => ({ latitude: point.lat, longitude: point.lng });
@@ -197,7 +204,7 @@ export function createMockPassengerGeo(options: MockPassengerGeoOptions = {}): M
       return fail('invalid_body');
     }
     const kind = input.kind ?? 'address';
-    if (kind !== 'address' && kind !== 'place') return fail('invalid_body');
+    if (kind !== 'address' && kind !== 'place' && kind !== 'any') return fail('invalid_body');
     if (input.near !== undefined && !isLatLng(input.near)) return fail('invalid_body');
     const query = normalize(input.q);
     if (query.length < MIN_QUERY_LENGTH) return succeed({ results: [] });
@@ -207,10 +214,12 @@ export function createMockPassengerGeo(options: MockPassengerGeoOptions = {}): M
     );
     const near = input.near;
     const bySource = (source: GeoSearchSource) => {
-      const list = matches.filter((place) => place.source === source && (source === 'curated' || place.kind === kind));
+      const list = matches.filter((place) => place.source === source && (source === 'curated' || kind === 'any' || place.kind === kind));
       return near ? [...list].sort((a, b) => haversineM(near, a) - haversineM(near, b)) : list;
     };
-    const ordered = [...bySource('curated'), ...bySource(kind === 'address' ? 'geocoding' : 'searchbox')];
+    // `any`: as duas fontes numa chamada só (no servidor, quem abre a lista depende de o texto ter cara de endereço).
+    const mapboxSources: readonly GeoSearchSource[] = kind === 'address' ? ['geocoding'] : kind === 'place' ? ['searchbox'] : ['geocoding', 'searchbox'];
+    const ordered = [...bySource('curated'), ...mapboxSources.flatMap(bySource)];
     const results = ordered.slice(0, MAX_RESULTS).map(({ id, label, sublabel, lat, lng, source }) => ({ id, label, sublabel, lat, lng, source }));
     return succeed({ results });
   }
@@ -251,7 +260,10 @@ export function createMockPassengerGeo(options: MockPassengerGeoOptions = {}): M
       return fail('invalid_body');
     }
     const { categorySlugs } = input;
-    if (categorySlugs !== undefined && (!Array.isArray(categorySlugs) || !categorySlugs.every((slug) => typeof slug === 'string'))) {
+    if (
+      categorySlugs !== undefined &&
+      (!Array.isArray(categorySlugs) || categorySlugs.length > MAX_CATEGORY_SLUGS || !categorySlugs.every((slug) => typeof slug === 'string' && slug.length <= MAX_SLUG_LENGTH))
+    ) {
       return fail('invalid_body');
     }
     if (!isFareVersionQuotable(fareVersion, { allowTestFares })) return fail('fare_not_configured');
@@ -271,7 +283,8 @@ export function createMockPassengerGeo(options: MockPassengerGeoOptions = {}): M
       if (!isEnabled(category) || (wanted && !wanted.has(category.slug))) continue;
       const rates = fareVersion.categories.find((candidate) => candidate.categorySlug === category.slug);
       if (!rates) continue; // categoria ligada sem tarifa na versão: não cota (o servidor faz o mesmo)
-      const priceCents = calculateFare(rates, { distanceKm: distanceM / 1000, durationMinutes: durationS / 60, dynamicMultiplier: 1 }).totalCents;
+      // Mesma conta do servidor (G2): arredonda uma vez, no total, sobre metros e segundos inteiros.
+      const priceCents = computeFare(rates, { distanceM, durationS }).totalCents;
       const quoteId = nextId();
       const signature = `mock-${mockDigest([quoteId, category.slug, priceCents, fareVersion.fareVersionId, expiresAt].join('|'))}`;
       const quote: FareQuote = {

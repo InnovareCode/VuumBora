@@ -112,9 +112,12 @@ export {
 export { toApproximatePlace, toTripRange } from './geo';
 export type { ApproximatePlace } from './geo';
 
-/** Cálculo de tarifa — simulador do dono (decisão 7) e, depois, cotação real do M4. */
-export { calculateFare, resolvePlatformFeeTier, splitFare } from './fare';
-export type { FareRates, FareInput, FareBreakdown, PlatformFeeTier, DriverStanding, FareSplit } from './fare';
+/**
+ * Tarifa. `computeFare` é o preço da COTAÇÃO (M4, G2: arredonda uma vez, no total); `calculateFare` é o simulador antigo do
+ * dono (arredonda por linha, para a tabela fechar com as linhas visíveis). Preço ao passageiro sai só de `computeFare`.
+ */
+export { calculateFare, computeFare, resolvePlatformFeeTier, splitFare } from './fare';
+export type { ComputeFareInput, FareComputation, FareRates, FareInput, FareBreakdown, PlatformFeeTier, DriverStanding, FareSplit } from './fare';
 
 /** Área de serviço (M4, N7): polígono GeoJSON + caixa, ponto-no-polígono puro (sem PostGIS). */
 export { assertValidPolygon, isPointInBoundingBox, isPointInPolygon, isPointInServiceArea } from './service-area';

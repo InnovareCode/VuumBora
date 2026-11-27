@@ -13,6 +13,8 @@ import { loadLegalConfig } from './lib/legal-config.js';
 import { twoFactorConfig } from './lib/two-factor-config.js';
 import { describeErrorForLog } from './lib/safe-error.js';
 import { documentStorageFromEnv, type DocumentStorageSetup } from './lib/document-storage-config.js';
+import { loadGeoConfig } from './lib/geo-config.js';
+import { createMapboxProvider } from './lib/mapbox.js';
 import { registerAuthRoutes } from './routes/auth-route.js';
 import { createSmtpMailer } from './services/mailer.js';
 import { registerAdminAuthRoutes } from './routes/admin-auth-route.js';
@@ -23,6 +25,7 @@ import { registerAdminDocumentReviewRoutes } from './routes/admin-document-revie
 import { registerAdminUserActivationRoute, registerAdminUserRoutes } from './routes/admin-user-route.js';
 import { registerDriverApplicationRoute } from './routes/driver-application-route.js';
 import { registerDriverRoutes } from './routes/driver-route.js';
+import { registerGeoRoutes, type GeoSetup } from './routes/geo-route.js';
 import { registerHealthRoute } from './routes/health-route.js';
 import { registerLegalRoutes } from './routes/legal-route.js';
 import { registerWaitlistRoute } from './routes/waitlist-route.js';
@@ -58,10 +61,29 @@ export interface BuildAppOptions {
    */
   readonly documents?: DocumentStorageSetup | null;
   /**
+   * Geografia e cotação (M4, fatias G3/G4). Omitido = lido do ambiente (`lib/geo-config.ts`; sem `MAPBOX_SERVER_TOKEN` as rotas
+   * que usam o Mapbox respondem 503, o boot segue). Os testes passam a configuração e o Mapbox com respostas GRAVADAS.
+   */
+  readonly geo?: GeoSetup;
+  /**
    * Só os testes: hooks na RAIZ, antes de qualquer `register` (valem para todo contexto). Serve para provar que nenhuma
    * rota depende de o contexto ter poucos `onSend` assíncronos (`test/public-routes-async-onsend.test.ts`).
    */
   readonly rootHooksForTest?: (app: FastifyInstance) => void;
+}
+
+/** Geografia a partir do ambiente: o Mapbox só existe com token; avisos com nome de variável, nunca valor. */
+function geoSetupFromEnv(app: FastifyInstance): GeoSetup {
+  const { config, problems } = loadGeoConfig();
+  if (problems.length > 0) app.log.warn({ event: 'geo_config_problems', reasons: problems });
+  if (config.allowTestFares && env.NODE_ENV === 'production') {
+    // Homologação pode precisar; produção com passageiro real, nunca (N8). Fica no log para ninguém esquecer ligado.
+    app.log.warn({ event: 'test_fares_allowed_in_production' });
+  }
+  const provider = config.mapboxToken
+    ? createMapboxProvider({ token: config.mapboxToken, profile: config.directionsProfile, timeoutMs: config.mapboxTimeoutMs })
+    : null;
+  return { config, provider };
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -162,6 +184,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     : await documentStorageFromEnv((reasons) => app.log.warn({ event: 'document_storage_unavailable', reasons }));
   if (options.documents === undefined && documents) app.addHook('onClose', async () => documents.storage.close());
 
+  // Geografia e cotação: configuração ausente ou errada não derruba o boot (falha fechada nas rotas). O aviso leva só NOMES.
+  const geo = options.geo ?? geoSetupFromEnv(app);
+
   // ANTES de qualquer `register`: o hook só vê as rotas registradas depois dele e é herdado pelos contextos filhos.
   if (options.onRoute) app.addHook('onRoute', options.onRoute);
   options.rootHooksForTest?.(app);
@@ -235,6 +260,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     registerAuthRoutes(instance, { legal, mail: options.mail ?? createSmtpMailer({ pool, encryptionKey: twoFactorConfig.encryptionKey, log: instance.log }) });
     // Cadastro do motorista (M3, fatia D4): Bearer de conta `driver`, mesma família pública (sem cookie, sem credentials no CORS).
     registerDriverRoutes(instance, { legal, documents });
+    // Busca, área, categorias e cotação do passageiro (M4, fatias G3/G4): Bearer de conta, mesma família pública.
+    registerGeoRoutes(instance, geo);
   });
 
   // `prefix: '/v1/admin'` não é só estética: `@fastify/cors` registra uma

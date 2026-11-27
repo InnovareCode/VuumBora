@@ -16,7 +16,11 @@ import type { ErrorCatalog } from '../server-error';
 
 export type { ServiceArea };
 
-export type GeoSearchKind = 'address' | 'place';
+/**
+ * `address` = Geocoding v6 (rua + número); `place` = Search Box (nome de lugar); `any` = AS DUAS numa chamada só (G3, pedido
+ * da Lyra: duas chamadas por busca contavam em dobro no limite por conta). Os pontos próprios entram nos três.
+ */
+export type GeoSearchKind = 'address' | 'place' | 'any';
 
 /** De onde veio o resultado. `curated` = pontos próprios (`curated_places`), sempre primeiro. */
 export type GeoSearchSource = 'curated' | 'geocoding' | 'searchbox';
@@ -30,7 +34,7 @@ export interface LatLng {
 export interface GeoSearchInput {
   /** Texto digitado. Menos de 2 caracteres (sem contar espaços) responde lista vazia, sem erro; mais de 100 é `400 invalid_body`. */
   readonly q: string;
-  /** Padrão `address`. */
+  /** Padrão `address`. Para o campo único de busca da P04, use `any` (uma chamada, conta uma vez no limite). */
   readonly kind?: GeoSearchKind;
   /** Desempate por proximidade (ex.: a posição do passageiro). */
   readonly near?: LatLng;
@@ -62,7 +66,10 @@ export interface RideCategory {
 }
 
 export interface GeoPort {
-  /** Pontos próprios primeiro, até 8 resultados. `400 invalid_body` · `429 rate_limited` · `502 geo_unavailable` (acréscimo ao §3). */
+  /**
+   * Pontos próprios primeiro, até 8 resultados. `400 invalid_body` · `429 rate_limited` · `502 geo_unavailable` (acréscimo ao §3;
+   * `503 geo_unavailable` quando o servidor está sem o token do Mapbox — mesmo `code`, mesmo `kind: unavailable`).
+   */
   search(input: GeoSearchInput): Promise<Result<{ readonly results: readonly GeoSearchResult[] }>>;
   /** `400 invalid_body` (coordenada fora do intervalo) · `429 rate_limited` · `502 geo_unavailable`. Fora da área NÃO é erro: `inServiceArea: false`. */
   reverse(point: LatLng): Promise<Result<ReverseGeocodeResult>>;
@@ -125,7 +132,12 @@ export interface FareQuotePort {
   getQuote(quoteId: string): Promise<Result<FareQuote>>;
 }
 
-/** Catálogo FECHADO dos `code` de geografia e cotação. */
+/**
+ * Catálogo FECHADO dos `code` de geografia e cotação. Fora dele, o servidor também responde (G3/G4, ainda não entraram aqui
+ * para não quebrar o `Record` exaustivo de `apps/passenger/src/geo/geoProblems.ts`; a tela trata pelo `kind`):
+ * `403 not_passenger_account` (conta de motorista cotando) e `503 unavailable` (falha interna, como em toda rota).
+ * `geo_unavailable` vem 502 (o Mapbox falhou) ou 503 (servidor sem token): o `kind` é `unavailable` nos dois.
+ */
 export const GEO_QUOTE_ERRORS = {
   invalid_body: { status: 400, message: 'Dados inválidos.' },
   unauthorized: { status: 401, message: 'Sessão expirada.' },

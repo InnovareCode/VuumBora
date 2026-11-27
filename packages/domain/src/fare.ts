@@ -99,6 +99,91 @@ export function calculateFare(rates: FareRates, input: FareInput): FareBreakdown
 }
 
 /**
+ * Entrada da cotação real (M4, fatia G2 do `docs/plano-m3-m4.md`, decisão N9). Distância e duração em
+ * METROS e SEGUNDOS INTEIROS — exatamente o que a cotação grava (`fare_quotes.distance_m`/`duration_s`).
+ * Quem recebe valor quebrado (a Directions devolve `5234.7` m) arredonda ANTES, à vista, e grava o
+ * inteiro: é com ele que a auditoria refaz a conta e chega no mesmo centavo.
+ */
+export interface ComputeFareInput {
+  /** Metros, inteiro >= 0. Zero é válido (trajeto sem deslocamento cobra base + tempo, ou o mínimo). */
+  readonly distanceM: number;
+  /** Segundos, inteiro >= 0. */
+  readonly durationS: number;
+  /**
+   * Dinâmica, com no máximo DUAS casas decimais (a coluna é `NUMERIC(4,2)`), de `1` a `99.99`. Padrão `1`.
+   * Mais casas lança: a cotação gravaria um multiplicador diferente do que calculou.
+   */
+  readonly dynamicMultiplier?: number;
+}
+
+/** Resultado de `computeFare`: o preço e o que o explica. */
+export interface FareComputation {
+  /** Preço final, em centavos inteiros: `max(arredondado, mínimo)`. */
+  readonly totalCents: number;
+  /** O valor exato arredondado UMA vez (meio para cima), antes do mínimo. */
+  readonly roundedCents: number;
+  /** `true` quando o mínimo da categoria segurou o preço (`roundedCents < minimumFareCents`). */
+  readonly minimumApplied: boolean;
+  /** O multiplicador usado, já normalizado para duas casas (o que a cotação grava). */
+  readonly dynamicMultiplier: number;
+}
+
+const MAX_DYNAMIC_HUNDREDTHS = 9999;
+
+function assertNonNegativeInteger(value: number, label: string): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RangeError(`${label} precisa ser um inteiro não-negativo (recebido: ${value})`);
+  }
+}
+
+/** `1.3` → `130`. Lança se não couber em duas casas (`1.005`) ou ficar fora de `[1, 99.99]`. */
+function dynamicHundredths(multiplier: number): number {
+  const scaled = multiplier * 100;
+  const hundredths = Math.round(scaled);
+  if (!Number.isFinite(multiplier) || Math.abs(scaled - hundredths) > 1e-6 || hundredths < 100 || hundredths > MAX_DYNAMIC_HUNDREDTHS) {
+    throw new RangeError(`dynamicMultiplier precisa estar entre 1 e 99.99, com até duas casas (recebido: ${multiplier})`);
+  }
+  return hundredths;
+}
+
+/**
+ * Preço da cotação (N9): a conta inteira é feita SEM arredondar e o total é arredondado UMA vez, meio para
+ * cima, no centavo; depois vale o mínimo da categoria.
+ *
+ *   exato = (base + porKm × metros/1000 + porMinuto × segundos/60) × dinâmica
+ *   total = max(arredonda_meio_para_cima(exato), mínimo)
+ *
+ * Aritmética INTEIRA (BigInt), não ponto flutuante: com o denominador comum (1000 × 60 / 20 = 3000, vezes 100 da
+ * dinâmica) o meio centavo é exato, e `0.5` nunca vira `0.49999999` no meio do caminho. Mesma entrada, mesmo preço,
+ * em qualquer máquina e em qualquer ordem de soma — é o que deixa a auditoria refazer a conta de uma cotação gravada.
+ *
+ * Diferença de `calculateFare` (simulador antigo do dono): lá cada linha é arredondada antes de somar, para a tabela
+ * fechar com as linhas visíveis; aqui não há linhas, há um preço fechado. As duas podem diferir em 1 centavo.
+ */
+export function computeFare(rates: FareRates, input: ComputeFareInput): FareComputation {
+  assertNonNegativeInteger(rates.baseCents, 'baseCents');
+  assertNonNegativeInteger(rates.perKmCents, 'perKmCents');
+  assertNonNegativeInteger(rates.perMinuteCents, 'perMinuteCents');
+  assertNonNegativeInteger(rates.minimumFareCents, 'minimumFareCents');
+  assertNonNegativeInteger(input.distanceM, 'distanceM');
+  assertNonNegativeInteger(input.durationS, 'durationS');
+  const hundredths = dynamicHundredths(input.dynamicMultiplier ?? 1);
+
+  // exato (em centavos) = numerador / 300000, com numerador = (base·3000 + porKm·metros·3 + porMinuto·segundos·50) × dinâmica·100
+  const scaledSubtotal =
+    BigInt(rates.baseCents) * 3000n + BigInt(rates.perKmCents) * BigInt(input.distanceM) * 3n + BigInt(rates.perMinuteCents) * BigInt(input.durationS) * 50n;
+  const numerator = scaledSubtotal * BigInt(hundredths);
+  const denominator = 300_000n;
+  // Meio para cima, para valor não-negativo: floor((2n + d) / 2d).
+  const rounded = (numerator * 2n + denominator) / (denominator * 2n);
+  if (rounded > BigInt(Number.MAX_SAFE_INTEGER)) throw new RangeError('preço fora do intervalo representável');
+
+  const roundedCents = Number(rounded);
+  const totalCents = Math.max(roundedCents, rates.minimumFareCents);
+  return { totalCents, roundedCents, minimumApplied: roundedCents < rates.minimumFareCents, dynamicMultiplier: hundredths / 100 };
+}
+
+/**
  * Uma faixa da taxa da plataforma (decisão 3 de `docs/decisoes-do-dono.md`, "Decisões do dono —
  * 22/11/2026 (manhã)"/22/11 noite: taxa entre 20% e 25%, por tempo de plataforma, corridas
  * concluídas e nota). Os cortes exatos (quantos dias, quantas corridas, qual nota) ainda não

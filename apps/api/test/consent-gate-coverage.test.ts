@@ -91,6 +91,14 @@ const ROUTE_POLICY: Readonly<Record<string, Policy>> = {
   'POST /v1/driver/documents/:id/submit': { kind: 'account-exempt', reason: 'confirmação do envio de documento do cadastro: não cria compromisso com passageiro' },
   // Ficar ONLINE é o compromisso: o portão vale para `online: true` (ficar offline nunca é bloqueado, R7: `onlyWhen`).
   'PUT /v1/driver/availability': { kind: 'account-gated' },
+  // Geografia e cotação do passageiro (M4, fatias G3/G4): o compromisso é PEDIR a corrida (POST /v1/trips, M5), que consome a
+  // cotação e entra aqui como `account-gated`. Buscar, ver a área e saber o preço não comprometem ninguém.
+  'GET /v1/geo/search': { kind: 'account-exempt', reason: 'busca de endereço: leitura, não cria compromisso' },
+  'GET /v1/geo/reverse': { kind: 'account-exempt', reason: 'nome do ponto do pino: leitura, não cria compromisso' },
+  'GET /v1/service-area': { kind: 'account-exempt', reason: 'área atendida: leitura de catálogo, não cria compromisso' },
+  'GET /v1/categories': { kind: 'account-exempt', reason: 'categorias ligadas: leitura de catálogo, não cria compromisso' },
+  'POST /v1/quotes': { kind: 'account-exempt', reason: 'cotação é preço, não pedido: o compromisso é o POST /v1/trips (M5), que consome a cotação' },
+  'GET /v1/quotes/:id': { kind: 'account-exempt', reason: 'leitura da própria cotação: não cria compromisso' },
 };
 
 /** Fases em que uma função pode autenticar a requisição, na ordem em que o Fastify as roda. */

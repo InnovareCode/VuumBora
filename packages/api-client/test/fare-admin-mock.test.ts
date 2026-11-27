@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { calculateFare, splitFare } from '@vuumbora/domain';
+import { computeFare, splitFare } from '@vuumbora/domain';
 import { createMockFareAdmin } from '../src/admin/fare-admin-mock-adapter';
 import type { FareTableDraft } from '../src/admin/types';
 
@@ -86,15 +86,14 @@ describe('versões', () => {
 });
 
 describe('simulador', () => {
-  test('preço pelo calculateFare e ganho do motorista com 20% e 25% (o resto do split)', async () => {
+  test('preço pelo computeFare e ganho do motorista com 20% e 25% (o resto do split)', async () => {
     const { port } = createMockFareAdmin({ role: 'dono' });
     const result = await port.simulate({ versionDraft: DRAFT, routes: [{ distanceM: 8000, durationS: 1200 }, { distanceM: 500, durationS: 120 }] });
     assert.ok(result.ok);
     assert.equal(result.data.rows.length, 2);
-    const total = calculateFare(DRAFT.categories[0] ?? { baseCents: 0, perKmCents: 0, perMinuteCents: 0, minimumFareCents: 0 }, {
-      distanceKm: 8,
-      durationMinutes: 20,
-      dynamicMultiplier: 1,
+    const total = computeFare(DRAFT.categories[0] ?? { baseCents: 0, perKmCents: 0, perMinuteCents: 0, minimumFareCents: 0 }, {
+      distanceM: 8000,
+      durationS: 1200,
     }).totalCents;
     assert.deepEqual(result.data.rows[0], {
       routeIndex: 0,
