@@ -74,26 +74,34 @@ export interface UploadSource {
 export interface DriverOnboardingPort {
   /**
    * Liga a conta (e-mail verificado) à candidatura APROVADA de mesmo e-mail (N3). Idempotente.
-   * `409 application_not_approved` (sem candidatura, ou ainda não aprovada) · `409 email_not_verified`.
+   * `409 application_not_approved` (sem candidatura, ou ainda não aprovada) · `409 email_not_verified` ·
+   * `409 application_already_linked` (a candidatura já é de outra conta, ex.: conta anterior excluída; acréscimo da D4).
    */
   linkApplication(): Promise<Result<LinkApplicationResult>>;
   /**
-   * Etapa 2. Ordem: `400 invalid_body` (forma do corpo, data, UF, CEP, CNH com 11 algarismos) →
-   * `409 driver_not_linked` → `422 invalid_cpf` (`fields.cpf`) → `422 cnh_without_ear` (`fields['cnh.ear']`).
+   * Etapa 2. Ordem: `400 invalid_body` (forma do corpo, data, menor de 18, UF, CEP, CNH com 11 algarismos,
+   * complemento acima de 60) → `409 driver_not_linked` → `422 invalid_cpf` (`fields.cpf`) → `422 cnh_without_ear`
+   * (`fields['cnh.ear']`) → acréscimos da D4: `409 cpf_locked` (CPF já informado é outro: não muda) → `409 cnh_locked`
+   * (CNH em análise, ou aprovada e válida, e os dados dela mudaram) → `409 cpf_in_use` (outro motorista tem este CPF).
+   * O endereço muda livre.
    */
   saveOnboarding(input: DriverOnboardingInput): Promise<Result<{ readonly status: VerificationStatus }>>;
   /**
    * Veículo ativo (substitui o anterior). Ordem: `400 invalid_body` (placa fora do padrão, ano fora de
-   * 1950..ano seguinte) → `409 driver_not_linked` → `409 plate_in_use` → `422 vehicle_too_old`
-   * (`fields.year`; idade máxima da configuração).
+   * 1950..ano seguinte, marca acima de 40, modelo acima de 60, cor acima de 30) → `409 driver_not_linked` →
+   * `409 plate_in_use` → `422 vehicle_too_old` (`fields.year`; idade máxima da configuração).
+   * Mesma placa, marca, modelo e ano = o mesmo veículo (só a cor muda, mesmo `vehicleId`); qualquer outra mudança é
+   * OUTRO veículo: o anterior sai de uso junto com os documentos dele (o CRLV é enviado de novo).
    */
   saveVehicle(input: DriverVehicleInput): Promise<Result<{ readonly vehicleId: string }>>;
   /** Sem erro de negócio: conta sem vínculo responde `status: 'not_started'`. */
   verification(): Promise<Result<DriverVerification>>;
   /**
    * Pede a URL de envio de um documento. Ordem: `400 invalid_body` → `413 file_too_large`
-   * (`fields.sizeBytes`) → `409 driver_not_linked` → `422 unknown_document_type` (`fields.typeCode`)
-   * → `409 document_under_review` (já há um deste tipo aguardando o revisor; acréscimo ao §3).
+   * (`fields.sizeBytes`) → `503 unavailable` (armazenamento não configurado) → `409 driver_not_linked` →
+   * `422 unknown_document_type` (`fields.typeCode`) → `409 vehicle_not_registered` (documento de veículo sem veículo
+   * ativo; acréscimo da D4) → `409 document_under_review` (já há um deste tipo aguardando o revisor; acréscimo ao §3)
+   * → `429 rate_limited` (teto de pedidos por conta por hora).
    */
   requestUploadUrl(input: DocumentUploadRequest): Promise<Result<DocumentUploadTarget>>;
   /**
@@ -117,11 +125,17 @@ export interface DocumentUploadPort {
 export const DRIVER_ONBOARDING_ERRORS = {
   invalid_body: { status: 400, message: 'Dados inválidos.' },
   unauthorized: { status: 401, message: 'Sessão expirada.' },
+  not_driver_account: { status: 403, message: 'Esta conta não é de motorista.' },
   not_found: { status: 404, message: 'Documento não encontrado.' },
   application_not_approved: { status: 409, message: 'Não encontramos uma candidatura aprovada para este e-mail.' },
+  application_already_linked: { status: 409, message: 'Esta candidatura já foi usada por outra conta. Fale com o suporte.' },
   email_not_verified: { status: 409, message: 'Confirme seu e-mail antes de continuar.' },
   driver_not_linked: { status: 409, message: 'Sua conta ainda não está ligada a uma candidatura aprovada.' },
+  cpf_locked: { status: 409, message: 'O CPF não pode ser trocado depois de informado. Fale com o suporte.' },
+  cnh_locked: { status: 409, message: 'Os dados da CNH estão em análise ou já foram aprovados e não mudam por aqui. Fale com o suporte.' },
+  cpf_in_use: { status: 409, message: 'Este CPF já está em outro cadastro de motorista. Fale com o suporte.' },
   plate_in_use: { status: 409, message: 'Esta placa já está cadastrada.' },
+  vehicle_not_registered: { status: 409, message: 'Cadastre o veículo antes de enviar este documento.' },
   upload_missing: { status: 409, message: 'O arquivo não chegou completo. Envie de novo.' },
   document_under_review: { status: 409, message: 'Este documento já está em análise.' },
   invalid_transition: { status: 409, message: 'Este documento já foi analisado.' },
@@ -135,3 +149,22 @@ export const DRIVER_ONBOARDING_ERRORS = {
 } as const satisfies ErrorCatalog;
 
 export type DriverOnboardingErrorCode = keyof typeof DRIVER_ONBOARDING_ERRORS;
+
+/**
+ * Catálogo FECHADO de `PUT /v1/driver/availability` (`DriverJourneyPort.setAvailability`). `consent_outdated` só ao
+ * LIGAR (aceite pendente dos Termos; desligar nunca é bloqueado, R7). `driver_not_approved` cobre também conta sem
+ * vínculo, suspensa, ou aprovada com pendência que não é documento vencido (ex.: trocou de carro e o CRLV novo não foi
+ * aprovado).
+ */
+export const DRIVER_AVAILABILITY_ERRORS = {
+  invalid_body: { status: 400, message: 'Dados inválidos.' },
+  unauthorized: { status: 401, message: 'Sessão expirada.' },
+  not_driver_account: { status: 403, message: 'Esta conta não é de motorista.' },
+  driver_not_approved: { status: 409, message: 'Seu cadastro ainda não está aprovado para ficar online.' },
+  document_expired: { status: 409, message: 'Um documento obrigatório venceu. Envie a versão atualizada para ficar online.' },
+  consent_outdated: { status: 409, message: 'Os Termos ou a Política mudaram. Leia a versão atual e aceite de novo.' },
+  rate_limited: { status: 429, message: 'Muitas tentativas. Aguarde um pouco.' },
+  unavailable: { status: 503, message: 'Serviço indisponível no momento.' },
+} as const satisfies ErrorCatalog;
+
+export type DriverAvailabilityErrorCode = keyof typeof DRIVER_AVAILABILITY_ERRORS;

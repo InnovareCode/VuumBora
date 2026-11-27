@@ -13,6 +13,11 @@
  *   enviou, e a decisão de lá aparece aqui;
  * - `control.goOnlineBlocker` liga este cadastro ao `createMockDriverRidePort({ availabilityGate })`.
  *
+ * Alinhado à API real (fatia D4): limites de texto dos CHECKs da 0024 (complemento até 60, marca até 40), 18 anos na
+ * etapa 2, e os acréscimos `cpf_locked`, `cnh_locked` e `cpf_in_use`. `vehicle_not_registered`,
+ * `application_already_linked` e `not_driver_account` só saem por `control.failNext` (a store não modela escopo de
+ * documento nem conta de outro tipo).
+ *
  * **Sem dado de demonstração na tela** (ficha M03 §10): o que este mock devolve serve para construir
  * e testar a tela, não para exibir como real; a origem de toda resposta é `'mock'`.
  */
@@ -105,8 +110,16 @@ function wait(ms: number): Promise<void> {
   return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
 }
 
+/** A data de nascimento mais recente com 18 anos completos em `today` (29/02 recua para 28/02, como o servidor). */
+function latestAdultBirthDate(today: string): string {
+  const year = Number(today.slice(0, 4)) - 18;
+  const monthDay = today.slice(5);
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  return `${String(year).padStart(4, '0')}-${monthDay === '02-29' && !leap ? '02-28' : monthDay}`;
+}
+
 /** A forma do corpo da etapa 2 (o que o servidor recusa com `400 invalid_body` antes de qualquer regra). */
-function isOnboardingBody(input: unknown): input is DriverOnboardingInput {
+function isOnboardingBody(input: unknown, today: string): input is DriverOnboardingInput {
   if (!isRecord(input) || !isRecord(input['address']) || !isRecord(input['cnh'])) return false;
   const address = input['address'];
   const cnh = input['cnh'];
@@ -114,9 +127,11 @@ function isOnboardingBody(input: unknown): input is DriverOnboardingInput {
   return (
     typeof input['cpf'] === 'string' &&
     isCalendarDate(input['birthDate']) &&
+    input['birthDate'] >= '1900-01-01' &&
+    input['birthDate'] <= latestAdultBirthDate(today) &&
     isText(address['street'], 120) &&
     isText(address['number'], 20) &&
-    (complement === undefined || (typeof complement === 'string' && complement.length <= 80)) &&
+    (complement === undefined || (typeof complement === 'string' && complement.trim().length <= 60)) &&
     isText(address['neighborhood'], 80) &&
     isText(address['city'], 80) &&
     typeof address['state'] === 'string' &&
@@ -137,7 +152,7 @@ function isVehicleBody(input: unknown, currentYear: number): input is DriverVehi
   const year = input['year'];
   return (
     isValidPlate(input['plate']) &&
-    isText(input['brand'], 60) &&
+    isText(input['brand'], 40) &&
     isText(input['model'], 60) &&
     isText(input['color'], 30) &&
     typeof year === 'number' &&
@@ -225,13 +240,30 @@ export function createMockDriverOnboarding(options: MockDriverOnboardingOptions 
   async function saveOnboarding(input: DriverOnboardingInput): Promise<Result<{ readonly status: VerificationStatus }>> {
     const forced = begin();
     if (forced) return forced;
-    if (!isOnboardingBody(input)) return fail('invalid_body');
+    if (!isOnboardingBody(input, store.today())) return fail('invalid_body');
     const driver = store.drivers.get(driverId);
     if (!driver) return fail('driver_not_linked');
     if (!isValidCpf(input.cpf)) return fail('invalid_cpf');
     if (!input.cnh.ear) return fail('cnh_without_ear');
+    const cpf = normalizeCpf(input.cpf);
+    if (driver.profile && driver.profile.cpf !== cpf) return fail('cpf_locked');
+    const previousCnh = driver.profile?.cnh;
+    // Sem dados de CNH gravados ainda, a primeira gravação passa (como no servidor).
+    const cnhChanged =
+      previousCnh !== undefined &&
+      (previousCnh.number !== input.cnh.number ||
+      previousCnh.category !== input.cnh.category ||
+        previousCnh.expiresOn !== input.cnh.expiresOn);
+    const cnh = store.latestDocument(driverId, 'cnh');
+    const today = store.today();
+    const cnhLocked =
+      cnh?.state === 'submitted' || (cnh?.state === 'approved' && (cnh.expiresOn === undefined || cnh.expiresOn >= today));
+    if (cnhLocked && cnhChanged) return fail('cnh_locked');
+    for (const other of store.drivers.values()) {
+      if (other.driverId !== driverId && other.profile?.cpf === cpf) return fail('cpf_in_use');
+    }
     driver.profile = {
-      cpf: normalizeCpf(input.cpf),
+      cpf,
       birthDate: input.birthDate,
       address: { ...input.address },
       cnh: { ...input.cnh },

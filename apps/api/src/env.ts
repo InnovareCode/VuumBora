@@ -127,6 +127,14 @@ const schema = z.object({
   WAITLIST_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
   WAITLIST_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(10),
 
+  /**
+   * Rotas do cadastro do motorista (`/v1/driver/*`, fatia D4): cota própria POR ROTA, por minuto, por IPv4 ou /64 IPv6.
+   * O cadastro é pouco frequente; o pedido de URL de envio ainda tem o teto por conta abaixo.
+   */
+  DRIVER_ROUTES_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
+  /** Teto por CONTA de pedidos de URL de envio de documento (`POST /v1/driver/documents/upload-url`) por hora. */
+  DRIVER_UPLOAD_URLS_PER_HOUR: z.coerce.number().int().positive().default(30),
+
   /** Rota separada (`/v1/driver-applications`) — limite próprio, mesmo padrão da lista de espera. */
   DRIVER_APPLICATION_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
   DRIVER_APPLICATION_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(10),

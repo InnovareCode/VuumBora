@@ -9,8 +9,9 @@
  *    `requireAccount`) OU `account-exempt` com o MOTIVO escrito; declarar uma rota autenticada como `public` falha;
  *  - classificação sem rota (rota removida ou renomeada) também falha: a tabela não apodrece.
  *
- * Hoje não há rota de compromisso (corrida, ficar online), então as três autenticadas são exceções com motivo. Quando a
- * primeira rota de compromisso nascer, ela entra como `account-gated` (e o teste cobra o preHandler) ou o teste falha.
+ * A primeira rota de compromisso é `PUT /v1/driver/availability` (fatia D4: ficar online), `account-gated`; o portão dela
+ * só vale para `online: true` (`onlyWhen`), e o comportamento por HTTP está em `driver-onboarding-routes.test.ts`. As
+ * demais autenticadas são exceções com motivo. Rota de compromisso nova entra como `account-gated` ou o teste falha.
  *
  * Duas detecções se completam (N3 da passada 4 da Íris: só pelo nome, três formas de esconder a autenticação passavam
  * declaradas `public` — autenticar por `onRequest`, por função anônima no `preHandler` e por `addHook` do contexto):
@@ -81,6 +82,15 @@ const ROUTE_POLICY: Readonly<Record<string, Policy>> = {
   'POST /v1/auth/consents': { kind: 'account-exempt', reason: 'é a SAÍDA do aceite pendente (reaceite): nunca pode ser bloqueada por ele' },
   'POST /v1/auth/logout-all': { kind: 'account-exempt', reason: 'encerrar sessões não cria compromisso novo e precisa funcionar com aceite pendente' },
   'POST /v1/auth/delete-account': { kind: 'account-exempt', reason: 'excluir a conta é o oposto de um compromisso novo: nunca pode ser bloqueada por aceite pendente' },
+  // Cadastro do motorista (M3, fatia D4): preencher o cadastro não é compromisso com passageiro; o compromisso é ficar online.
+  'POST /v1/driver/link-application': { kind: 'account-exempt', reason: 'ligar a conta à candidatura é cadastro, não compromisso com passageiro' },
+  'PUT /v1/driver/onboarding': { kind: 'account-exempt', reason: 'etapa 2 do cadastro (dados pessoais e CNH): não cria compromisso com passageiro' },
+  'PUT /v1/driver/vehicle': { kind: 'account-exempt', reason: 'cadastro do veículo: não cria compromisso com passageiro' },
+  'GET /v1/driver/verification': { kind: 'account-exempt', reason: 'leitura do próprio cadastro: nunca pode ser bloqueada por aceite pendente' },
+  'POST /v1/driver/documents/upload-url': { kind: 'account-exempt', reason: 'envio de documento do cadastro: não cria compromisso com passageiro' },
+  'POST /v1/driver/documents/:id/submit': { kind: 'account-exempt', reason: 'confirmação do envio de documento do cadastro: não cria compromisso com passageiro' },
+  // Ficar ONLINE é o compromisso: o portão vale para `online: true` (ficar offline nunca é bloqueado, R7: `onlyWhen`).
+  'PUT /v1/driver/availability': { kind: 'account-gated' },
 };
 
 /** Fases em que uma função pode autenticar a requisição, na ordem em que o Fastify as roda. */

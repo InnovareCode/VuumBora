@@ -4,6 +4,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { pool } from '../db.js';
 import { env } from '../env.js';
 import { ADMIN_SESSION_COOKIE, type AdminRole, type AdminUser } from '../domain/admin.js';
+import { refuseAndStop } from '../lib/early-reply.js';
 import { resolveAdminSession } from '../services/admin-auth-service.js';
 
 declare module 'fastify' {
@@ -15,14 +16,17 @@ declare module 'fastify' {
   }
 }
 
-function sendUnauthorized(reply: FastifyReply, message: string): void {
-  reply.code(401).send({ ok: false, error: { code: 'unauthorized', message } });
+// As recusas ESPERAM a resposta terminar (lib/early-reply.ts): hoje o contexto do painel não tem `onSend` assíncrono e o
+// `send()` termina na hora, mas um `onSend` async novo faria o handler rodar apesar do 401/403 (o papel e o CSRF
+// deixariam de proteger a ação).
+async function sendUnauthorized(reply: FastifyReply, message: string): Promise<void> {
+  await refuseAndStop(reply, 401, { ok: false, error: { code: 'unauthorized', message } });
 }
 
 export async function requireAdmin(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const rawToken = request.cookies[ADMIN_SESSION_COOKIE];
   if (!rawToken) {
-    sendUnauthorized(reply, 'Faça login para continuar.');
+    await sendUnauthorized(reply, 'Faça login para continuar.');
     return;
   }
 
@@ -31,7 +35,7 @@ export async function requireAdmin(request: FastifyRequest, reply: FastifyReply)
     // Cookie presente mas sessão inválida/expirada: limpa o cookie velho —
     // sem isso o navegador insiste em mandar um token morto em toda requisição.
     reply.clearCookie(ADMIN_SESSION_COOKIE, { path: '/' });
-    sendUnauthorized(reply, 'Sessão expirada. Faça login novamente.');
+    await sendUnauthorized(reply, 'Sessão expirada. Faça login novamente.');
     return;
   }
 
@@ -39,8 +43,8 @@ export async function requireAdmin(request: FastifyRequest, reply: FastifyReply)
   request.adminCsrfToken = resolved.csrfToken;
 }
 
-function sendForbidden(reply: FastifyReply): void {
-  reply.code(403).send({ ok: false, error: { code: 'forbidden', message: 'Seu papel não tem acesso a este recurso.' } });
+async function sendForbidden(reply: FastifyReply): Promise<void> {
+  await refuseAndStop(reply, 403, { ok: false, error: { code: 'forbidden', message: 'Seu papel não tem acesso a este recurso.' } });
 }
 
 /**
@@ -56,7 +60,7 @@ export function requireAdminRole(...allowedRoles: readonly AdminRole[]) {
     if (reply.sent) return; // `requireAdmin` já respondeu 401 — não segue para a checagem de papel.
 
     if (!allowedRoles.includes(request.admin!.role)) {
-      sendForbidden(reply);
+      await sendForbidden(reply);
     }
   };
 }
@@ -71,8 +75,8 @@ function csrfTokensMatch(expected: string, provided: string): boolean {
   return timingSafeEqual(expectedBuffer, providedBuffer);
 }
 
-function sendInvalidCsrf(reply: FastifyReply): void {
-  reply.code(403).send({ ok: false, error: { code: 'csrf_token_invalid', message: 'Token CSRF ausente ou inválido.' } });
+async function sendInvalidCsrf(reply: FastifyReply): Promise<void> {
+  await refuseAndStop(reply, 403, { ok: false, error: { code: 'csrf_token_invalid', message: 'Token CSRF ausente ou inválido.' } });
 }
 
 /**
@@ -126,6 +130,6 @@ export async function requireCsrfToken(request: FastifyRequest, reply: FastifyRe
   const provided = request.headers[CSRF_HEADER];
 
   if (!expected || typeof provided !== 'string' || !csrfTokensMatch(expected, provided)) {
-    sendInvalidCsrf(reply);
+    await sendInvalidCsrf(reply);
   }
 }

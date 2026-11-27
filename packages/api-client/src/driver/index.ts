@@ -25,8 +25,9 @@ export type {
 } from './types';
 
 /** M3 (fatia K0 do `docs/plano-m3-m4.md`): vínculo, etapa 2, veículo, verificação e documentos. */
-export { DRIVER_ONBOARDING_ERRORS } from './onboarding-types';
+export { DRIVER_AVAILABILITY_ERRORS, DRIVER_ONBOARDING_ERRORS } from './onboarding-types';
 export type {
+  DriverAvailabilityErrorCode,
   DocumentUploadPort,
   DocumentUploadRequest,
   DocumentUploadTarget,
@@ -47,6 +48,9 @@ export type {
   DriverVehicleInput,
 } from '../documents/types';
 export { createMockDriverOnboarding } from './onboarding-mock-adapter';
+/** D4: os mesmos contratos contra a API real (`/v1/driver/*`), com o token do `SessionManager`. */
+export { createDocumentUploadHttpAdapter, createDriverJourneyHttpAdapter, createDriverOnboardingHttpAdapter } from './onboarding-http-adapter';
+export type { DocumentUploadHttpOptions, DriverHttpOptions } from './onboarding-http-adapter';
 export type { MockDriverOnboarding, MockDriverOnboardingControl, MockDriverOnboardingOptions, MockReviewDecision } from './onboarding-mock-adapter';
 export { createDocumentStore } from '../documents/mock-store';
 export type { DocumentStore, DocumentStoreOptions } from '../documents/mock-store';

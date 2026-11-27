@@ -9,7 +9,7 @@ export type AccessEvent =
   | 'login_success' | 'login_failure' | 'login_blocked' | 'token_refresh'
   | 'token_reuse_detected' | 'logout' | 'logout_all' | 'password_changed'
   | 'register' | 'email_code_sent' | 'email_verified' | 'password_reset_requested' | 'password_reset_completed'
-  | 'account_deleted';
+  | 'account_deleted' | 'driver_application_linked';
 
 export class EmailTakenError extends Error {}
 /** O banco recusou a data de nascimento (rede de segurança da 0019). A mensagem nunca carrega a data. */

@@ -12,6 +12,7 @@ import { hashIpForLog, rateLimitKey, routeRateLimitKey } from './lib/ip-bucket.j
 import { loadLegalConfig } from './lib/legal-config.js';
 import { twoFactorConfig } from './lib/two-factor-config.js';
 import { describeErrorForLog } from './lib/safe-error.js';
+import { documentStorageFromEnv, type DocumentStorageSetup } from './lib/document-storage-config.js';
 import { registerAuthRoutes } from './routes/auth-route.js';
 import { createSmtpMailer } from './services/mailer.js';
 import { registerAdminAuthRoutes } from './routes/admin-auth-route.js';
@@ -20,6 +21,7 @@ import { registerAdminEmailSettingsRoutes } from './routes/admin-email-settings-
 import { registerAdminDriverApplicationRoutes } from './routes/admin-driver-application-route.js';
 import { registerAdminUserActivationRoute, registerAdminUserRoutes } from './routes/admin-user-route.js';
 import { registerDriverApplicationRoute } from './routes/driver-application-route.js';
+import { registerDriverRoutes } from './routes/driver-route.js';
 import { registerHealthRoute } from './routes/health-route.js';
 import { registerLegalRoutes } from './routes/legal-route.js';
 import { registerWaitlistRoute } from './routes/waitlist-route.js';
@@ -48,6 +50,12 @@ export interface BuildAppOptions {
    * exige `requireCurrentConsent` ou uma exceção declarada em toda rota autenticada (`test/consent-gate-coverage.test.ts`).
    */
   readonly onRoute?: onRouteHookHandler;
+  /**
+   * Armazenamento dos documentos do motorista (fatia D3). Omitido = lido do ambiente (`lib/document-storage-config.ts`);
+   * `null` = indisponível (envio de documento responde 503). Os testes passam o adaptador local com relógio próprio e
+   * fecham ele mesmos; o criado a partir do ambiente fecha junto com o app.
+   */
+  readonly documents?: DocumentStorageSetup | null;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -141,6 +149,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // As threads do bcrypt (lib/bcrypt-pool.ts) terminam junto com o servidor, depois das operações em curso.
   app.addHook('onClose', async () => closeBcryptPools());
 
+  // Armazenamento de documentos: configuração ausente ou errada não derruba o boot (falha fechada nas rotas que o usam).
+  // O aviso leva só NOMES de variável, nunca valor.
+  const documents = options.documents !== undefined
+    ? options.documents
+    : await documentStorageFromEnv((reasons) => app.log.warn({ event: 'document_storage_unavailable', reasons }));
+  if (options.documents === undefined && documents) app.addHook('onClose', async () => documents.storage.close());
+
   // ANTES de qualquer `register`: o hook só vê as rotas registradas depois dele e é herdado pelos contextos filhos.
   if (options.onRoute) app.addHook('onRoute', options.onRoute);
 
@@ -198,7 +213,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(async function publicRoutes(instance) {
     await instance.register(cors, {
       origin: env.ALLOWED_ORIGINS,
-      methods: ['GET', 'POST'],
+      // PUT: etapa 2, veículo e disponibilidade do motorista (`/v1/driver/*`, Bearer, sem cookie).
+      methods: ['GET', 'POST', 'PUT'],
       credentials: false,
     });
 
@@ -210,6 +226,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     registerLegalRoutes(instance, legal);
     // Sem adaptador injetado (produção): SMTP configurado no painel/ambiente, lido a cada envio.
     registerAuthRoutes(instance, { legal, mail: options.mail ?? createSmtpMailer({ pool, encryptionKey: twoFactorConfig.encryptionKey, log: instance.log }) });
+    // Cadastro do motorista (M3, fatia D4): Bearer de conta `driver`, mesma família pública (sem cookie, sem credentials no CORS).
+    registerDriverRoutes(instance, { legal, documents });
   });
 
   // `prefix: '/v1/admin'` não é só estética: `@fastify/cors` registra uma
