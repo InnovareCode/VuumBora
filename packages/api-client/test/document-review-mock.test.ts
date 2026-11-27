@@ -152,14 +152,14 @@ describe('aprovar', () => {
     const decisions = [
       await port.approve('demo-ana-cnh', { expiresOn: '2030-01-01' }, 'a1'),
       await port.approve('demo-ana-crlv', { expiresOn: '2030-01-01' }, 'a2'),
-      await port.approve('demo-ana-antecedentes', { expiresOn: '2027-01-01' }, 'a3'),
+      await port.approve('demo-ana-criminal_record', { expiresOn: '2027-01-01' }, 'a3'),
       await port.approve('demo-ana-inss', {}, 'a4'),
     ];
     for (const decision of decisions) {
       assert.ok(decision.ok);
       assert.equal(decision.data.driverStatus, 'under_review');
     }
-    const last = await port.approve('demo-ana-foto_perfil', {}, 'a5');
+    const last = await port.approve('demo-ana-profile_photo', {}, 'a5');
     assert.ok(last.ok);
     assert.equal(last.data.status, 'approved');
     assert.equal(last.data.driverStatus, 'approved');
@@ -277,5 +277,27 @@ describe('control.failNext', () => {
     control.failNext('unauthorized');
     expectError(await port.queue(), 'unauthorized', 'unauthorized');
     assert.ok((await port.queue()).ok);
+  });
+});
+
+describe('reativar (D5)', () => {
+  test('não suspenso: 409 driver_not_suspended; suspenso e em dia: aprovado; repetir devolve a reativação original', async () => {
+    const { port, control } = demo();
+    const notSuspended = await port.reinstate('demo-carla', 'r1');
+    expectError(notSuspended, 'conflict', 'driver_not_suspended');
+    assert.equal((await port.suspend('demo-carla', { reason: 'Conferência de documento.' }, 's1')).ok, true);
+    const first = await port.reinstate('demo-carla', 'r2');
+    assert.ok(first.ok && first.data.status === 'approved');
+    const again = await port.reinstate('demo-carla', 'r3');
+    assert.deepEqual(again.ok && again.data, first.ok && first.data);
+    assert.equal(control.auditLog().filter((entry) => entry.action === 'driver.reinstate').length, 1);
+  });
+
+  test('suspenso com pendência: 409 approval_blocked, e continua suspenso', async () => {
+    const { port } = demo();
+    assert.equal((await port.suspend('demo-ana', { reason: 'Conferência de documento.' }, 's1')).ok, true);
+    expectError(await port.reinstate('demo-ana', 'r1'), 'conflict', 'approval_blocked');
+    const detail = await port.driver('demo-ana');
+    assert.ok(detail.ok && detail.data.status === 'suspended');
   });
 });

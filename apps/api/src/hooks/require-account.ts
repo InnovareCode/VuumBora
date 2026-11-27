@@ -28,7 +28,7 @@ export function makeRequireAccount(config: AuthConfig) {
     const token = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
     const claims = token ? verifyAccessToken(config.jwtSecret, token) : null;
     if (!claims || !(await isSessionLive(pool, claims.sid, claims.sub))) {
-      // Espera a recusa terminar: sem isso o handler rodaria mesmo assim (lib/early-reply.ts).
+      // Para a cadeia (também no aborto da conexão): sem isso o handler rodaria mesmo assim (lib/early-reply.ts).
       await refuseAndStop(reply, 401, { ok: false, error: { code: 'unauthorized', message: 'Sessão inválida ou expirada.' } });
       return;
     }

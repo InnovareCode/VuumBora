@@ -28,6 +28,8 @@ export type {
   DocumentReviewQueueInput,
   DocumentReviewQueueItem,
   DocumentViewUrl,
+  DriverReinstatement,
+  DriverReinstatementPort,
   DriverSuspension,
   FareAdminErrorCode,
   FareAdminPort,

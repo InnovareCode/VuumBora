@@ -135,7 +135,7 @@ export interface DocumentDecision {
 }
 
 export interface SuspendDriverInput {
-  /** Motivo, 10 a 1000 caracteres (mesma regra da recusa de candidatura). */
+  /** Motivo, 10 a 500 caracteres depois do trim (o CHECK `drivers_suspension_reason_len` da 0024 vai até 500). */
   readonly reason: string;
 }
 
@@ -143,6 +143,13 @@ export interface DriverSuspension {
   readonly driverId: string;
   readonly status: 'suspended';
   readonly suspendedAt: string;
+}
+
+/** `POST /v1/admin/drivers/:id/reinstate` (acréscimo da D5): sair da suspensão é decisão com autor (0025). */
+export interface DriverReinstatement {
+  readonly driverId: string;
+  readonly status: 'approved';
+  readonly reinstatedAt: string;
 }
 
 /**
@@ -163,22 +170,40 @@ export interface DocumentReviewPort {
   /** `404 not_found` · `409 invalid_transition` · `422 unknown_reason` (`fields.reasonCode`) · `400 invalid_body` (nota longa). */
   reject(documentId: string, input: RejectDocumentInput, idempotencyKey: string): Promise<Result<DocumentDecision>>;
   rejectionReasons(): Promise<Result<readonly DocumentRejection[]>>;
-  /** `404 not_found` · `400 validation_failed` (`fields.reason`). Suspender quem já está suspenso devolve a suspensão original. */
+  /**
+   * `404 not_found` · `400 validation_failed` (`fields.reason`) · `403 own_registration`. Suspender quem já está suspenso
+   * devolve a suspensão original.
+   */
   suspend(driverId: string, input: SuspendDriverInput, idempotencyKey: string): Promise<Result<DriverSuspension>>;
+}
+
+/**
+ * Acréscimo da D5 (porta À PARTE para o espelho do painel, que confere `DocumentReviewPort` por igualdade estrita,
+ * adotar quando quiser): `POST /v1/admin/drivers/:id/reinstate`, com `Idempotency-Key` e CSRF.
+ */
+export interface DriverReinstatementPort {
+  /**
+   * `404 not_found` · `409 driver_not_suspended` · `403 own_registration` · `409 approval_blocked` (há pendência no
+   * cadastro: documento vencido ou faltando). Já reativado devolve a reativação original.
+   */
+  reinstate(driverId: string, idempotencyKey: string): Promise<Result<DriverReinstatement>>;
 }
 
 /** Catálogo FECHADO dos `code` da fila de documentos. */
 export const DOCUMENT_REVIEW_ERRORS = {
   invalid_body: { status: 400, message: 'Dados inválidos.' },
   invalid_cursor: { status: 400, message: 'Cursor de paginação inválido.' },
-  validation_failed: { status: 400, message: 'Informe o motivo (10 a 1000 caracteres).', field: 'reason' },
+  validation_failed: { status: 400, message: 'Informe o motivo (10 a 500 caracteres).', field: 'reason' },
   idempotency_key_required: { status: 400, message: 'Informe o cabeçalho Idempotency-Key.' },
   unauthorized: { status: 401, message: 'Sessão expirada.' },
   forbidden: { status: 403, message: 'Seu papel não tem acesso a este recurso.' },
   csrf_token_invalid: { status: 403, message: 'Token CSRF ausente ou inválido.' },
+  own_registration: { status: 403, message: 'Ninguém decide sobre o próprio cadastro de motorista.' },
   not_found: { status: 404, message: 'Não encontrado.' },
   invalid_transition: { status: 409, message: 'Este documento já foi analisado.' },
   idempotency_key_reused: { status: 409, message: 'Esta chave já foi usada com outro conteúdo.' },
+  driver_not_suspended: { status: 409, message: 'Este motorista não está suspenso.' },
+  approval_blocked: { status: 409, message: 'Há pendências no cadastro: o motorista não pode voltar a ficar aprovado.' },
   invalid_expires_on: { status: 422, message: 'Data de validade ausente, inválida ou já passada.', field: 'expiresOn' },
   unknown_reason: { status: 422, message: 'Motivo de recusa desconhecido.', field: 'reasonCode' },
   unavailable: { status: 503, message: 'Serviço indisponível no momento.' },

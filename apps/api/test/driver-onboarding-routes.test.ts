@@ -330,6 +330,10 @@ describe('PUT /v1/driver/onboarding (etapa 2)', () => {
       { ...valid, cnh: { ...valid.cnh, number: '1234567890' } },
       { ...valid, cnh: { ...valid.cnh, ear: 'sim' } },
       { ...valid, cpf: 12345678909 },
+      // S-5: caractere de controle (o Postgres recusaria o NUL com 22021, que viraria 503)
+      { ...valid, address: { ...valid.address, complement: 'Apto\u00003' } },
+      { ...valid, address: { ...valid.address, street: 'Rua\u0007Mossoró' } },
+      { ...valid, address: { ...valid.address, city: 'Natal\u0085' } },
     ];
     for (const body of invalid) assertRefused(await call('PUT', '/v1/driver/onboarding', { token: driver.token, body }), 'invalid_body');
     const row = await owner.query(`SELECT cpf, cnh_number, address_postal_code FROM drivers WHERE account_id = $1`, [driver.accountId]);
@@ -453,6 +457,8 @@ describe('PUT /v1/driver/vehicle', () => {
       vehicleBody({ year: 2020.5 }),
       vehicleBody({ brand: 'x'.repeat(41) }),
       vehicleBody({ color: '' }),
+      vehicleBody({ brand: 'Fiat\u0000' }),
+      vehicleBody({ model: 'Argo\u001b[31m' }),
     ]) {
       assertRefused(await call('PUT', '/v1/driver/vehicle', { token: driver.token, body }), 'invalid_body');
     }
@@ -583,6 +589,7 @@ describe('POST /v1/driver/documents/upload-url', () => {
       { typeCode: 'cnh', contentType: 'image/jpeg', sizeBytes: 0, sha256: SHA },
       { typeCode: 'cnh', contentType: 'image/jpeg', sizeBytes: 1.5, sha256: SHA },
       { typeCode: '', contentType: 'image/jpeg', sizeBytes: 10, sha256: SHA },
+      { typeCode: 'cnh\u0000', contentType: 'image/jpeg', sizeBytes: 10, sha256: SHA },
     ]) {
       assertRefused(await call('POST', '/v1/driver/documents/upload-url', { token: unlinked.token, body }), 'invalid_body');
     }

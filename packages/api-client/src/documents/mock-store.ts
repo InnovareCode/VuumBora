@@ -31,22 +31,34 @@ export interface MockRequirement {
   readonly hasExpiry: boolean;
 }
 
-/** Semente PROVISÓRIA (N1): mínimo federal (Lei 12.587, art. 11-B) e foto de perfil. */
+/**
+ * Semente PROVISÓRIA (N1): mínimo federal (Lei 12.587, art. 11-B) e foto de perfil. IGUAL à semente da migração 0024
+ * (`document_types` + `document_requirements` de Natal): mesmos códigos, rótulos, ordem e validade.
+ */
 export const PROVISIONAL_REQUIREMENTS: readonly MockRequirement[] = [
-  { typeCode: 'cnh', label: 'CNH com EAR', required: true, hasExpiry: true },
+  { typeCode: 'cnh', label: 'CNH com EAR (exerce atividade remunerada)', required: true, hasExpiry: true },
   { typeCode: 'crlv', label: 'Documento do veículo (CRLV)', required: true, hasExpiry: true },
-  { typeCode: 'antecedentes', label: 'Certidão de antecedentes criminais', required: true, hasExpiry: true },
+  { typeCode: 'criminal_record', label: 'Certidão de antecedentes criminais', required: true, hasExpiry: true },
   { typeCode: 'inss', label: 'Comprovante de inscrição no INSS', required: true, hasExpiry: false },
-  { typeCode: 'foto_perfil', label: 'Foto de perfil', required: true, hasExpiry: false },
+  { typeCode: 'profile_photo', label: 'Foto de perfil', required: true, hasExpiry: false },
 ];
 
-/** Catálogo PROVISÓRIO de motivos de recusa (N2; o texto final depende da decisão 9). */
+/**
+ * Catálogo PROVISÓRIO de motivos de recusa (N2; o texto final depende da decisão 9). IGUAL ao
+ * `document_rejection_reasons` da migração 0024: os 11 códigos, os textos e a ordem.
+ */
 export const PROVISIONAL_REJECTION_REASONS: readonly DocumentRejection[] = [
-  { code: 'illegible', text: 'Não conseguimos ler o documento. Envie uma foto nítida, sem reflexo e sem cortes.' },
-  { code: 'wrong_document', text: 'O arquivo enviado não é o documento pedido.' },
-  { code: 'expired_document', text: 'O documento enviado está vencido.' },
-  { code: 'data_mismatch', text: 'Os dados do documento não conferem com os do seu cadastro.' },
-  { code: 'incomplete', text: 'Falta uma parte do documento. Envie frente e verso.' },
+  { code: 'illegible', text: 'A imagem está ilegível. Envie de novo, com boa luz e sem reflexo.' },
+  { code: 'cropped', text: 'O documento aparece cortado. Envie com as quatro bordas visíveis.' },
+  { code: 'expired', text: 'O documento está vencido. Envie a versão dentro da validade.' },
+  { code: 'wrong_document', text: 'Este não é o documento pedido. Confira e envie o documento certo.' },
+  { code: 'data_mismatch', text: 'Os dados não conferem com o seu cadastro (nome, CPF ou placa).' },
+  { code: 'cnh_missing_ear', text: 'A CNH não traz a observação EAR (exerce atividade remunerada).' },
+  { code: 'cnh_category_not_allowed', text: 'A categoria da CNH precisa ser B ou superior.' },
+  { code: 'photo_not_compliant', text: 'A foto precisa mostrar o seu rosto de frente, sem óculos escuros, boné ou filtro.' },
+  { code: 'certificate_not_accepted', text: 'A certidão não pôde ser aceita. Fale com o suporte para saber o próximo passo.' },
+  { code: 'vehicle_not_compliant', text: 'O veículo não atende aos requisitos de ano ou modelo.' },
+  { code: 'other', text: 'O documento precisa de correção. Fale com o suporte para saber o que ajustar.' },
 ];
 
 /** Estado interno de um documento. `pending_upload` = pediu a URL e ainda não enviou: não aparece em lista nenhuma. */
@@ -94,7 +106,7 @@ export interface MockDriverRecord {
 
 /** Linha da trilha de auditoria (N5: cada visualização de documento grava ANTES de devolver a URL). */
 export interface MockAuditEntry {
-  readonly action: 'document.view_url' | 'document.approve' | 'document.reject' | 'driver.suspend';
+  readonly action: 'document.view_url' | 'document.approve' | 'document.reject' | 'driver.suspend' | 'driver.reinstate';
   readonly targetId: string;
   readonly actorRole: string;
   readonly atMs: number;
@@ -297,9 +309,9 @@ function seedDemo(store: DocumentStore): void {
   addDriver('demo-ana', 'Ana Exemplo', 'QWE1A23', '52998224725');
   addDocument('demo-ana', 'cnh', 'submitted', store.settings.reviewSlaHours + 5);
   addDocument('demo-ana', 'crlv', 'submitted', 3);
-  addDocument('demo-ana', 'antecedentes', 'submitted', 2);
+  addDocument('demo-ana', 'criminal_record', 'submitted', 2);
   addDocument('demo-ana', 'inss', 'submitted', 2);
-  addDocument('demo-ana', 'foto_perfil', 'submitted', 1);
+  addDocument('demo-ana', 'profile_photo', 'submitted', 1);
 
   // 2) Correção pedida num documento, os outros aprovados.
   addDriver('demo-bruno', 'Bruno Exemplo', 'RTY2B34', '11144477735');
@@ -307,12 +319,12 @@ function seedDemo(store: DocumentStore): void {
     rejection: store.rejectionReasons[0] ?? { code: 'illegible', text: 'Documento ilegível.' },
     internalNote: 'Foto com reflexo no número.',
   });
-  for (const typeCode of ['crlv', 'antecedentes']) addDocument('demo-bruno', typeCode, 'approved', 30, { expiresOn: '2027-06-30' });
-  for (const typeCode of ['inss', 'foto_perfil']) addDocument('demo-bruno', typeCode, 'approved', 30);
+  for (const typeCode of ['crlv', 'criminal_record']) addDocument('demo-bruno', typeCode, 'approved', 30, { expiresOn: '2027-06-30' });
+  for (const typeCode of ['inss', 'profile_photo']) addDocument('demo-bruno', typeCode, 'approved', 30);
 
   // 3) Aprovado.
   const carla = addDriver('demo-carla', 'Carla Exemplo', 'UIO3C45', '39053344705');
-  for (const typeCode of ['cnh', 'crlv', 'antecedentes']) addDocument('demo-carla', typeCode, 'approved', 200, { expiresOn: '2027-12-31' });
-  for (const typeCode of ['inss', 'foto_perfil']) addDocument('demo-carla', typeCode, 'approved', 200);
+  for (const typeCode of ['cnh', 'crlv', 'criminal_record']) addDocument('demo-carla', typeCode, 'approved', 200, { expiresOn: '2027-12-31' });
+  for (const typeCode of ['inss', 'profile_photo']) addDocument('demo-carla', typeCode, 'approved', 200);
   carla.accountStatus = 'approved';
 }

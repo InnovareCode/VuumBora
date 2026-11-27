@@ -120,6 +120,29 @@ describe('createDocumentUploadHttpAdapter', () => {
     assert.deepEqual(calls[0]!.headers, { 'Content-Type': 'image/jpeg', 'x-amz-checksum-sha256': 'abc=' });
   });
 
+  test('S-6: URL de envio http é recusada sem allowInsecureHttp (nem chega a ler o arquivo); com a opção, passa', async () => {
+    let fetched = 0;
+    const impl = (async (input: string | URL) => {
+      fetched += 1;
+      return String(input).startsWith('data:') ? new Response(new Uint8Array([1])) : new Response(null, { status: 200 });
+    }) as typeof fetch;
+    const insecure = { ...target, uploadUrl: 'http://armazenamento.teste/o/x', expiresAt: new Date(Date.now() + 60_000).toISOString() };
+    const refused = await createDocumentUploadHttpAdapter({ fetch: impl }).upload(insecure, { uri: 'data:,x' });
+    assert.equal(!refused.ok && refused.error.kind, 'unknown');
+    assert.equal(fetched, 0);
+    assert.ok((await createDocumentUploadHttpAdapter({ fetch: impl, allowInsecureHttp: true }).upload(insecure, { uri: 'data:,x' })).ok);
+  });
+
+  test('S-6: resposta da API com URL de envio http vira unknown, a não ser em desenvolvimento', async () => {
+    const body = { ok: true, data: { documentId: 'd1', uploadUrl: 'http://armazenamento.teste/o/x', method: 'PUT', headers: {}, expiresAt: new Date(Date.now() + 60_000).toISOString() } };
+    const { impl } = fakeFetch(() => ({ status: 200, body }));
+    const request = { typeCode: 'cnh', contentType: 'image/jpeg' as const, sizeBytes: 1, sha256: 'a'.repeat(64) };
+    const refused = await createDriverOnboardingHttpAdapter(options(impl)).requestUploadUrl(request);
+    assert.equal(!refused.ok && refused.error.kind, 'unknown');
+    const dev = await createDriverOnboardingHttpAdapter({ ...options(impl), baseUrl: 'http://localhost:3101', allowInsecureHttp: true }).requestUploadUrl(request);
+    assert.ok(dev.ok);
+  });
+
   test('URL vencida (pelo relógio, ou 403 do armazenamento): forbidden com code upload_url_expired', async () => {
     const forbidden = (async (input: string | URL) =>
       String(input).startsWith('data:') ? new Response(new Uint8Array([1])) : new Response(null, { status: 403 })) as typeof fetch;

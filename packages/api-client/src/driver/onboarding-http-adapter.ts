@@ -11,6 +11,8 @@
  * - `createDocumentUploadHttpAdapter` faz o PUT do arquivo direto no armazenamento (não é a API): 403 da URL vencida
  *   vira `forbidden` com `code: 'upload_url_expired'` (peça outra URL). Progresso: o `fetch` não informa bytes
  *   enviados, então `onProgress` recebe só `1` ao terminar.
+ * - A URL de envio leva foto de CNH: `https:` obrigatório, como a `baseUrl`. `http:` só com `allowInsecureHttp`
+ *   (desenvolvimento, armazenamento local). Resposta da API com URL `http:` sem essa opção vira `unknown`.
  * - Não loga nada: URL assinada e dado pessoal passam por aqui.
  */
 import type { DriverPhase } from '@vuumbora/domain/driver';
@@ -108,7 +110,16 @@ export function parseVerification(value: unknown): DriverVerification | null {
   };
 }
 
-function parseUploadTarget(value: unknown): DocumentUploadTarget | null {
+function isAllowedUploadUrl(value: string, allowInsecureHttp: boolean): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || (allowInsecureHttp && url.protocol === 'http:');
+  } catch {
+    return false;
+  }
+}
+
+function parseUploadTarget(value: unknown, allowInsecureHttp: boolean): DocumentUploadTarget | null {
   if (!isRecord(value) || !nonEmptyString(value['documentId']) || !nonEmptyString(value['uploadUrl']) || value['method'] !== 'PUT') return null;
   if (!isIso(value['expiresAt']) || !isRecord(value['headers'])) return null;
   const headers: Record<string, string> = {};
@@ -116,12 +127,7 @@ function parseUploadTarget(value: unknown): DocumentUploadTarget | null {
     if (typeof headerValue !== 'string') return null;
     headers[name] = headerValue;
   }
-  try {
-    const url = new URL(value['uploadUrl']);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-  } catch {
-    return null;
-  }
+  if (!isAllowedUploadUrl(value['uploadUrl'], allowInsecureHttp)) return null;
   return { documentId: value['documentId'], uploadUrl: value['uploadUrl'], method: 'PUT', headers, expiresAt: value['expiresAt'] as string };
 }
 
@@ -249,7 +255,7 @@ export function createDriverOnboardingHttpAdapter(options: DriverHttpOptions): D
         path: '/v1/driver/documents/upload-url',
         body: { typeCode: input.typeCode, contentType: input.contentType, sizeBytes: input.sizeBytes, sha256: input.sha256 },
         fields,
-        parse: parseUploadTarget,
+        parse: (data) => parseUploadTarget(data, options.allowInsecureHttp === true),
       }),
 
     submitDocument: (documentId: string) =>
@@ -286,6 +292,8 @@ export function createDriverJourneyHttpAdapter(options: DriverHttpOptions): Driv
 
 export interface DocumentUploadHttpOptions {
   readonly fetch?: typeof fetch;
+  /** Aceita URL de envio `http:` (armazenamento local). SÓ desenvolvimento: fora disso, `https:` obrigatório. */
+  readonly allowInsecureHttp?: boolean;
   /** Envio pode ser lento em 3G: padrão 120 s. */
   readonly timeoutMs?: number;
 }
@@ -299,6 +307,9 @@ export function createDocumentUploadHttpAdapter(options: DocumentUploadHttpOptio
   return {
     async upload(target: DocumentUploadTarget, source: UploadSource, onProgress?: (fraction: number) => void): Promise<Result<void>> {
       if (!isRecord(source) || !nonEmptyString(source.uri)) return failWith({ kind: 'validation', fields: { form: 'Arquivo inválido.' }, code: 'invalid_body' });
+      if (!isAllowedUploadUrl(target.uploadUrl, options.allowInsecureHttp === true)) {
+        return failWith({ kind: 'unknown', message: 'URL de envio sem https.' });
+      }
       if (Date.parse(target.expiresAt) <= Date.now()) return failWith(expired);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);

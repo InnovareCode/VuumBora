@@ -23,9 +23,8 @@ export function registerHealthRoute(app: FastifyInstance, options: HealthRouteOp
   app.get('/healthz', { config: { rateLimit: false } }, async (_request, reply) => {
     const dbOk = await cache.get(check);
     if (!dbOk) {
-      reply.code(503).send({ status: 'unavailable' });
-      return;
+      return reply.code(503).send({ status: 'unavailable' });
     }
-    reply.code(200).send({ status: 'ok' });
+    return reply.code(200).send({ status: 'ok' });
   });
 }

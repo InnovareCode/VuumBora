@@ -43,7 +43,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
     // `reasons`: nomes de variável e motivo, nunca valor (lib/auth-config.ts::authConfigProblems).
     app.log.error({ event: 'auth_unavailable', reason: 'config_missing_weak_or_invalid', reasons: authConfigProblems() });
     app.all('/v1/auth/*', async (_request, reply) => {
-      fail(reply, 503, 'auth_unavailable', 'Autenticação indisponível no momento.');
+      return fail(reply, 503, 'auth_unavailable', 'Autenticação indisponível no momento.');
     });
     return;
   }
@@ -105,7 +105,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
         return tooManyAttempts(reply, config.registerWindowMinutes * 60);
       }
       request.log.info({ event: 'auth_registered', accountId: result.account.id, accountType: result.account.accountType, emailSent: result.emailSent, reclaimed: result.reclaimed });
-      reply.code(201).send({
+      return reply.code(201).send({
         ok: true,
         data: {
           account: result.account,
@@ -124,7 +124,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
           ? fail(reply, 403, 'underage', 'É preciso ter 18 anos ou mais para criar uma conta.')
           : fail(reply, 400, 'invalid_birth_date', 'Data de nascimento inválida. Use o formato AAAA-MM-DD.');
       }
-      unavailable(request, reply, err, 'auth_register_failed');
+      return unavailable(request, reply, err, 'auth_register_failed');
     }
   });
 
@@ -146,9 +146,9 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
         return fail(reply, 403, 'email_not_verified', 'Confirme seu e-mail para entrar.');
       }
       request.log.info({ event: 'auth_login_succeeded', accountId: result.session.account.id });
-      reply.code(200).send({ ok: true, data: result.session });
+      return reply.code(200).send({ ok: true, data: result.session });
     } catch (err) {
-      unavailable(request, reply, err, 'auth_login_failed_internal');
+      return unavailable(request, reply, err, 'auth_login_failed_internal');
     }
   });
 
@@ -175,9 +175,9 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
         request.log.info({ event: 'auth_refresh_refused' });
         return fail(reply, 401, 'invalid_refresh_token', 'Sessão expirada. Faça login novamente.');
       }
-      reply.code(200).send({ ok: true, data: result.tokens });
+      return reply.code(200).send({ ok: true, data: result.tokens });
     } catch (err) {
-      unavailable(request, reply, err, 'auth_refresh_failed_internal');
+      return unavailable(request, reply, err, 'auth_refresh_failed_internal');
     }
   });
 
@@ -186,18 +186,18 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
     if (!parsed.success) return invalidBody(request, reply, 'auth_logout_rejected');
     try {
       await identity.logout(pool, parsed.data.refreshToken, contextOf(request, config));
-      reply.code(200).send({ ok: true });
+      return reply.code(200).send({ ok: true });
     } catch (err) {
-      unavailable(request, reply, err, 'auth_logout_failed_internal');
+      return unavailable(request, reply, err, 'auth_logout_failed_internal');
     }
   });
 
   app.post('/v1/auth/logout-all', { ...limits.session(), preHandler: requireAccount }, async (request, reply) => {
     try {
       const revoked = await identity.logoutAll(pool, request.authAccount!.accountId, contextOf(request, config));
-      reply.code(200).send({ ok: true, data: { revokedSessions: revoked } });
+      return reply.code(200).send({ ok: true, data: { revokedSessions: revoked } });
     } catch (err) {
-      unavailable(request, reply, err, 'auth_logout_all_failed_internal');
+      return unavailable(request, reply, err, 'auth_logout_all_failed_internal');
     }
   });
 
@@ -226,9 +226,9 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
       }
       if (result.kind === 'account_missing') return fail(reply, 401, 'unauthorized', 'Sessão inválida ou expirada.');
       request.log.info({ event: 'auth_account_deleted', accountId: request.authAccount!.accountId });
-      reply.code(200).send({ ok: true, data: { accountDeleted: true } });
+      return reply.code(200).send({ ok: true, data: { accountDeleted: true } });
     } catch (err) {
-      unavailable(request, reply, err, 'auth_delete_account_failed_internal');
+      return unavailable(request, reply, err, 'auth_delete_account_failed_internal');
     }
   });
 
@@ -248,9 +248,9 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRoutesOpti
       // (o boot já avisou): o app não consegue mostrar reaceite, mas a sessão continua funcionando.
       const status = await getConsentStatus(pool, legal, accountId);
       if (status.kind === 'account_missing') return fail(reply, 401, 'unauthorized', 'Sessão inválida ou expirada.');
-      reply.code(200).send({ ok: true, data: { ...account, consent: status.kind === 'ok' ? status.status : null } });
+      return reply.code(200).send({ ok: true, data: { ...account, consent: status.kind === 'ok' ? status.status : null } });
     } catch (err) {
-      unavailable(request, reply, err, 'auth_me_failed_internal');
+      return unavailable(request, reply, err, 'auth_me_failed_internal');
     }
   });
 }

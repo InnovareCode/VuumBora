@@ -19,6 +19,7 @@ import { registerAdminAuthRoutes } from './routes/admin-auth-route.js';
 import { registerAdminTwoFactorRoutes } from './routes/admin-two-factor-route.js';
 import { registerAdminEmailSettingsRoutes } from './routes/admin-email-settings-route.js';
 import { registerAdminDriverApplicationRoutes } from './routes/admin-driver-application-route.js';
+import { registerAdminDocumentReviewRoutes } from './routes/admin-document-review-route.js';
 import { registerAdminUserActivationRoute, registerAdminUserRoutes } from './routes/admin-user-route.js';
 import { registerDriverApplicationRoute } from './routes/driver-application-route.js';
 import { registerDriverRoutes } from './routes/driver-route.js';
@@ -56,6 +57,11 @@ export interface BuildAppOptions {
    * fecham ele mesmos; o criado a partir do ambiente fecha junto com o app.
    */
   readonly documents?: DocumentStorageSetup | null;
+  /**
+   * Só os testes: hooks na RAIZ, antes de qualquer `register` (valem para todo contexto). Serve para provar que nenhuma
+   * rota depende de o contexto ter poucos `onSend` assíncronos (`test/public-routes-async-onsend.test.ts`).
+   */
+  readonly rootHooksForTest?: (app: FastifyInstance) => void;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -158,6 +164,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   // ANTES de qualquer `register`: o hook só vê as rotas registradas depois dele e é herdado pelos contextos filhos.
   if (options.onRoute) app.addHook('onRoute', options.onRoute);
+  options.rootHooksForTest?.(app);
 
   await app.register(helmet);
 
@@ -257,12 +264,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       // listar por nome documenta a intenção em vez de depender de um
       // comportamento implícito do plugin.
       allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'Idempotency-Key'],
+      // `Date` não é cabeçalho "seguro" para o navegador ler em resposta cross-origin: sem isto, o painel não lê o relógio
+      // do servidor e calcularia a validade do link de documento (≤ 300 s) pelo relógio da máquina do revisor.
+      exposedHeaders: ['Date'],
     });
 
     registerAdminAuthRoutes(instance);
     registerAdminTwoFactorRoutes(instance);
     registerAdminEmailSettingsRoutes(instance);
     registerAdminDriverApplicationRoutes(instance);
+    // Revisão de documentos do motorista (M3, fatia D5): revisor_documentos e dono; a visualização usa o armazenamento.
+    registerAdminDocumentReviewRoutes(instance, { documents });
     registerAdminUserRoutes(instance);
     // Primeiro acesso (F07): SEM sessão, mesma classe de limite do login (pré-autenticação, mesmo risco de martelo).
     registerAdminUserActivationRoute(instance, {

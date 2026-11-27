@@ -25,7 +25,7 @@ export async function requireDriverAccount(request: FastifyRequest, reply: Fasti
     }
     if (accountType !== 'driver') {
       request.log.info({ event: 'driver_route_refused', reason: 'not_driver_account' });
-      // Espera a recusa terminar: sem isso o handler rodaria mesmo assim (lib/early-reply.ts).
+      // Para a cadeia (também no aborto da conexão): sem isso o handler rodaria mesmo assim (lib/early-reply.ts).
       await refuseAndStop(reply, 403, { ok: false, error: { code: 'not_driver_account', message: 'Esta conta não é de motorista.' } });
     }
   } catch (err) {

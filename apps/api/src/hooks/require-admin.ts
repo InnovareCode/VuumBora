@@ -16,9 +16,10 @@ declare module 'fastify' {
   }
 }
 
-// As recusas ESPERAM a resposta terminar (lib/early-reply.ts): hoje o contexto do painel não tem `onSend` assíncrono e o
-// `send()` termina na hora, mas um `onSend` async novo faria o handler rodar apesar do 401/403 (o papel e o CSRF
-// deixariam de proteger a ação).
+// As recusas PARAM a cadeia (lib/early-reply.ts): esperam a resposta terminar e, se o cliente derrubou a conexão,
+// assumem a resposta (`hijack`). Hoje o contexto do painel não tem `onSend` assíncrono e o `send()` termina na hora;
+// com um `onSend` async novo (compressão, auditoria), só esperar o fim NÃO bastaria no aborto da conexão — o handler
+// rodaria com a sessão já carregada, e o papel e o CSRF deixariam de proteger a ação.
 async function sendUnauthorized(reply: FastifyReply, message: string): Promise<void> {
   await refuseAndStop(reply, 401, { ok: false, error: { code: 'unauthorized', message } });
 }

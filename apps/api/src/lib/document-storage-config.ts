@@ -10,7 +10,7 @@
  *   DOCUMENT_STORAGE_S3_ACCESS_KEY_ID       credencial restrita ao prefixo driver-docs/
  *   DOCUMENT_STORAGE_S3_SECRET_ACCESS_KEY
  *   DOCUMENT_STORAGE_S3_FORCE_PATH_STYLE    true | false (padrão false)
- *   DOCUMENT_STORAGE_LOCAL_HOST / _PORT / _PUBLIC_URL   só desenvolvimento (o local RECUSA NODE_ENV=production)
+ *   DOCUMENT_STORAGE_LOCAL_HOST / _PORT / _PUBLIC_URL   só desenvolvimento (o local exige NODE_ENV=development ou test)
  *   DOCUMENT_URL_TTL_SECONDS                validade das URLs assinadas, 1..300 (padrão 300)
  */
 import { DOCUMENT_URL_MAX_TTL_SECONDS, type DocumentStorage } from './document-storage.js';
@@ -46,7 +46,9 @@ export function loadDocumentStorageConfig(source: Source = process.env): Documen
   if (driver === '') return { ok: false, reasons: ['DOCUMENT_STORAGE_DRIVER: ausente (s3 ou local)', ...reasons] };
 
   if (driver === 'local') {
-    if (trimmed(source, 'NODE_ENV') === 'production') reasons.push('DOCUMENT_STORAGE_DRIVER: local é só para desenvolvimento e teste');
+    // Só com NODE_ENV explicitamente de desenvolvimento ou teste: ausente vale produção, como em env.ts e auth-config.
+    const nodeEnv = trimmed(source, 'NODE_ENV');
+    if (nodeEnv !== 'development' && nodeEnv !== 'test') reasons.push('DOCUMENT_STORAGE_DRIVER: local só com NODE_ENV=development ou test');
     const portRaw = trimmed(source, 'DOCUMENT_STORAGE_LOCAL_PORT');
     const port = portRaw === '' ? 0 : /^\d{1,5}$/.test(portRaw) && Number(portRaw) <= 65535 ? Number(portRaw) : NaN;
     if (Number.isNaN(port)) reasons.push('DOCUMENT_STORAGE_LOCAL_PORT: porta inválida');

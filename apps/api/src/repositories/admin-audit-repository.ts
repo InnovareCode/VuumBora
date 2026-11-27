@@ -12,7 +12,8 @@ export interface AuditLogInput {
   readonly ipAddress: string | null;
 }
 
-export async function insertAuditLog(pool: Pool, input: AuditLogInput): Promise<void> {
+/** `pool` ou o `client` de uma transação: a trilha de uma decisão grava na MESMA transação da decisão. */
+export async function insertAuditLog(pool: Pick<Pool, 'query'>, input: AuditLogInput): Promise<void> {
   await pool.query(
     `INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, before, after, ip_address)
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,

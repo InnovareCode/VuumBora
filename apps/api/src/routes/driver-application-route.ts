@@ -62,8 +62,8 @@ const bodySchema = z.object({
  * Diferente de erro de campo: não há "campo certo" para apontar, então a
  * resposta não leva `fields`.
  */
-function sendInvalidBodyError(reply: FastifyReply): void {
-  reply.code(400).send({
+function sendInvalidBodyError(reply: FastifyReply): FastifyReply {
+  return reply.code(400).send({
     ok: false,
     error: { code: 'invalid_body', message: 'Corpo da requisição inválido.' },
   });
@@ -75,8 +75,8 @@ function sendInvalidBodyError(reply: FastifyReply): void {
  * passada só. Formato combina com `ApiError` (kind: 'validation') em
  * `packages/api-client/src/driver-applications`.
  */
-function sendValidationError(reply: FastifyReply, fields: Readonly<Record<string, string>>): void {
-  reply.code(400).send({
+function sendValidationError(reply: FastifyReply, fields: Readonly<Record<string, string>>): FastifyReply {
+  return reply.code(400).send({
     ok: false,
     error: {
       code: 'validation_failed',
@@ -105,8 +105,7 @@ export function registerDriverApplicationRoute(app: FastifyInstance): void {
         // path vazio = corpo não é nem um objeto (string/array/número/ausente) — não é erro de campo.
         if (issues.some((issue) => issue.path.length === 0)) {
           request.log.info({ event: 'driver_application_rejected', reason: 'invalid_body' });
-          sendInvalidBodyError(reply);
-          return;
+          return sendInvalidBodyError(reply);
         }
 
         const fields: Record<string, string> = {};
@@ -119,17 +118,16 @@ export function registerDriverApplicationRoute(app: FastifyInstance): void {
           reason: 'validation_failed',
           fields: Object.keys(fields),
         });
-        sendValidationError(reply, fields);
-        return;
+        return sendValidationError(reply, fields);
       }
 
       try {
         await submitDriverApplication(pool, parsed.data);
         request.log.info({ event: 'driver_application_processed' });
-        reply.code(200).send({ ok: true });
+        return reply.code(200).send({ ok: true });
       } catch (err) {
         request.log.error({ event: 'driver_application_failed', ...describeErrorForLog(err) });
-        reply.code(503).send({
+        return reply.code(503).send({
           ok: false,
           error: {
             code: 'unavailable',

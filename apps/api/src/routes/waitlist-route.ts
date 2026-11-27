@@ -22,8 +22,8 @@ const VALIDATION_MESSAGES: Readonly<Record<string, string>> = {
   invalid_body: 'Corpo da requisição inválido.',
 };
 
-function sendValidationError(reply: FastifyReply, code: keyof typeof VALIDATION_MESSAGES): void {
-  reply.code(400).send({ ok: false, error: { code, message: VALIDATION_MESSAGES[code] } });
+function sendValidationError(reply: FastifyReply, code: keyof typeof VALIDATION_MESSAGES): FastifyReply {
+  return reply.code(400).send({ ok: false, error: { code, message: VALIDATION_MESSAGES[code] } });
 }
 
 export function registerWaitlistRoute(app: FastifyInstance): void {
@@ -44,17 +44,16 @@ export function registerWaitlistRoute(app: FastifyInstance): void {
         const field = parsed.error.issues[0]?.path[0];
         const code = field === 'profile' ? 'invalid_profile' : field === 'email' ? 'invalid_email' : 'invalid_body';
         request.log.info({ event: 'waitlist_signup_rejected', reason: code });
-        sendValidationError(reply, code);
-        return;
+        return sendValidationError(reply, code);
       }
 
       try {
         await signUpForWaitlist(pool, parsed.data.email, parsed.data.profile);
         request.log.info({ event: 'waitlist_signup_processed' });
-        reply.code(200).send({ ok: true });
+        return reply.code(200).send({ ok: true });
       } catch (err) {
         request.log.error({ event: 'waitlist_signup_failed', ...describeErrorForLog(err) });
-        reply.code(503).send({
+        return reply.code(503).send({
           ok: false,
           error: {
             code: 'unavailable',

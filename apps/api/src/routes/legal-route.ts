@@ -47,10 +47,10 @@ export function registerLegalRoutes(app: FastifyInstance, legal: LegalConfig | n
       }
       // A vigente muda só quando o operador publica; o 409 `consent_outdated` já traz `error.current`, então um cache velho se corrige sozinho.
       reply.header('Cache-Control', `public, max-age=${legal.cacheMaxAgeSeconds}`);
-      reply.code(200).send({ ok: true, data: result.current });
+      return reply.code(200).send({ ok: true, data: result.current });
     } catch (err) {
       reply.header('Cache-Control', 'no-store');
-      unavailable(request, reply, err, 'legal_current_failed_internal');
+      return unavailable(request, reply, err, 'legal_current_failed_internal');
     }
   });
 }

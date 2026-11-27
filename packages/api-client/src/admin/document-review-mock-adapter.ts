@@ -32,6 +32,8 @@ import {
   type DocumentReviewQueueInput,
   type DocumentReviewQueueItem,
   type DocumentViewUrl,
+  type DriverReinstatement,
+  type DriverReinstatementPort,
   type DriverSuspension,
   type RejectDocumentInput,
   type SuspendDriverInput,
@@ -53,7 +55,7 @@ export interface MockDocumentReviewControl {
 }
 
 export interface MockDocumentReview {
-  readonly port: DocumentReviewPort;
+  readonly port: DocumentReviewPort & DriverReinstatementPort;
   readonly control: MockDocumentReviewControl;
   readonly store: DocumentStore;
 }
@@ -82,6 +84,7 @@ export function createMockDocumentReview(options: MockDocumentReviewOptions): Mo
   let role = options.role;
   let forcedFailure: DocumentReviewErrorCode | 'network' | undefined;
   const decisions = new Map<string, { readonly key: string; readonly fingerprint: string; readonly response: DocumentDecision }>();
+  const reinstatements = new Map<string, number>();
 
   const fail = (code: DocumentReviewErrorCode) => failWith(catalogError(DOCUMENT_REVIEW_ERRORS, code));
 
@@ -274,7 +277,7 @@ export function createMockDocumentReview(options: MockDocumentReviewOptions): Mo
     if (blocked) return blocked;
     if (!isIdempotencyKey(idempotencyKey)) return fail('idempotency_key_required');
     const reason = isObjectBody(input) && typeof input.reason === 'string' ? input.reason.trim() : '';
-    if (reason.length < 10 || reason.length > 1000) return fail('validation_failed');
+    if (reason.length < 10 || reason.length > 500) return fail('validation_failed');
     const record = typeof driverId === 'string' ? store.drivers.get(driverId) : undefined;
     if (!record) return fail('not_found');
     // Já suspenso (por qualquer caminho): devolve a suspensão ORIGINAL, sem gravar de novo.
@@ -284,6 +287,30 @@ export function createMockDocumentReview(options: MockDocumentReviewOptions): Mo
       audit('driver.suspend', record.driverId);
     }
     return succeed({ driverId: record.driverId, status: 'suspended', suspendedAt: iso(record.suspension.atMs) });
+  }
+
+  /** D5: sai da suspensão (`suspended → approved`) se nada bloqueia a aprovação; já reativado devolve o original. */
+  async function reinstate(driverId: string, idempotencyKey: string): Promise<Result<DriverReinstatement>> {
+    const blocked = guard();
+    if (blocked) return blocked;
+    if (!isIdempotencyKey(idempotencyKey)) return fail('idempotency_key_required');
+    const record = typeof driverId === 'string' ? store.drivers.get(driverId) : undefined;
+    if (!record) return fail('not_found');
+    const previous = reinstatements.get(record.driverId);
+    if (record.accountStatus === 'approved' && previous !== undefined) {
+      return succeed({ driverId: record.driverId, status: 'approved', reinstatedAt: iso(previous) });
+    }
+    if (record.accountStatus !== 'suspended') return fail('driver_not_suspended');
+    record.accountStatus = 'pending_review';
+    const ready = store.applyAutoApproval(record.driverId) === 'approved';
+    if (!ready) {
+      record.accountStatus = 'suspended';
+      return fail('approval_blocked');
+    }
+    const atMs = clock();
+    reinstatements.set(record.driverId, atMs);
+    audit('driver.reinstate', record.driverId);
+    return succeed({ driverId: record.driverId, status: 'approved', reinstatedAt: iso(atMs) });
   }
 
   const control: MockDocumentReviewControl = {
@@ -299,7 +326,7 @@ export function createMockDocumentReview(options: MockDocumentReviewOptions): Mo
   };
 
   return {
-    port: { queue, driver, viewUrl, approve, reject, rejectionReasons, suspend },
+    port: { queue, driver, viewUrl, approve, reject, rejectionReasons, suspend, reinstate },
     control,
     store,
   };

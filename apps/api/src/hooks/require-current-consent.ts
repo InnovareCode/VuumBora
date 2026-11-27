@@ -17,7 +17,7 @@
  */
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { pool } from '../db.js';
-import { untilSent } from '../lib/early-reply.js';
+import { stopAfterSend } from '../lib/early-reply.js';
 import type { LegalConfig } from '../lib/legal-config.js';
 import { consentOutdated, consentUnavailable, fail, unavailable } from '../routes/auth-http.js';
 import { checkCommitmentConsent } from '../services/legal-service.js';
@@ -39,10 +39,11 @@ export function makeRequireCurrentConsent(legal: LegalConfig | null, options: Re
       // Erro de fiação (esqueceram `requireAccount` antes): recusa em vez de deixar a rota aberta.
       request.log.error({ event: 'consent_gate_without_account' });
       fail(reply, 401, 'unauthorized', 'Sessão inválida ou expirada.');
-      await untilSent(reply);
+      await stopAfterSend(reply);
       return;
     }
-    // Toda recusa abaixo ESPERA a resposta terminar: sem isso a rota de compromisso executaria apesar do 409
+    // Toda recusa abaixo PARA a cadeia (espera o fim da resposta e, se a conexão caiu, assume a resposta): sem isso a
+    // rota de compromisso executaria apesar do 409
     // (lib/early-reply.ts; a prova na rota real está em driver-onboarding-routes.test.ts).
     try {
       const gate = await checkCommitmentConsent(pool, legal, accountId);
@@ -50,20 +51,20 @@ export function makeRequireCurrentConsent(legal: LegalConfig | null, options: Re
       if (gate.kind === 'unavailable') {
         request.log.error({ event: 'consent_gate_unavailable', reason: 'legal_documents_unavailable' });
         consentUnavailable(reply);
-        await untilSent(reply);
+        await stopAfterSend(reply);
         return;
       }
       if (gate.kind === 'account_missing') {
         fail(reply, 401, 'unauthorized', 'Sessão inválida ou expirada.');
-        await untilSent(reply);
+        await stopAfterSend(reply);
         return;
       }
       request.log.info({ event: 'consent_pending_blocked', accountId, pending: gate.pending });
       consentOutdated(reply, gate.current, { pending: gate.pending });
-      await untilSent(reply);
+      await stopAfterSend(reply);
     } catch (err) {
       unavailable(request, reply, err, 'consent_gate_failed_internal');
-      await untilSent(reply);
+      await stopAfterSend(reply);
     }
   };
 }

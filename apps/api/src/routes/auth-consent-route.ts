@@ -48,9 +48,9 @@ export function registerAuthConsentRoutes(
         return consentOutdated(reply, result.current);
       }
       request.log.info({ event: 'auth_consents_accepted', accountId: request.authAccount!.accountId, upToDate: result.status.upToDate });
-      reply.code(200).send({ ok: true, data: { consent: result.status } });
+      return reply.code(200).send({ ok: true, data: { consent: result.status } });
     } catch (err) {
-      unavailable(request, reply, err, 'auth_consents_failed_internal');
+      return unavailable(request, reply, err, 'auth_consents_failed_internal');
     }
   });
 }

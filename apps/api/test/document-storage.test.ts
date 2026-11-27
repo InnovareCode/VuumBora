@@ -223,6 +223,10 @@ describe('configuração por ambiente (falha fechada, nunca derruba o boot)', ()
     DOCUMENT_STORAGE_S3_SECRET_ACCESS_KEY: 'SEGREDO-QUE-NAO-PODE-VAZAR',
   };
 
+  test('local: só com NODE_ENV de desenvolvimento ou teste', () => {
+    for (const nodeEnv of ['development', 'test']) assert.ok(loadDocumentStorageConfig({ DOCUMENT_STORAGE_DRIVER: 'local', NODE_ENV: nodeEnv }).ok, nodeEnv);
+  });
+
   test('S3 completo: ok, validade padrão 300 s', () => {
     const loaded = loadDocumentStorageConfig(S3_ENV);
     assert.ok(loaded.ok);
@@ -238,6 +242,9 @@ describe('configuração por ambiente (falha fechada, nunca derruba o boot)', ()
       { ...S3_ENV, DOCUMENT_STORAGE_S3_ENDPOINT: 'http://sem-tls.invalid' },
       { ...S3_ENV, DOCUMENT_URL_TTL_SECONDS: '301' },
       { DOCUMENT_STORAGE_DRIVER: 'local', NODE_ENV: 'production' },
+      // S-3: NODE_ENV ausente vale produção (como em env.ts), e qualquer valor que não seja desenvolvimento ou teste também.
+      { DOCUMENT_STORAGE_DRIVER: 'local' },
+      { DOCUMENT_STORAGE_DRIVER: 'local', NODE_ENV: 'staging' },
     ];
     for (const source of cases) {
       const loaded = loadDocumentStorageConfig(source);

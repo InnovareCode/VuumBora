@@ -30,9 +30,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Texto com 1..max caracteres depois do trim. Devolve o texto aparado ou `null`. */
+/**
+ * Caractere de controle (C0, DEL, C1). O Postgres recusa `\u0000` em texto (22021), o que viraria 503 em vez de 400; os
+ * demais não têm lugar em nome de rua, marca ou tipo de documento (revisão M3-D3/D4, S-5).
+ */
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f]/;
+
+export function hasControlCharacter(value: string): boolean {
+  return CONTROL_CHARACTER.test(value);
+}
+
+/** Texto com 1..max caracteres depois do trim, sem caractere de controle. Devolve o texto aparado ou `null`. */
 function text(value: unknown, max: number): string | null {
-  if (typeof value !== 'string') return null;
+  if (typeof value !== 'string' || hasControlCharacter(value)) return null;
   const trimmed = value.trim();
   return trimmed.length >= 1 && trimmed.length <= max ? trimmed : null;
 }
@@ -189,7 +199,7 @@ export interface UploadRequestInput {
 export function parseUploadRequest(body: unknown, maxSizeBytes: number): { ok: true; value: UploadRequestInput } | { ok: false; code: 'invalid_body' | 'file_too_large' } {
   if (!isRecord(body)) return { ok: false, code: 'invalid_body' };
   const { typeCode, contentType, sizeBytes, sha256 } = body;
-  if (typeof typeCode !== 'string' || typeCode.trim().length === 0 || typeCode.length > 64) return { ok: false, code: 'invalid_body' };
+  if (typeof typeCode !== 'string' || typeCode.trim().length === 0 || typeCode.length > 64 || hasControlCharacter(typeCode)) return { ok: false, code: 'invalid_body' };
   if (typeof contentType !== 'string' || !(DOCUMENT_CONTENT_TYPES as readonly string[]).includes(contentType)) return { ok: false, code: 'invalid_body' };
   if (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256)) return { ok: false, code: 'invalid_body' };
   if (typeof sizeBytes !== 'number' || !Number.isInteger(sizeBytes) || sizeBytes <= 0) return { ok: false, code: 'invalid_body' };

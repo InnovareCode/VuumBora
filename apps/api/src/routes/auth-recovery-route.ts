@@ -16,33 +16,28 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 /** Cota máxima de espera informada ao cliente quando o teto cumulativo trava a redefinição (a janela real é de 24 h, rolante). */
 const RESET_LOCK_RETRY_AFTER_SECONDS = 24 * 60 * 60;
 
-function replyToCodeCheck(request: FastifyRequest, reply: FastifyReply, result: recovery.CodeCheckResult, event: string, okData: Record<string, unknown>, config: AuthConfig, invalidMessage = 'Código incorreto.'): void {
+function replyToCodeCheck(request: FastifyRequest, reply: FastifyReply, result: recovery.CodeCheckResult, event: string, okData: Record<string, unknown>, config: AuthConfig, invalidMessage = 'Código incorreto.'): FastifyReply {
   switch (result.kind) {
     case 'ok':
       request.log.info({ event: `${event}_succeeded` });
-      reply.code(200).send({ ok: true, data: okData });
-      return;
+      return reply.code(200).send({ ok: true, data: okData });
     case 'invalid':
       request.log.info({ event: `${event}_invalid_code` });
-      fail(reply, 400, 'invalid_code', invalidMessage, { attemptsLeft: result.attemptsLeft });
-      return;
+      return fail(reply, 400, 'invalid_code', invalidMessage, { attemptsLeft: result.attemptsLeft });
     case 'locked':
       request.log.warn({ event: `${event}_code_locked` });
-      fail(reply, 429, 'code_locked', 'Muitas tentativas com este código. Peça um novo código.');
-      return;
+      return fail(reply, 429, 'code_locked', 'Muitas tentativas com este código. Peça um novo código.');
     case 'account_locked':
       // Teto cumulativo do dia (I-7): pedir outro código não adianta; o limite rola com a janela de 24 h.
       request.log.warn({ event: `${event}_account_locked` });
       reply.header('Retry-After', String(RESET_LOCK_RETRY_AFTER_SECONDS));
-      fail(reply, 429, 'reset_locked', 'Muitas tentativas de redefinição para esta conta. Tente novamente mais tarde ou fale com o suporte.', { retryAfterSeconds: RESET_LOCK_RETRY_AFTER_SECONDS });
-      return;
+      return fail(reply, 429, 'reset_locked', 'Muitas tentativas de redefinição para esta conta. Tente novamente mais tarde ou fale com o suporte.', { retryAfterSeconds: RESET_LOCK_RETRY_AFTER_SECONDS });
     case 'blocked':
       request.log.warn({ event: `${event}_blocked` });
-      tooManyAttempts(reply, result.retryAfterSeconds);
-      return;
+      return tooManyAttempts(reply, result.retryAfterSeconds);
     default:
       request.log.info({ event: `${event}_code_expired` });
-      fail(reply, 400, 'code_expired', 'Código expirado ou inexistente. Peça um novo código.');
+      return fail(reply, 400, 'code_expired', 'Código expirado ou inexistente. Peça um novo código.');
   }
 }
 
@@ -54,9 +49,9 @@ export function registerAuthRecoveryRoutes(app: FastifyInstance, config: AuthCon
     try {
       const result = await recovery.verifyEmail(pool, config, parsed.data, contextOf(request, config));
       // Código OU senha errados dão a MESMA resposta (a senha do cadastro faz parte da prova de quem verifica).
-      replyToCodeCheck(request, reply, result, 'auth_verify_email', { verified: true }, config, 'Código ou senha incorretos.');
+      return replyToCodeCheck(request, reply, result, 'auth_verify_email', { verified: true }, config, 'Código ou senha incorretos.');
     } catch (err) {
-      unavailable(request, reply, err, 'auth_verify_email_failed_internal');
+      return unavailable(request, reply, err, 'auth_verify_email_failed_internal');
     }
   });
 
@@ -70,9 +65,9 @@ export function registerAuthRecoveryRoutes(app: FastifyInstance, config: AuthCon
         request.log.warn({ event: 'auth_resend_blocked' });
         return tooManyAttempts(reply, config.codeRequestWindowMinutes * 60);
       }
-      reply.code(200).send({ ok: true, data: { resendAfterSeconds: result.resendAfterSeconds } });
+      return reply.code(200).send({ ok: true, data: { resendAfterSeconds: result.resendAfterSeconds } });
     } catch (err) {
-      unavailable(request, reply, err, 'auth_resend_failed_internal');
+      return unavailable(request, reply, err, 'auth_resend_failed_internal');
     }
   });
 
@@ -86,9 +81,9 @@ export function registerAuthRecoveryRoutes(app: FastifyInstance, config: AuthCon
         request.log.warn({ event: 'auth_forgot_blocked' });
         return tooManyAttempts(reply, config.codeRequestWindowMinutes * 60);
       }
-      reply.code(200).send({ ok: true, data: { resendAfterSeconds: result.resendAfterSeconds } });
+      return reply.code(200).send({ ok: true, data: { resendAfterSeconds: result.resendAfterSeconds } });
     } catch (err) {
-      unavailable(request, reply, err, 'auth_forgot_failed_internal');
+      return unavailable(request, reply, err, 'auth_forgot_failed_internal');
     }
   });
 
@@ -102,9 +97,9 @@ export function registerAuthRecoveryRoutes(app: FastifyInstance, config: AuthCon
     try {
       const deps = { mail, onMailFailure: mailFailureLogger(request.log) };
       const result = await recovery.resetPassword(pool, config, deps, parsed.data, contextOf(request, config));
-      replyToCodeCheck(request, reply, result, 'auth_reset_password', { passwordChanged: true, sessionsRevoked: true }, config);
+      return replyToCodeCheck(request, reply, result, 'auth_reset_password', { passwordChanged: true, sessionsRevoked: true }, config);
     } catch (err) {
-      unavailable(request, reply, err, 'auth_reset_password_failed_internal');
+      return unavailable(request, reply, err, 'auth_reset_password_failed_internal');
     }
   });
 }
