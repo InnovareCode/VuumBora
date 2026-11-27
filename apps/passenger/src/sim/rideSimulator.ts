@@ -22,21 +22,24 @@
  * terminar, avança o MESMO mock para `searching_driver` antes de assinar — para o mock nunca
  * aparentar atraso em relação à tela, que já mostra a busca.
  *
- * F08b (ajuste do Atlas): a COTAÇÃO é toda da store (`refreshQuote`, chamada a partir de
- * `setDestination`) — este módulo não chama mais `port.quote()` nem decide categoria nenhuma.
- * `startRideSimulation` recebe o `quoteId` já escolhido (da cotação que a Home mostrou e a pessoa
- * selecionou) e só pede com ele: sem cotação válida pra aquela categoria, `port.request` recusa
- * (`quote_expired`/`category_unavailable`/`not_found`) e `onRequestFailed` avisa a store — nunca um
- * fallback silencioso para outra categoria.
+ * **Ponte de cotação até o M5 (fatia G6).** O preço, a rota e as categorias que a pessoa vê vêm da cotação NOVA
+ * (`FareQuotePort`, `src/geo/geoClient.ts`), escolhida na P05 e conferida na P06. Mas `PassengerRidePort.request()` (F08)
+ * só aceita o `quoteId` da cotação ANTIGA (`PassengerRidePort.quote()`), que vive noutro mock. Por isso, e só aqui, o
+ * simulador pede a cotação antiga PARA O MESMO TRAJETO e usa o `quoteId` da MESMA categoria (`categorySlug`). Nada da
+ * cotação antiga (preço, distância, tempo) sai deste módulo nem aparece em tela. Sem a categoria na cotação antiga
+ * (desligada entre uma e outra), `onRequestFailed` leva a corrida a `failed`: nunca um fallback para outra categoria.
+ * No M5, `POST /v1/trips` recebe o `quoteId` + `signature` da cotação nova e esta ponte some.
  */
-import type { TripId, TripStatus } from '@vuumbora/domain';
+import type { Place, TripId, TripStatus } from '@vuumbora/domain';
 import { uuid } from 'expo';
 import { passengerRide } from '../ride/passengerRideClient';
 import { MOCK_ASSIGNED_DRIVER, type AssignedDriverInfo } from '../data/mockDriverAssignment';
 
 export interface RideSimulationInput {
-  /** `quoteId` da categoria JÁ escolhida (cotação viva, buscada pela store) — nunca decidido aqui. */
-  readonly quoteId: string;
+  /** Categoria da cotação NOVA que a pessoa confirmou na P06 — nunca decidida aqui. */
+  readonly categorySlug: string;
+  readonly origin: Place;
+  readonly destination: Place;
   readonly paymentMethodId: string;
 }
 
@@ -116,8 +119,22 @@ export function startRideSimulation(input: RideSimulationInput, callbacks: RideS
   });
 }
 
+/** Ponte até o M5 (ver o cabeçalho): o `quoteId` da cotação ANTIGA para a mesma categoria e o mesmo trajeto. */
+async function legacyQuoteIdFor(input: RideSimulationInput): Promise<string | undefined> {
+  const legacy = await passengerRide.port.quote({ origin: input.origin, destination: input.destination });
+  if (!legacy.ok) return undefined;
+  return legacy.data.categories.find((category) => category.categoryId === input.categorySlug)?.quoteId;
+}
+
 async function bootstrap(input: RideSimulationInput, callbacks: RideSimulationCallbacks, myGeneration: number): Promise<void> {
-  const requested = await passengerRide.port.request({ quoteId: input.quoteId, paymentMethodId: input.paymentMethodId }, uuid.v4());
+  const legacyQuoteId = await legacyQuoteIdFor(input);
+  if (myGeneration !== generation) return;
+  if (legacyQuoteId === undefined) {
+    console.warn(`[ride] a categoria "${input.categorySlug}" não está na cotação da corrida simulada — a corrida não vai avançar.`);
+    callbacks.onRequestFailed();
+    return;
+  }
+  const requested = await passengerRide.port.request({ quoteId: legacyQuoteId, paymentMethodId: input.paymentMethodId }, uuid.v4());
   if (myGeneration !== generation) return; // cancelado/substituído enquanto o pedido ia e voltava
   if (!requested.ok) {
     console.warn('[ride] pedido ao mock falhou — a corrida não vai avançar.', requested.error);

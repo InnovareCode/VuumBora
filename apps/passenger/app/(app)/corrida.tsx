@@ -32,7 +32,8 @@ export default function RideScreen() {
   const phase = useRideRequestStore((state) => state.phase);
   const origin = useRideRequestStore((state) => state.origin);
   const destination = useRideRequestStore((state) => state.destination);
-  const requestedCategory = useRideRequestStore((state) => state.requestedCategory);
+  const requestedQuote = useRideRequestStore((state) => state.requestedQuote);
+  const categoryInfo = useRideRequestStore((state) => state.categoryInfo);
   const assignedDriver = useRideRequestStore((state) => state.assignedDriver);
   const pickupCode = useRideRequestStore((state) => state.pickupCode);
   const pickupEtaMinutes = useRideRequestStore((state) => state.pickupEtaMinutes);
@@ -126,7 +127,8 @@ export default function RideScreen() {
             status={phase}
             origin={origin}
             destination={destination}
-            category={requestedCategory}
+            quote={requestedQuote}
+            categoryInfo={categoryInfo}
             elapsedSeconds={elapsedSearchSeconds}
             driverCancelledNotice={false}
             onRetry={handleRetry}
@@ -178,7 +180,8 @@ export default function RideScreen() {
             status="searching"
             origin={origin}
             destination={destination}
-            category={requestedCategory}
+            quote={requestedQuote}
+            categoryInfo={categoryInfo}
             elapsedSeconds={elapsedSearchSeconds}
             driverCancelledNotice={driverCancelledNotice}
             onRetry={handleRetry}

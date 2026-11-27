@@ -1,23 +1,13 @@
 import type { Place } from '@vuumbora/domain';
 
 /**
- * Endereços de DEMONSTRAÇÃO (especificacoes/PASSAGEIRO.md: "mockups são propostas, não
- * recursos implementados"). Nenhum ponto aqui vem de geocodificação real.
+ * "Lugares salvos" de DEMONSTRAÇÃO (especificacoes/PASSAGEIRO.md: "mockups são propostas, não recursos implementados") —
+ * ainda sem fonte própria (API do usuário, pendência futura). A tela os marca com o selo "endereços de exemplo".
  *
- * A busca por texto da P04 passou a usar `placesClient` (`src/places/placesClient.ts`, porta
- * `PlacesPort` de `@vuumbora/api-client/passenger`) — o que sobra aqui é só o que a porta NÃO
- * cobre: a localização atual (ponto de partida padrão, também usado pela store) e os "lugares
- * salvos" (ainda sem fonte própria — API do usuário, pendência futura).
+ * Fatia G6: a busca por texto e o ponto do pino vêm do contrato (`src/geo/geoClient.ts`), e a localização atual vem do
+ * aparelho (`src/location`). A "localização atual" fixa que morava aqui (`MOCK_CURRENT_LOCATION`, Ponta Negra) saiu: o
+ * app não inventa mais a posição de ninguém.
  */
-
-// Rótulo "Sua localização atual" é a copy da ficha P04 (`docs/fichas-de-tela/P04-origem-e-destino.md`
-// §7) — era "Local atual" antes desta fatia; conferido que não aparece em mais nenhuma tela.
-export const MOCK_CURRENT_LOCATION: Place = {
-  label: 'Sua localização atual',
-  address: 'Ponta Negra, Natal - RN',
-  point: { latitude: -5.879, longitude: -35.177, accuracyM: 12 },
-};
-
 export const MOCK_SAVED_PLACES: readonly Place[] = [
   { label: 'Casa', address: 'Rua das Dunas, 120 — Ponta Negra, Natal - RN', point: { latitude: -5.881, longitude: -35.18 } },
   {

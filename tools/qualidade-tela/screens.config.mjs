@@ -74,39 +74,57 @@ export const TELAS = [
     pranchaArquivo: 'alvo_motorista_2026-11-22.png',
     recortePrancha: { x0: 553, y0: 6, x1: 799, y1: 470 },
   },
+  // ---- Fatia G6 (M4): P03-P06 sobre o mock do contrato de geografia e cotação ------------------------------
+  // Cada ID é UM estado. Só `__DEV__` (apps/passenger/src/dev/devGeo.ts): `?devLocal=` faz a porta de localização
+  // responder como o cenário (sem ele, o Chromium da ferramenta não tem permissão e a P03 cairia sempre na
+  // pré-permissão); `?devGeoErro=<código>` faz a 1ª chamada da operação da tela recusar com o erro do catálogo
+  // `GEO_QUOTE_ERRORS`; `?devBusca=` preenche a busca da P04; `?devPino=` abre a P04 no pino; `?devSeed=1` monta o
+  // trajeto da P05/P06. Os números (preço, rota) saem sempre da cotação do mock do contrato.
   {
     id: 'P03',
     app: 'passageiro',
     nome: 'inicio',
-    rota: '/',
+    rota: '/?devLocal=ok',
     estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
     pranchaArquivo: 'alvo_passageiro_2026-11-22.png',
     // §18.1: "Home", 813,12,1049,508 + folga de 8px.
     recortePrancha: { x0: 805, y0: 4, x1: 1057, y1: 516 },
   },
+  { id: 'P03-sem-permissao', app: 'passageiro', nome: 'inicio-pre-permissao', rota: '/?devLocal=pedir', estados: [ESTADOS.PADRAO] },
+  { id: 'P03-negada', app: 'passageiro', nome: 'inicio-localizacao-bloqueada', rota: '/?devLocal=negada', estados: [ESTADOS.PADRAO] },
+  { id: 'P03-erro-local', app: 'passageiro', nome: 'inicio-erro-localizacao', rota: '/?devLocal=erro', estados: [ESTADOS.PADRAO] },
+  { id: 'P03-fora', app: 'passageiro', nome: 'inicio-fora-da-area', rota: '/?devLocal=fora', estados: [ESTADOS.PADRAO] },
+  { id: 'P03-carregando', app: 'passageiro', nome: 'inicio-procurando-localizacao', rota: '/?devLocal=carregando', estados: [ESTADOS.PADRAO] },
   {
     id: 'P04',
     app: 'passageiro',
     nome: 'destino',
-    rota: '/destino',
+    rota: '/destino?devLocal=ok',
     estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
     // Ficha P04: "sem recorte na prancha, herda o topo da 'Escolha de categoria'" (§18.1: 1061,12,1297,508) + folga de 8px.
     pranchaArquivo: 'alvo_passageiro_2026-11-22.png',
     recortePrancha: { x0: 1053, y0: 4, x1: 1305, y1: 516 },
   },
+  { id: 'P04-resultados', app: 'passageiro', nome: 'destino-resultados', rota: '/destino?devLocal=ok&devBusca=natal', estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE] },
+  { id: 'P04-vazio', app: 'passageiro', nome: 'destino-sem-resultado', rota: '/destino?devLocal=ok&devBusca=zzzz', estados: [ESTADOS.PADRAO] },
+  { id: 'P04-erro', app: 'passageiro', nome: 'destino-erro-busca', rota: '/destino?devLocal=ok&devBusca=midway&devGeoErro=geo_unavailable', estados: [ESTADOS.PADRAO] },
+  { id: 'P04-sem-permissao', app: 'passageiro', nome: 'destino-sem-localizacao', rota: '/destino?devLocal=negada', estados: [ESTADOS.PADRAO] },
+  { id: 'P04-pino', app: 'passageiro', nome: 'destino-pino', rota: '/destino?devLocal=ok&devPino=destino', estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE] },
+  { id: 'P04-pino-fora', app: 'passageiro', nome: 'destino-pino-fora-da-area', rota: '/destino?devLocal=fora&devPino=destino', estados: [ESTADOS.PADRAO] },
+  { id: 'P04-pino-erro', app: 'passageiro', nome: 'destino-pino-erro', rota: '/destino?devLocal=negada&devPino=origem&devGeoErro=geo_unavailable', estados: [ESTADOS.PADRAO] },
   {
     id: 'P05',
     app: 'passageiro',
     nome: 'categoria',
-    // `?devSeed=1`: só em desenvolvimento (`__DEV__`), popula o destino para a captura não
-    // precisar clicar o fluxo inteiro (Home/P04) antes de chegar aqui — ver
-    // `apps/passenger/src/dev/useDevRideSeed.ts`. Mesmo padrão já usado pela M05b (`devAprovado`).
     rota: '/categoria?devSeed=1',
     estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
     pranchaArquivo: 'alvo_passageiro_2026-11-22.png',
     // Ficha P05 §título: recorte "Escolha de categoria", 1061,12,1297,508 + folga de 8px.
     recortePrancha: { x0: 1053, y0: 4, x1: 1305, y1: 516 },
   },
+  { id: 'P05-nao-operamos', app: 'passageiro', nome: 'categoria-fare-not-configured', rota: '/categoria?devSeed=1&devGeoErro=fare_not_configured', estados: [ESTADOS.PADRAO] },
+  { id: 'P05-erro', app: 'passageiro', nome: 'categoria-rota-indisponivel', rota: '/categoria?devSeed=1&devGeoErro=route_unavailable', estados: [ESTADOS.PADRAO] },
+  { id: 'P05-fora-da-area', app: 'passageiro', nome: 'categoria-fora-da-area', rota: '/categoria?devSeed=1&devGeoErro=outside_service_area', estados: [ESTADOS.PADRAO] },
   {
     id: 'P06',
     app: 'passageiro',

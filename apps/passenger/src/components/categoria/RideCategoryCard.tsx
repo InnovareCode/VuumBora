@@ -1,12 +1,14 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { Check, Clock, type LucideIcon } from 'lucide-react-native';
-import { SurfaceRaised, VehicleIllustration, theme, textStyle, tabularNums, type VehicleIllustrationVariant } from '@vuumbora/ui';
+import { Check, type LucideIcon } from 'lucide-react-native';
+import { SurfaceRaised, VehicleIllustration, focusRingStyle, theme, textStyle, tabularNums, useKeyboardFocusRing, type VehicleIllustrationVariant } from '@vuumbora/ui';
 
 // Direção de arte §4/§9 item 4: halo do card selecionado. `boxShadow` com cor é a
 // única forma de um glow colorido no RN (elevation/shadow* nativo não aceita cor no
 // Android) — ver nota de validação em ButtonCore.tsx (mesma pendência de prova em Android).
 const SELECTED_GLOW = theme.glow.selected;
+/** Anel de foco de teclado (G-22): sem ele o Chromium pintava o `outline: auto` escuro, invisível no fundo escuro. */
+const CARD_FOCUS_RING = focusRingStyle('outside', theme.radius.lg);
 
 // São cinco categorias (decisão do dono, 20/11/2026): cinco cards lado a lado não cabem em
 // largura nenhuma de celular com o nome legível ("Motorista mulher"), então o card é SEMPRE uma
@@ -25,10 +27,16 @@ export interface RideCategoryCardProps {
   readonly icon: LucideIcon;
   /** Ilustração do veículo — só categorias que são o próprio carro (VuumBora, Conforto). */
   readonly vehicleVariant?: VehicleIllustrationVariant;
-  /** Faixa de tempo estimada (ex.: "4–6 min") — DEMONSTRAÇÃO, sinalizada pelo chamador. */
-  readonly etaLabel: string;
-  /** Preço estimado (ex.: "R$ 23,90") — DEMONSTRAÇÃO, sinalizada pelo chamador. */
+  /**
+   * Legenda curta da categoria (ex.: "Carro para o dia a dia."), do servidor (`GET /v1/categories`). Ausente enquanto
+   * as categorias não chegaram. Fatia G6: o "chega em N min" saiu — o contrato do M4 não tem tempo até o embarque
+   * (isso é do despacho, M5), e o app não inventa número.
+   */
+  readonly detail?: string | undefined;
+  /** Preço FECHADO da cotação (ex.: "R$ 15,37", D-06). */
   readonly priceLabel: string;
+  /** Rótulo lido junto do preço: "preço de teste" quando a tarifa é de teste. */
+  readonly priceDescription: string;
   readonly selected: boolean;
   readonly onPress: () => void;
   readonly testID?: string;
@@ -39,8 +47,9 @@ export const RideCategoryCard = memo(function RideCategoryCard({
   name,
   icon: Icon,
   vehicleVariant,
-  etaLabel,
+  detail,
   priceLabel,
+  priceDescription,
   selected,
   onPress,
   testID,
@@ -48,14 +57,17 @@ export const RideCategoryCard = memo(function RideCategoryCard({
   const { width } = useWindowDimensions();
   const showVehicleArt = width >= VEHICLE_ART_BREAKPOINT;
 
-  const accessibilityLabel = `${name}, estimativa ${etaLabel}, preço estimado de demonstração ${priceLabel}${selected ? ', selecionado' : ''}`;
+  const accessibilityLabel = `${name}${detail ? `, ${detail}` : ''}, ${priceDescription} ${priceLabel}${selected ? ', selecionado' : ''}`;
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
 
   return (
     <Pressable
+      {...focusProps}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={accessibilityLabel}
+      style={focusVisible ? CARD_FOCUS_RING : undefined}
       testID={testID}
     >
       <SurfaceRaised style={[styles.card, selected && styles.cardSelected, selected && { boxShadow: SELECTED_GLOW }]}>
@@ -72,12 +84,12 @@ export const RideCategoryCard = memo(function RideCategoryCard({
           <Text style={styles.name} numberOfLines={1}>
             {name}
           </Text>
-          <View style={styles.etaRow}>
-            <Clock size={12} color={theme.role.textMuted} strokeWidth={2} />
-            <Text style={styles.eta} numberOfLines={1}>
-              {etaLabel}
+          {detail ? (
+            // Até 2 linhas, nunca cortada no meio (legenda do servidor pode ser longa).
+            <Text style={styles.detail} numberOfLines={2}>
+              {detail}
             </Text>
-          </View>
+          ) : null}
         </View>
         <View style={styles.trailing}>
           <Text style={styles.price} numberOfLines={1}>
@@ -142,7 +154,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   name: { color: theme.role.textPrimary, ...textStyle('semibold', 'caption') },
-  etaRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  eta: { color: theme.role.textMuted, ...textStyle('regular', 'caption') },
+  detail: { color: theme.role.textMuted, ...textStyle('regular', 'caption') },
   price: { color: theme.role.textPrimary, ...textStyle('bold', 'small'), ...tabularNums },
 });

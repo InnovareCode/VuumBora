@@ -2,10 +2,10 @@ import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Car, Circle, MapPin } from 'lucide-react-native';
 import { SLOW_DRIVER_SEARCH_SECONDS, type Place } from '@vuumbora/domain';
-import type { CategoryQuote } from '@vuumbora/api-client/passenger';
+import type { FareQuote, RideCategory } from '@vuumbora/api-client/passenger';
 import { InlineAlert, LinkButton, MockBadge, MoneyText, PrimaryButton, SurfaceRaised, theme, textStyle, tabularNums, tokens } from '@vuumbora/ui';
 import { RouteSummaryRow } from '../confirmation/RouteSummaryRow';
-import { rideCategoryName } from '../../data/rideCategoryDisplay';
+import { categoryName } from '../../utils/rideQuoteFormatting';
 import { formatElapsedClock } from '../../utils/time';
 
 export type SearchingPanelStatus = 'searching' | 'failed' | 'cancelled';
@@ -14,7 +14,10 @@ export interface SearchingPanelProps {
   readonly status: SearchingPanelStatus;
   readonly origin?: Place | undefined;
   readonly destination?: Place | undefined;
-  readonly category?: CategoryQuote | undefined;
+  /** A cotação de fato pedida (preço fechado, D-06). */
+  readonly quote?: FareQuote | undefined;
+  /** Nomes das categorias do servidor (`GET /v1/categories`); vazio → catálogo de exibição local. */
+  readonly categoryInfo?: readonly RideCategory[];
   readonly elapsedSeconds: number;
   readonly driverCancelledNotice: boolean;
   readonly onRetry: () => void;
@@ -37,7 +40,8 @@ export const SearchingPanel = memo(function SearchingPanel({
   status,
   origin,
   destination,
-  category,
+  quote,
+  categoryInfo = [],
   elapsedSeconds,
   driverCancelledNotice,
   onRetry,
@@ -99,15 +103,15 @@ export const SearchingPanel = memo(function SearchingPanel({
           value={destination?.address ?? 'Não definido'}
           testID="searching-destination"
         />
-        {category ? (
+        {quote ? (
           <>
             <View style={styles.divider} />
             <View style={styles.categoryRow}>
               <Car size={20} color={theme.role.textSecondary} strokeWidth={1.75} />
               <Text style={styles.categoryName} numberOfLines={1}>
-                {rideCategoryName(category.categoryId)}
+                {categoryName(quote.categorySlug, categoryInfo)}
               </Text>
-              <MoneyText value={category.estimate.total.amountCents / 100} estimated label="Preço estimado" size="body" testID="searching-price" />
+              <MoneyText value={quote.priceCents / 100} label="Preço" size="body" testID="searching-price" />
             </View>
           </>
         ) : null}

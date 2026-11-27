@@ -2,7 +2,10 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight, Search } from 'lucide-react-native';
-import { theme, textStyle, gradientColors, gradientLocations } from '@vuumbora/ui';
+import { focusRingStyle, theme, textStyle, gradientColors, gradientLocations, useKeyboardFocusRing } from '@vuumbora/ui';
+
+/** Anel de foco de teclado em volta da pílula (G-22), no raio dela. */
+const BAR_FOCUS_RING = focusRingStyle('outside', theme.radius.xl);
 
 export interface DestinationSearchBarProps {
   readonly onPress?: () => void;
@@ -23,13 +26,15 @@ const PILL_LOCATIONS = gradientLocations(theme.gradient.searchLight);
  */
 export const DestinationSearchBar = memo(function DestinationSearchBar({ onPress, destinationAddress }: DestinationSearchBarProps) {
   const hasDestination = Boolean(destinationAddress);
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
 
   return (
     <Pressable
+      {...focusProps}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={hasDestination ? `Destino: ${destinationAddress}. Tocar para alterar` : 'Para onde vamos? Informe seu destino'}
-      style={({ pressed }) => [pressed && styles.barPressed]}
+      style={({ pressed }) => [pressed && styles.barPressed, focusVisible && BAR_FOCUS_RING]}
     >
       <LinearGradient colors={PILL_COLORS} locations={PILL_LOCATIONS} style={styles.bar}>
         <View style={styles.iconCircle}>

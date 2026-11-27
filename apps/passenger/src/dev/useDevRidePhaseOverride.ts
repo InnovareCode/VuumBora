@@ -5,6 +5,7 @@ import { MOCK_ASSIGNED_DRIVER } from '../data/mockDriverAssignment';
 import { buildMockReceipt } from '../data/mockTripReceipt';
 import { useRideRequestStore } from '../store/useRideRequestStore';
 import { stopRideSimulation } from '../sim/rideSimulator';
+import { devSampleOrigin } from './devGeo';
 
 /**
  * Fases que a captura de tela (`tools/qualidade-tela`) consegue pedir por `?devPhase=` — SÓ
@@ -71,11 +72,11 @@ function applyDevPhase(phase: DevRidePhaseParam): void {
     case 'completed': {
       // P10 (`concluida.tsx`) chama este MESMO hook — precisa do recibo que `onCompleted` da
       // store monta de verdade (`buildMockReceipt` a partir da cotação REALMENTE pedida).
-      const requested = useRideRequestStore.getState().requestedCategory;
+      const requested = useRideRequestStore.getState().requestedQuote;
       useRideRequestStore.setState({
         phase: 'completed',
         assignedDriver: MOCK_ASSIGNED_DRIVER,
-        receipt: requested ? buildMockReceipt(requested.estimate.total) : undefined,
+        receipt: requested ? buildMockReceipt(requested.priceCents) : undefined,
       });
       return;
     }
@@ -135,12 +136,12 @@ export function useDevRidePhaseOverride(): void {
       const state = useRideRequestStore.getState();
       if (!state.destination) {
         const seedDestination = MOCK_SAVED_PLACES[2];
-        if (seedDestination) state.setDestination(seedDestination);
+        if (seedDestination) state.setRoute(state.origin ?? devSampleOrigin(), seedDestination);
       }
       await waitForQuote();
       if (cancelled) return;
       const afterQuote = useRideRequestStore.getState();
-      if (afterQuote.quoteStatus !== 'ready' || afterQuote.quoteCategories.length === 0) return;
+      if (afterQuote.quoteStatus !== 'ready' || afterQuote.fareQuotes.length === 0) return;
       afterQuote.requestRide();
       stopRideSimulation();
       if (cancelled) return;

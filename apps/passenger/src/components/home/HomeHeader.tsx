@@ -1,7 +1,11 @@
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Bell, Menu } from 'lucide-react-native';
-import { BrandLogo, theme } from '@vuumbora/ui';
+import { BrandLogo, focusRingStyle, theme, useKeyboardFocusRing } from '@vuumbora/ui';
+
+// Anel de foco de teclado (G-22): sem ele, o Chromium pintava o `outline: auto` escuro do navegador sobre o fundo
+// escuro — foco invisível (medido por Tab + getComputedStyle na fatia G6).
+const SIDE_FOCUS_RING = focusRingStyle('outside', theme.layout.touchTarget / 2);
 
 export interface HomeHeaderProps {
   readonly notificationCount?: number;
@@ -18,24 +22,15 @@ export interface HomeHeaderProps {
 export const HomeHeader = memo(function HomeHeader({ notificationCount = 0, onPressNotifications, onPressMenu }: HomeHeaderProps) {
   return (
     <View style={styles.row}>
-      <Pressable
-        onPress={onPressMenu}
-        accessibilityRole="button"
-        accessibilityLabel="Abrir menu"
-        hitSlop={8}
-        style={styles.sideTarget}
-      >
+      <HeaderIconButton onPress={onPressMenu} accessibilityLabel="Abrir menu">
         <Menu size={24} color={theme.role.textPrimary} strokeWidth={1.75} />
-      </Pressable>
+      </HeaderIconButton>
       <View style={styles.logoBox}>
         <BrandLogo size="sm" />
       </View>
-      <Pressable
+      <HeaderIconButton
         onPress={onPressNotifications}
-        accessibilityRole="button"
         accessibilityLabel={notificationCount > 0 ? `Notificações, ${notificationCount} não lidas` : 'Notificações'}
-        hitSlop={8}
-        style={styles.sideTarget}
       >
         <Bell size={22} color={theme.role.textPrimary} strokeWidth={1.75} />
         {notificationCount > 0 ? (
@@ -43,10 +38,34 @@ export const HomeHeader = memo(function HomeHeader({ notificationCount = 0, onPr
             <Text style={styles.badgeText}>{notificationCount > 9 ? '9+' : notificationCount}</Text>
           </View>
         ) : null}
-      </Pressable>
+      </HeaderIconButton>
     </View>
   );
 });
+
+function HeaderIconButton({
+  onPress,
+  accessibilityLabel,
+  children,
+}: {
+  readonly onPress?: (() => void) | undefined;
+  readonly accessibilityLabel: string;
+  readonly children: ReactNode;
+}) {
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
+  return (
+    <Pressable
+      {...focusProps}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={8}
+      style={[styles.sideTarget, focusVisible && SIDE_FOCUS_RING]}
+    >
+      {children}
+    </Pressable>
+  );
+}
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

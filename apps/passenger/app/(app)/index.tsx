@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { Briefcase, Home as HomeIcon, Star } from 'lucide-react-native';
+import type { Place } from '@vuumbora/domain';
 import { AppShell, MockBadge, NetworkBanner, theme } from '@vuumbora/ui';
 import { HomeHeader } from '../../src/components/home/HomeHeader';
 import { HomeMenuSheet } from '../../src/components/home/HomeMenuSheet';
@@ -10,6 +11,8 @@ import { HomeMapPreview } from '../../src/components/home/HomeMapPreview';
 import { DestinationSearchBar } from '../../src/components/home/DestinationSearchBar';
 import { QuickAccessGrid, type QuickAccessItem } from '../../src/components/home/QuickAccessGrid';
 import { MOCK_SAVED_PLACES } from '../../src/data/mockPlaces';
+import { useDevGeoParams } from '../../src/dev/devGeo';
+import { useCurrentLocationPlace, useLocationStore } from '../../src/location/useLocationStore';
 import { useRideRequestStore } from '../../src/store/useRideRequestStore';
 import { useSession } from '../../src/session/SessionProvider';
 
@@ -19,31 +22,51 @@ function findSavedPlace(label: string) {
 }
 
 /**
- * P03 — Início/mapa do passageiro (`docs/fichas-de-tela/P03-inicio.md`, onda 2 do padrão
- * premium). PP-9/D-06 (decidido): menu ☰ no lugar da barra de 4 abas — a antiga tinha
- * "Mensagens" sem ação nenhuma (G-19). PP-6/D-07 (decidido): o banner de segurança/promoção saiu
- * — prometia "motoristas verificados", "suporte 24h" e "10% OFF", nenhum real
- * (`DESIGN_SYSTEM_MESTRE.md` §9); o espaço fica vazio até existir um fato verdadeiro para pôr ali.
+ * P03 — Início do passageiro (`docs/fichas-de-tela/P03-inicio.md`). PP-9: menu ☰ no lugar das abas; PP-6: sem banner
+ * de promessa; PP-2: categoria e "Solicitar corrida" moram na P05.
  *
- * PP-2 (onda 3, decidido pelo Atlas): categoria e "Solicitar corrida" SAÍRAM da Home de verdade
- * — iam contra a própria spec (P03 não tem categoria) e contra a prancha. Foram para a P05
- * (`(app)/categoria.tsx`): o fluxo agora é destino (P04) → categoria (P05) → confirmação (P06).
- * Os atalhos com endereço salvo (Casa/Trabalho) continuam chamando `setDestination` (que já
- * dispara a cotação — F08b, `requestedCategory`/`quoteCategories` preservados sem alteração),
- * mas agora navegam para a P05 em vez de só atualizar uma seção que não existe mais aqui.
+ * Fatia G6: o mapa mostra a POSIÇÃO DO APARELHO (`src/location`), com o nome que o servidor dá ao ponto
+ * (`geoPort.reverse`) e o aviso de fora da área atendida. Sem posição (recusa, erro, aparelho sem o módulo), nada é
+ * inventado: a P04 abre com a origem para digitar. O número fixo de notificações (3) saiu: não havia notificação real
+ * por trás dele (ficha §10, "tirar o número até existir").
  */
 export default function PassengerHomeScreen() {
+  useDevGeoParams('reverse');
+
   const { mode: sessionMode } = useSession();
   const destination = useRideRequestStore((state) => state.destination);
+  const setRoute = useRideRequestStore((state) => state.setRoute);
   const setDestination = useRideRequestStore((state) => state.setDestination);
+
+  const locationStatus = useLocationStore((state) => state.status);
+  const placeStatus = useLocationStore((state) => state.placeStatus);
+  const placeLabel = useLocationStore((state) => state.placeLabel);
+  const inServiceArea = useLocationStore((state) => state.inServiceArea);
+  const ensureLocationStarted = useLocationStore((state) => state.ensureStarted);
+  const requestLocationPermission = useLocationStore((state) => state.requestPermission);
+  const relocate = useLocationStore((state) => state.relocate);
+  const currentPlace = useCurrentLocationPlace();
+
   const [menuVisible, setMenuVisible] = useState(false);
 
-  // G-19 (achado do portão onda 2, ainda válido na onda 3): os 3 atalhos não tinham ação
-  // nenhuma. Com endereço salvo (hoje sempre tem, `MOCK_SAVED_PLACES`), o toque define o
-  // destino (dispara a cotação) e leva direto à P05 — o mesmo destino que escolher o lugar na
-  // P04 alcançaria. Sem endereço salvo, o rótulo vira "Salvar {label}" e o toque leva à P04
-  // (não há onde salvar um lugar ainda). Favoritos não tem um único lugar fixo — leva direto à
-  // P04, que já abre na seção "Lugares salvos".
+  useEffect(() => {
+    ensureLocationStarted();
+  }, [ensureLocationStarted]);
+
+  /**
+   * Atalho com lugar salvo: com a posição do aparelho, o trajeto já está completo e vai direto para a P05 (ficha §6).
+   * Sem posição, o destino fica escolhido e a P04 abre pedindo só a origem.
+   */
+  function goToSavedPlace(place: Place) {
+    if (currentPlace) {
+      setRoute(currentPlace, place);
+      router.push('/categoria');
+      return;
+    }
+    setDestination(place);
+    router.push('/destino');
+  }
+
   const casaPlace = findSavedPlace('Casa');
   const trabalhoPlace = findSavedPlace('Trabalho');
 
@@ -52,23 +75,13 @@ export default function PassengerHomeScreen() {
       key: 'casa',
       label: casaPlace ? 'Casa' : 'Salvar Casa',
       icon: <HomeIcon size={20} color={theme.role.ctaBackground} strokeWidth={1.75} />,
-      onPress: casaPlace
-        ? () => {
-            setDestination(casaPlace);
-            router.push('/categoria');
-          }
-        : () => router.push('/destino'),
+      onPress: casaPlace ? () => goToSavedPlace(casaPlace) : () => router.push('/destino'),
     },
     {
       key: 'trabalho',
       label: trabalhoPlace ? 'Trabalho' : 'Salvar Trabalho',
       icon: <Briefcase size={20} color={theme.role.ctaBackground} strokeWidth={1.75} />,
-      onPress: trabalhoPlace
-        ? () => {
-            setDestination(trabalhoPlace);
-            router.push('/categoria');
-          }
-        : () => router.push('/destino'),
+      onPress: trabalhoPlace ? () => goToSavedPlace(trabalhoPlace) : () => router.push('/destino'),
     },
     {
       key: 'favoritos',
@@ -81,7 +94,7 @@ export default function PassengerHomeScreen() {
   return (
     <AppShell scroll glow>
       <View style={styles.content}>
-        <HomeHeader notificationCount={3} onPressMenu={() => setMenuVisible(true)} />
+        <HomeHeader onPressMenu={() => setMenuVisible(true)} />
         <NetworkBanner testID="home-network-banner" />
         {sessionMode === 'mock' ? (
           <MockBadge label="acesso simulado, sem autenticação real" testID="simulated-access-badge" />
@@ -93,9 +106,13 @@ export default function PassengerHomeScreen() {
         {/* Ficha P03 §2: o mapa sangra até a borda e o pé da tela — por isso é o ÚLTIMO
             elemento do conteúdo rolável, com `bleed` cancelando o padding do `AppShell`. */}
         <HomeMapPreview
-          cityLabel="Natal - RN"
-          currentAddress="Ponta Negra, Natal - RN"
-          landmarkLabel="Morro do Careca"
+          status={locationStatus}
+          placeStatus={placeStatus}
+          placeLabel={placeLabel}
+          inServiceArea={inServiceArea}
+          onAllowLocation={requestLocationPermission}
+          onRelocate={relocate}
+          onTypeAddress={() => router.push('/destino')}
           bleed
         />
       </View>

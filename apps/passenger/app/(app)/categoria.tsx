@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
-import { ArrowRight, CreditCard } from 'lucide-react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ArrowRight, CreditCard, MapPinned } from 'lucide-react-native';
+import { isQuoteExpired } from '@vuumbora/domain';
 import {
   AppShell,
   EmptyState,
   ErrorState,
   FooterActions,
+  InlineAlert,
   ListRow,
   LoadingSkeleton,
   MockBadge,
@@ -14,60 +16,124 @@ import {
   PrimaryButton,
   SectionHeader,
   theme,
+  textStyle,
+  useNetworkStatus,
 } from '@vuumbora/ui';
 import { RouteMapBanner } from '../../src/components/categoria/RouteMapBanner';
 import { RideCategoryCard } from '../../src/components/categoria/RideCategoryCard';
 import { categoryVisual } from '../../src/components/categoria/categoryVisuals';
 import { PaymentMethodOption } from '../../src/components/confirmation/PaymentMethodOption';
 import { MOCK_PAYMENT_METHODS } from '../../src/data/mockPaymentMethods';
-import { rideCategoryName } from '../../src/data/rideCategoryDisplay';
-import { formatQuotePickupEta, formatQuotePrice } from '../../src/utils/rideQuoteFormatting';
+import { useDevGeoParams } from '../../src/dev/devGeo';
 import { useDevRideSeed } from '../../src/dev/useDevRideSeed';
-import { useRideRequestStore } from '../../src/store/useRideRequestStore';
+import { describeRouteForReader, formatDistanceM, formatDurationS, placePoint } from '../../src/geo/geoFormat';
+import { describeGeoProblem } from '../../src/geo/geoProblems';
+import { goBackOr } from '../../src/navigation/goBack';
+import { useSession } from '../../src/session/SessionProvider';
+import { selectedFareQuote, useRideRequestStore } from '../../src/store/useRideRequestStore';
+import { categoryDescription, categoryName, formatQuotePrice } from '../../src/utils/rideQuoteFormatting';
 
 /**
- * P05 — Categoria e orçamento (`docs/fichas-de-tela/P05-categoria-e-orcamento.md`, onda 3 do
- * padrão premium). PP-2 (decidido): categoria e "Solicitar corrida" SAEM da Home (P03) — o
- * fluxo passa a ser destino (P04) → categoria (aqui) → confirmação (P06). A Home e os atalhos
- * Casa/Trabalho/Favoritos chamam `setDestination` (que já dispara a cotação) e navegam para
- * cá — ver `(app)/index.tsx`.
+ * P05 — Categoria e preço (`docs/fichas-de-tela/P05-categoria-e-orcamento.md`). Fluxo: P04 → aqui → P06.
  *
- * F08b/onda 2 preservados sem alteração: a lista de categorias vem SÓ da cotação viva
- * (`quoteCategories`), nunca de um catálogo fixo — Motorista mulher/Entrega/Pet continuam fora
- * do DOM enquanto D-08/D-09 não ligam; `requestedCategory` do recibo é escrito só no
- * `requestRide` (P06), não aqui.
+ * Fatia G6: tudo o que esta tela mostra de número vem da COTAÇÃO ASSINADA do contrato do M4 (`FareQuotePort`, via store):
+ * quais categorias existem para o trajeto, o preço FECHADO de cada uma (D-06; por isso "Preço", não "Preço estimado") e
+ * a rota (polilinha desenhada no mapa, distância e tempo). Nome e legenda vêm de `GET /v1/categories`. O "chega em N min"
+ * saiu: o contrato do M4 não tem tempo até o embarque (é do despacho, M5).
+ *
+ * Erros, pelo catálogo `GEO_QUOTE_ERRORS` (`src/geo/geoProblems.ts`): fora da área e trajeto curto levam a trocar o
+ * destino; rota/servidor indisponível e limite de tentativas, a tentar de novo; `503 fare_not_configured` é "ainda não
+ * operamos" e leva ao início (NÃO "tente de novo"). Preço vencido no "Continuar": cota de novo, avisa "O preço foi
+ * atualizado" e pede um segundo toque (ficha §5).
  */
 export default function CategoryScreen() {
+  useDevGeoParams('createQuotes'); // antes do seed: o cenário de erro precisa valer para a 1ª cotação
   useDevRideSeed();
 
+  const { signOut } = useSession();
+  const online = useNetworkStatus();
   const origin = useRideRequestStore((state) => state.origin);
   const destination = useRideRequestStore((state) => state.destination);
   const categoryId = useRideRequestStore((state) => state.categoryId);
   const setCategory = useRideRequestStore((state) => state.setCategory);
   const quoteStatus = useRideRequestStore((state) => state.quoteStatus);
-  const quoteCategories = useRideRequestStore((state) => state.quoteCategories);
+  const fareQuotes = useRideRequestStore((state) => state.fareQuotes);
+  const quoteRoute = useRideRequestStore((state) => state.quoteRoute);
+  const quoteError = useRideRequestStore((state) => state.quoteError);
+  const priceUpdated = useRideRequestStore((state) => state.priceUpdated);
+  const categoryInfo = useRideRequestStore((state) => state.categoryInfo);
   const refreshQuote = useRideRequestStore((state) => state.refreshQuote);
+  const acknowledgePriceUpdate = useRideRequestStore((state) => state.acknowledgePriceUpdate);
   const paymentMethodId = useRideRequestStore((state) => state.paymentMethodId);
   const setPaymentMethod = useRideRequestStore((state) => state.setPaymentMethod);
 
   const [paymentPickerOpen, setPaymentPickerOpen] = useState(false);
 
-  // `AppShell padded={false}` (ficha §4: "sem glow, tem mapa") não dá o respiro lateral de
-  // `layout.screenPadding`/`screenPaddingCompact` (§3) — como o mapa sangra até a borda mesmo,
-  // é o PAINEL (não o `AppShell`) quem aplica o respiro ao próprio conteúdo, no mesmo corte
+  // `AppShell padded={false}` (o mapa sangra até a borda): é o PAINEL quem aplica o respiro lateral, no mesmo corte
   // (< 375pt) que o `AppShell` usaria.
   const { width } = useWindowDimensions();
   const panelPadding = width < 375 ? theme.layout.screenPaddingCompact : theme.layout.screenPadding;
 
+  const selectedQuote = selectedFareQuote({ fareQuotes, categoryId });
   const selectedPayment = MOCK_PAYMENT_METHODS.find((method) => method.id === paymentMethodId);
-  const canContinue = Boolean(categoryId && paymentMethodId);
+  const anyTestFare = fareQuotes.some((quote) => quote.isTestFare);
+  const canContinue = online && quoteStatus === 'ready' && selectedQuote !== undefined && selectedPayment !== undefined;
+  const problem = quoteStatus === 'error' ? describeGeoProblem(quoteError ?? { kind: 'network', retryable: true }, 'quote') : undefined;
 
-  function handleBack() {
-    router.back();
+  const continueBlockedReason = !online
+    ? 'sem conexão'
+    : quoteStatus === 'loading'
+      ? 'calculando o preço'
+      : !selectedQuote
+        ? 'escolha uma categoria'
+        : 'escolha a forma de pagamento';
+
+  function handleChangeRoute() {
+    goBackOr('/destino');
   }
 
+  function handleProblemAction() {
+    if (!problem) return;
+    switch (problem.action) {
+      case 'retry':
+        refreshQuote();
+        return;
+      case 'requote':
+        refreshQuote({ priceUpdated: true });
+        return;
+      case 'change_route':
+        handleChangeRoute();
+        return;
+      case 'home':
+        router.replace('/');
+        return;
+      case 'sign_in':
+        void signOut();
+        return;
+    }
+  }
+
+  /**
+   * Sem cotação para mostrar (erro, trajeto não atendido, sem trajeto), a ação que resolve vai para o RODAPÉ no lugar do
+   * "Continuar" desabilitado: em 320×568 o painel rola, e a saída ("Voltar ao início", "Trocar destino", "Tentar de
+   * novo") ficava abaixo da dobra (G-11), medido na captura da `fare_not_configured`.
+   */
+  const recovery: { readonly label: string; readonly onPress: () => void; readonly testID: string } | undefined = problem
+    ? { label: problem.actionLabel, onPress: handleProblemAction, testID: 'category-problem-action' }
+    : quoteStatus === 'idle'
+      ? { label: 'Escolher destino', onPress: () => router.push('/destino'), testID: 'pick-destination-button' }
+      : quoteStatus === 'ready' && fareQuotes.length === 0
+        ? { label: 'Trocar destino', onPress: handleChangeRoute, testID: 'change-destination-button' }
+        : undefined;
+
   function handleContinue() {
-    if (!canContinue) return;
+    if (!canContinue || !selectedQuote) return;
+    // Regra do domínio (sem rede): preço vencido cota de novo e pede o segundo toque, com o valor novo à vista.
+    if (isQuoteExpired(selectedQuote.expiresAt, Date.now())) {
+      refreshQuote({ priceUpdated: true });
+      return;
+    }
+    if (priceUpdated) acknowledgePriceUpdate();
     router.push('/confirmacao');
   }
 
@@ -77,22 +143,35 @@ export default function CategoryScreen() {
       scroll
       footer={
         <FooterActions testID="category-footer">
-          <PrimaryButton
-            label="Continuar"
-            icon={<ArrowRight size={20} color={theme.role.ctaText} strokeWidth={2.25} />}
-            onPress={handleContinue}
-            disabled={!canContinue}
-            accessibilityLabel={canContinue ? 'Continuar' : 'Continuar, indisponível: escolha uma categoria'}
-            testID="continue-to-confirmation-button"
-          />
+          {recovery ? (
+            <PrimaryButton label={recovery.label} onPress={recovery.onPress} testID={recovery.testID} />
+          ) : (
+            <PrimaryButton
+              label="Continuar"
+              icon={<ArrowRight size={20} color={theme.role.ctaText} strokeWidth={2.25} />}
+              onPress={handleContinue}
+              disabled={!canContinue}
+              accessibilityLabel={canContinue ? 'Continuar' : `Continuar, indisponível: ${continueBlockedReason}`}
+              testID="continue-to-confirmation-button"
+            />
+          )}
+          {!online ? (
+            <Text style={styles.footerNote} testID="category-offline-note">
+              Sem conexão
+            </Text>
+          ) : null}
         </FooterActions>
       }
     >
       <View style={styles.content}>
         <RouteMapBanner
-          originAddress={origin?.address ?? 'Sua localização atual'}
-          destinationAddress={destination?.address ?? 'Para onde você vai?'}
-          onBack={handleBack}
+          originAddress={origin?.address ?? 'Origem não definida'}
+          destinationAddress={destination?.address ?? 'Destino não definido'}
+          originPoint={origin ? placePoint(origin) : undefined}
+          destinationPoint={destination ? placePoint(destination) : undefined}
+          polyline={quoteStatus === 'ready' ? quoteRoute?.polyline : undefined}
+          routeDescription={quoteStatus === 'ready' && quoteRoute ? describeRouteForReader(quoteRoute.distanceM, quoteRoute.durationS) : undefined}
+          onBack={handleChangeRoute}
           testID="category-map"
         />
 
@@ -100,57 +179,62 @@ export default function CategoryScreen() {
           <View style={styles.handle} accessibilityElementsHidden importantForAccessibility="no" />
           <NetworkBanner testID="category-network-banner" />
 
-          <SectionHeader
-            title="Escolha uma categoria"
-            mock={quoteStatus === 'ready' && quoteCategories.length > 0}
-            mockLabel="preço estimado de demonstração"
-            testID="category-section-header"
-          />
+          <View style={styles.titleBlock}>
+            <SectionHeader title="Escolha uma categoria" mock={quoteStatus === 'ready' && anyTestFare} mockLabel="tarifa de teste" testID="category-section-header" />
+            {quoteStatus === 'ready' && quoteRoute ? (
+              <View style={styles.routeRow} testID="category-route-summary">
+                <MapPinned size={14} color={theme.role.textSecondary} strokeWidth={2} />
+                <Text style={styles.routeText}>
+                  {formatDistanceM(quoteRoute.distanceM)} · cerca de {formatDurationS(quoteRoute.durationS)} de viagem
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          {priceUpdated && quoteStatus === 'ready' ? (
+            <InlineAlert tone="info" title="O preço foi atualizado." message="Confira o valor novo antes de continuar." announce testID="category-price-updated" />
+          ) : null}
 
           {quoteStatus === 'idle' ? (
-            // Defensivo: na navegação real esta tela só é alcançada com destino já definido
-            // (Home/P04 chamam `setDestination` antes de navegar para aqui) — "idle" não é um
-            // estado alcançável pela ficha, mas evita um painel vazio sem explicação se algo
-            // chegar aqui sem destino (ex.: navegação direta por link).
+            // Defensivo: na navegação real esta tela só é alcançada com origem e destino definidos.
             <EmptyState
-              title="Defina seu destino"
-              description="Escolha para onde você vai para ver as opções de viagem disponíveis."
-              action={<PrimaryButton label="Escolher destino" onPress={() => router.push('/destino')} testID="pick-destination-button" />}
+              title="Defina seu trajeto"
+              description="Escolha de onde sai e para onde vai para ver as opções de viagem."
               testID="category-idle-state"
             />
           ) : quoteStatus === 'loading' ? (
-            <View style={styles.categoryColumn} testID="category-loading-state">
+            <View style={styles.categoryColumn} testID="category-loading-state" accessibilityLabel="Calculando o preço">
               <LoadingSkeleton variant="block" height={66} lines={2} />
             </View>
-          ) : quoteStatus === 'error' ? (
-            <ErrorState
-              title="Não conseguimos calcular o preço agora"
-              description="Tente de novo em instantes."
-              onRetry={refreshQuote}
-              testID="category-error-state"
-            />
-          ) : quoteStatus === 'ready' && quoteCategories.length === 0 ? (
+          ) : problem ? (
+            // A ação mora no rodapé (`recovery`), visível sem rolar.
+            problem.action === 'retry' || problem.action === 'requote' ? (
+              <ErrorState title={problem.title} description={problem.description} testID={`category-problem-${problem.key}`} />
+            ) : (
+              <EmptyState title={problem.title} description={problem.description} testID={`category-problem-${problem.key}`} />
+            )
+          ) : fareQuotes.length === 0 ? (
             <EmptyState
-              title="Ainda não atendemos este trajeto"
-              description="Escolha outro endereço de destino para ver opções disponíveis."
-              action={<PrimaryButton label="Trocar destino" onPress={() => router.push('/destino')} testID="change-destination-button" />}
+              title="Ainda não atendemos este trajeto."
+              description="Nenhuma categoria atende esta rota agora. Escolha outro destino."
               testID="category-empty-state"
             />
           ) : (
             <View style={styles.categoryColumn} accessibilityRole="radiogroup">
-              {quoteCategories.map((category) => {
-                const visual = categoryVisual(category.categoryId);
+              {fareQuotes.map((quote) => {
+                const visual = categoryVisual(quote.categorySlug);
                 return (
                   <RideCategoryCard
-                    key={category.categoryId}
-                    name={rideCategoryName(category.categoryId)}
+                    key={quote.quoteId}
+                    name={categoryName(quote.categorySlug, categoryInfo)}
                     icon={visual.icon}
                     {...(visual.vehicleVariant ? { vehicleVariant: visual.vehicleVariant } : {})}
-                    etaLabel={formatQuotePickupEta(category)}
-                    priceLabel={formatQuotePrice(category)}
-                    selected={categoryId === category.categoryId}
-                    onPress={() => setCategory(category.categoryId)}
-                    testID={`ride-category-${category.categoryId}`}
+                    detail={categoryDescription(quote.categorySlug, categoryInfo)}
+                    priceLabel={formatQuotePrice(quote)}
+                    priceDescription={quote.isTestFare ? 'preço de teste' : 'preço'}
+                    selected={categoryId === quote.categorySlug}
+                    onPress={() => setCategory(quote.categorySlug)}
+                    testID={`ride-category-${quote.categorySlug}`}
                   />
                 );
               })}
@@ -193,12 +277,8 @@ export default function CategoryScreen() {
 
 const styles = StyleSheet.create({
   content: { flexGrow: 1 },
-  // `role.surface` chapado é a exceção prevista pela própria régua para "painel inferior"
-  // (`docs/padrao-premium-telas.md` §4/§6: "painel inferior e barra de abas, com elevation.3")
-  // — diferente dos CARDS por dentro dele (`RideCategoryCard`/`PaymentMethodOption`), que usam
-  // `SurfaceRaised`. `boxShadow` separa o painel do mapa por cima (G-02 não se aplica aqui).
-  // Sem `flex` (ficha §2: "o painel tem a altura do conteúdo") — quem cresce para ocupar a
-  // sobra vertical é o mapa (`RouteMapBanner`, `flex:1`), não o painel.
+  // `role.surface` chapado é a exceção prevista pela régua para "painel inferior" (padrão premium §4/§6), com
+  // `elevation.3`. Sem `flex` (ficha §2: "o painel tem a altura do conteúdo") — quem cresce é o mapa.
   panel: {
     backgroundColor: theme.role.surface,
     borderTopLeftRadius: theme.radius.xxl,
@@ -216,7 +296,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.role.borderControl,
     marginBottom: theme.spacing['1'],
   },
+  titleBlock: { gap: theme.spacing['2'] },
+  routeRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['1'] },
+  routeText: { flexShrink: 1, color: theme.role.textSecondary, ...textStyle('regular', 'small') },
   categoryColumn: { gap: theme.spacing['2'] },
   paymentSection: { gap: theme.spacing['2'] },
   paymentList: { gap: theme.spacing['2'], marginTop: theme.spacing['1'] },
+  footerNote: { color: theme.role.textMuted, ...textStyle('regular', 'caption'), textAlign: 'center' },
 });

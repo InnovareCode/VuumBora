@@ -36,7 +36,9 @@ export const PlaceRow = memo(function PlaceRow({ place, onPress, testID }: Place
       icon={iconFor(place.label)}
       label={place.label}
       value={place.address}
-      valueLines={2}
+      // Até 3 linhas: o endereço de exemplo mais longo ("Av. Engenheiro Roberto Freire, 3000 — Capim Macio, Natal - RN")
+      // precisava de 3 em 320pt e era cortado com reticências em 2 (sonda `textoTruncado`, achado antigo da P04).
+      valueLines={3}
       onPress={() => onPress(place)}
       accessibilityLabel={`${place.label}, ${place.address}`}
       {...(testID !== undefined ? { testID } : {})}

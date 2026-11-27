@@ -1,6 +1,9 @@
 import { memo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { MockBadge, SurfaceRaised, theme, textStyle } from '@vuumbora/ui';
+import { MockBadge, SurfaceRaised, focusRingStyle, theme, textStyle, useKeyboardFocusRing } from '@vuumbora/ui';
+
+/** Anel de foco de teclado em volta do atalho (G-22), no raio do cartão. */
+const TILE_FOCUS_RING = focusRingStyle('outside', theme.radius.lg);
 
 export interface QuickAccessItem {
   readonly key: string;
@@ -36,12 +39,14 @@ export const QuickAccessGrid = memo(function QuickAccessGrid({ items }: QuickAcc
 });
 
 function QuickAccessButton({ label, icon, onPress, mock }: Omit<QuickAccessItem, 'key'>) {
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
   return (
     <Pressable
+      {...focusProps}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={mock ? `${label}, recurso de demonstração` : label}
-      style={styles.pressable}
+      style={[styles.pressable, focusVisible && TILE_FOCUS_RING]}
     >
       {({ pressed }) => (
         <SurfaceRaised style={[styles.card, pressed && styles.cardPressed]}>

@@ -2,27 +2,26 @@ import { useEffect } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { MOCK_SAVED_PLACES } from '../data/mockPlaces';
 import { useRideRequestStore } from '../store/useRideRequestStore';
+import { devSampleOrigin } from './devGeo';
 
 /**
- * SÓ `__DEV__`: popula o destino (a origem já tem padrão na store, `MOCK_CURRENT_LOCATION`)
- * quando a P05/P06 é aberta DIRETO, sem passar pela Home/P04 antes — necessário para a
- * ferramenta de qualidade de tela (`tools/qualidade-tela`) capturar o estado "padrão" dessas
- * telas sem clicar o fluxo inteiro a cada captura. Mesmo padrão já usado pela M05
- * (`?devAprovado=false`, `apps/driver/app/(app)/index.tsx`): parâmetro só em desenvolvimento,
- * removido do bundle de produção pelo Metro (`__DEV__`), nunca lido fora daqui.
+ * SÓ `__DEV__`: monta o trajeto quando a P05/P06 é aberta DIRETO (`?devSeed=1`), sem passar pela P03/P04 — é o que a
+ * ferramenta `tools/qualidade-tela` usa para capturar essas telas sem clicar o fluxo inteiro. Mesmo padrão do
+ * `?devCenario=` do motorista: parâmetro só em desenvolvimento, nunca lido fora daqui.
  *
- * Definir o destino já dispara `refreshQuote()` sozinho (`setDestination` na store) — a
- * categoria é escolhida pela MESMA regra de sempre (1ª da cotação), não por este hook.
+ * Fatia G6: a origem não tem mais padrão na store (vem da posição do aparelho), então o atalho monta os DOIS pontos
+ * (`setRoute`, uma cotação só): a origem de exemplo do cenário `?devLocal=ok` e o 3º lugar salvo de exemplo. O preço,
+ * a rota e as categorias saem da cotação do mock do contrato, como no fluxo real.
  */
 export function useDevRideSeed() {
   const { devSeed } = useLocalSearchParams<{ devSeed?: string }>();
   const destination = useRideRequestStore((state) => state.destination);
-  const setDestination = useRideRequestStore((state) => state.setDestination);
+  const setRoute = useRideRequestStore((state) => state.setRoute);
 
   useEffect(() => {
     if (!__DEV__ || devSeed !== '1' || destination) return;
-    const fallbackDestination = MOCK_SAVED_PLACES[2]; // "Shopping Midway Mall" — perto do exemplo da prancha
-    if (fallbackDestination) setDestination(fallbackDestination);
+    const sampleDestination = MOCK_SAVED_PLACES[2]; // "Shopping Midway Mall" — perto do exemplo da prancha
+    if (sampleDestination) setRoute(useRideRequestStore.getState().origin ?? devSampleOrigin(), sampleDestination);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [devSeed, destination]);
 }

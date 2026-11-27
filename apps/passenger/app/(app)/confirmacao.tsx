@@ -1,48 +1,79 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Car, Circle, CreditCard, MapPin } from 'lucide-react-native';
+import { Car, Circle, CreditCard, MapPin, MapPinned } from 'lucide-react-native';
+import type { ApiError } from '@vuumbora/api-client';
 import { canRequestRide } from '@vuumbora/domain/passenger';
-import { AppShell, FooterActions, InlineAlert, MockBadge, MoneyText, PrimaryButton, ScreenHeader, SectionHeader, SurfaceRaised, theme, textStyle, tokens } from '@vuumbora/ui';
+import {
+  AppShell,
+  FooterActions,
+  InlineAlert,
+  LinkButton,
+  LoadingSkeleton,
+  MockBadge,
+  MoneyText,
+  NetworkBanner,
+  PrimaryButton,
+  ScreenHeader,
+  SectionHeader,
+  SurfaceRaised,
+  theme,
+  textStyle,
+  tokens,
+  useNetworkStatus,
+} from '@vuumbora/ui';
 import { RouteSummaryRow } from '../../src/components/confirmation/RouteSummaryRow';
 import { PaymentMethodOption } from '../../src/components/confirmation/PaymentMethodOption';
 import { MOCK_PAYMENT_METHODS } from '../../src/data/mockPaymentMethods';
-import { rideCategoryName } from '../../src/data/rideCategoryDisplay';
-import { formatQuotePickupEta } from '../../src/utils/rideQuoteFormatting';
+import { useDevGeoParams } from '../../src/dev/devGeo';
 import { useDevRideSeed } from '../../src/dev/useDevRideSeed';
-import { toRideDraft, useRideRequestStore } from '../../src/store/useRideRequestStore';
+import { formatDistanceM, formatDurationS } from '../../src/geo/geoFormat';
+import { describeGeoProblem, type GeoProblemView } from '../../src/geo/geoProblems';
+import { goBackOr } from '../../src/navigation/goBack';
+import { useSession } from '../../src/session/SessionProvider';
+import { selectedFareQuote, toRideDraft, useRideRequestStore } from '../../src/store/useRideRequestStore';
+import { formatClockTime } from '../../src/utils/time';
+import { categoryName } from '../../src/utils/rideQuoteFormatting';
 
 /**
- * P06 — Confirmação da corrida (`docs/fichas-de-tela/P06-confirmacao.md`, onda 3 do padrão
- * premium). A recomendação PP-3 do Apolo (P05+P06 num painel só, com "revisar" como 2º estado)
- * NÃO foi adotada nesta fatia — o Atlas manteve o fluxo linear em telas separadas (destino → P05
- * → P06, ver `(app)/categoria.tsx`), que é o que esta missão descreve; fica registrado para quem
- * quiser revisitar.
+ * P06 — Confirmação da corrida (`docs/fichas-de-tela/P06-confirmacao.md`). PP-3 (P05+P06 num painel só) continua não
+ * adotado: tela separada, `AppShell scroll glow`, um cartão só e um selo embaixo dele.
  *
- * Lacunas do protótipo corrigidas aqui (ficha §11): cartão chapado → `SurfaceRaised` (§11.1);
- * dois selos na linha do título → UM selo, embaixo do cartão (§11.2); carro/origem amarelos e
- * destino laranja → `map.pickup`/`map.destination`/ícone `textSecondary` (§11.3); preço em
- * `subtitle` → `heading` (N2, §11.4); aviso de falta em texto solto → `InlineAlert` (§11.5).
- *
- * F08b: a categoria/preço/tempo aqui vêm da MESMA cotação viva que a Home/P05 buscaram
- * (`quoteCategories`), nunca de um catálogo local — se a cotação não tem mais a categoria
- * escolhida (ex.: ficou muito tempo nesta tela e ela desligou), o botão "Solicitar" desliga.
+ * Fatia G6:
+ * - categoria, preço e rota vêm da cotação ASSINADA escolhida na P05 (nunca de texto local, aceite D2);
+ * - o preço é FECHADO na cotação (D-06): rótulo "Preço" e, no rodapé, até quando ele vale (`expiresAt`, 5 min, N9). A
+ *   frase "o valor final pode mudar" saiu, como a própria ficha §7 previa para preço fechado;
+ * - selo "tarifa de teste" quando a versão da tarifa é de teste (`isTestFare`, N8);
+ * - antes de pedir, confere a cotação no servidor (`confirmSelectedQuote` → `getQuote`, a checagem que o
+ *   `POST /v1/trips` fará no M5): vencida ou sumida, cota de novo, avisa "O preço foi atualizado" e pede o segundo toque.
  */
 export default function ConfirmationScreen() {
+  useDevGeoParams('getQuote'); // antes do seed: o cenário de erro vale para a conferência do "Solicitar"
   useDevRideSeed();
 
+  const { signOut } = useSession();
+  const online = useNetworkStatus();
   const origin = useRideRequestStore((state) => state.origin);
   const destination = useRideRequestStore((state) => state.destination);
   const categoryId = useRideRequestStore((state) => state.categoryId);
   const paymentMethodId = useRideRequestStore((state) => state.paymentMethodId);
-  const quoteCategories = useRideRequestStore((state) => state.quoteCategories);
+  const fareQuotes = useRideRequestStore((state) => state.fareQuotes);
+  const quoteRoute = useRideRequestStore((state) => state.quoteRoute);
+  const quoteStatus = useRideRequestStore((state) => state.quoteStatus);
+  const quoteError = useRideRequestStore((state) => state.quoteError);
+  const priceUpdated = useRideRequestStore((state) => state.priceUpdated);
+  const categoryInfo = useRideRequestStore((state) => state.categoryInfo);
   const setPaymentMethod = useRideRequestStore((state) => state.setPaymentMethod);
+  const confirmSelectedQuote = useRideRequestStore((state) => state.confirmSelectedQuote);
+  const acknowledgePriceUpdate = useRideRequestStore((state) => state.acknowledgePriceUpdate);
   const requestRide = useRideRequestStore((state) => state.requestRide);
 
   const [submitting, setSubmitting] = useState(false);
+  const [sendError, setSendError] = useState<ApiError | undefined>(undefined);
 
-  const category = quoteCategories.find((c) => c.categoryId === categoryId);
-  const canRequest = canRequestRide(toRideDraft({ origin, destination, categoryId, paymentMethodId })) && category !== undefined;
+  const quote = selectedFareQuote({ fareQuotes, categoryId });
+  const quoting = quoteStatus === 'loading';
+  const canRequest = canRequestRide(toRideDraft({ origin, destination, categoryId, paymentMethodId })) && quote !== undefined && !quoting;
 
   const missing: string[] = [];
   if (!origin) missing.push('origem');
@@ -50,43 +81,92 @@ export default function ConfirmationScreen() {
   if (!categoryId) missing.push('categoria');
   if (!paymentMethodId) missing.push('forma de pagamento');
 
-  function handleRequest() {
-    // Segundo toque durante o envio é ignorado (ficha §5, "Carregando ação") — aqui o envio é
-    // síncrono (F08b: a transição de fase não espera o mock), mas a guarda cobre o caso real
-    // (API de verdade, D3) sem precisar reescrever esta tela quando ela chegar.
-    if (!canRequest || submitting) return;
+  const problem: GeoProblemView | undefined = sendError
+    ? describeGeoProblem(sendError, 'confirm')
+    : quoteStatus === 'error' && quoteError
+      ? describeGeoProblem(quoteError, 'quote')
+      : undefined;
+
+  async function handleRequest() {
+    // Segundo toque durante o envio é ignorado (ficha §5, "Carregando ação").
+    if (!canRequest || submitting || !online) return;
     setSubmitting(true);
-    requestRide();
-    router.replace('/corrida');
+    setSendError(undefined);
+    const outcome = await confirmSelectedQuote();
+    if (outcome.status === 'ok') {
+      acknowledgePriceUpdate();
+      requestRide();
+      router.replace('/corrida');
+      return;
+    }
+    setSubmitting(false);
+    if (outcome.status === 'error') setSendError(outcome.error);
+    // `price_updated`: a store já cotou de novo e marcou o aviso; o próximo toque segue com o preço novo.
   }
+
+  function handleProblemAction() {
+    if (!problem) return;
+    switch (problem.action) {
+      case 'retry':
+        setSendError(undefined);
+        if (quoteStatus === 'error') useRideRequestStore.getState().refreshQuote();
+        return;
+      case 'requote':
+        setSendError(undefined);
+        useRideRequestStore.getState().refreshQuote({ priceUpdated: true });
+        return;
+      case 'change_route':
+        goBackOr('/destino');
+        return;
+      case 'home':
+        router.replace('/');
+        return;
+      case 'sign_in':
+        void signOut();
+        return;
+    }
+  }
+
+  const blockedReason = !online ? 'sem conexão' : quoting ? 'atualizando o preço' : `falta escolher ${missing.join(', ') || 'a categoria'}`;
+  const selo = quote?.isTestFare ? 'tarifa de teste' : 'corrida de demonstração';
 
   return (
     <AppShell
       scroll
       glow
       footer={
-        // G-11: o CTA principal precisa estar visível sem rolar em 320×568 (ou fixo no
-        // rodapé) — o cartão + lista de pagamento sozinhos já passam da dobra nesse
-        // tamanho, então o CTA fica fixo (igual à P04/P05), não solto no fim do conteúdo.
+        // G-11: o CTA fica fixo no rodapé (o cartão + a lista de pagamento passam da dobra em 320×568).
         <FooterActions testID="confirmation-footer">
-          {!canRequest ? (
+          {missing.length > 0 ? (
             <InlineAlert tone="warning" message={`Falta escolher: ${missing.join(', ')}.`} testID="confirmation-missing-alert" />
+          ) : null}
+          {priceUpdated && !quoting && quote ? (
+            <InlineAlert tone="info" title="O preço foi atualizado." message="Confira o valor novo antes de solicitar." announce testID="confirmation-price-updated" />
+          ) : null}
+          {problem ? (
+            <View style={styles.problem}>
+              <InlineAlert tone="danger" title={problem.title} message={problem.description} announce testID={`confirmation-problem-${problem.key}`} />
+              <LinkButton label={problem.actionLabel} onPress={handleProblemAction} role="button" align="flex-start" testID="confirmation-problem-action" />
+            </View>
           ) : null}
           <PrimaryButton
             label="Solicitar corrida"
             icon={<Car size={20} color={theme.role.ctaText} strokeWidth={2.25} />}
-            onPress={handleRequest}
-            disabled={!canRequest}
+            onPress={() => void handleRequest()}
+            disabled={!canRequest || !online}
             loading={submitting}
-            accessibilityLabel={canRequest ? 'Solicitar corrida' : `Solicitar corrida, indisponível: falta escolher ${missing.join(', ')}`}
+            accessibilityLabel={canRequest && online ? 'Solicitar corrida' : `Solicitar corrida, indisponível: ${blockedReason}`}
             testID="request-ride-button"
           />
-          <Text style={styles.footerNote}>O valor final pode mudar se o trajeto mudar.</Text>
+          <Text style={styles.footerNote} testID="confirmation-footer-note">
+            {!online ? 'Sem conexão' : quote ? `Preço fechado: vale até ${formatClockTime(new Date(quote.expiresAt))}.` : ' '}
+          </Text>
         </FooterActions>
       }
     >
       <View style={styles.content}>
-        <ScreenHeader title="Confirme sua corrida" subtitle="Confira antes de solicitar" onBack={() => router.back()} testID="confirmation-header" />
+        <ScreenHeader title="Confirme sua corrida" subtitle="Confira antes de solicitar" onBack={() => goBackOr('/categoria')} testID="confirmation-header" />
+        <NetworkBanner testID="confirmation-network-banner" />
 
         <SurfaceRaised style={styles.card}>
           <RouteSummaryRow
@@ -102,17 +182,26 @@ export default function ConfirmationScreen() {
             value={destination?.address ?? 'Não definido'}
             testID="confirmation-destination"
           />
+          {quoteRoute && !quoting ? (
+            <View style={styles.routeRow} testID="confirmation-route-summary">
+              <MapPinned size={14} color={theme.role.textSecondary} strokeWidth={2} />
+              <Text style={styles.routeText}>
+                {formatDistanceM(quoteRoute.distanceM)} · cerca de {formatDurationS(quoteRoute.durationS)} de viagem
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.divider} />
-          {category ? (
+          {quoting ? (
+            <View testID="confirmation-quoting" accessibilityLabel="Atualizando o preço">
+              <LoadingSkeleton variant="block" height={56} lines={1} />
+            </View>
+          ) : quote ? (
             <View style={styles.categoryRow}>
               <Car size={24} color={theme.role.textSecondary} strokeWidth={1.75} />
               <View style={styles.categoryTextBlock}>
-                <Text style={styles.categoryName} numberOfLines={1}>
-                  {rideCategoryName(category.categoryId)} · chega em {formatQuotePickupEta(category)}
-                </Text>
-                {/* N2 da tela (ficha §3): rótulo pequeno em cima, número grande e tabular embaixo —
-                    `MoneyText estimated` já junta os dois (C-10). */}
-                <MoneyText value={category.estimate.total.amountCents / 100} estimated label="Preço estimado" size="heading" testID="confirmation-price" />
+                <Text style={styles.categoryName}>{categoryName(quote.categorySlug, categoryInfo)}</Text>
+                {/* N2 da tela (ficha §3): rótulo pequeno em cima, número grande e tabular embaixo. Preço FECHADO (D-06). */}
+                <MoneyText value={quote.priceCents / 100} label="Preço" size="heading" testID="confirmation-price" />
               </View>
             </View>
           ) : (
@@ -126,7 +215,8 @@ export default function ConfirmationScreen() {
             testID="confirmation-payment"
           />
         </SurfaceRaised>
-        <MockBadge label="corrida de demonstração" testID="confirmation-mock-badge" />
+        {/* Um selo só, embaixo do cartão (ficha §2). Com tarifa de teste, é ELA que precisa ficar clara. */}
+        <MockBadge label={selo} testID={quote?.isTestFare ? 'confirmation-test-fare-badge' : 'confirmation-mock-badge'} />
 
         <View style={styles.section}>
           <SectionHeader title="Forma de pagamento" testID="payment-section-header" />
@@ -153,8 +243,7 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: theme.radius.lg,
     borderWidth: 1,
-    // Borda iluminada de cima (direção de arte §4/§9 item 2) — `SurfaceRaised` dá o fundo
-    // gradiente (lacuna §11.1: era `theme.role.surface` chapado).
+    // Borda iluminada de cima (direção de arte §4/§9 item 2) — `SurfaceRaised` dá o fundo gradiente.
     borderTopColor: theme.role.edgeTop,
     borderColor: theme.role.edgeBottom,
     padding: theme.spacing['4'],
@@ -162,10 +251,13 @@ const styles = StyleSheet.create({
   },
   divider: { height: 1, backgroundColor: theme.role.border },
   section: { gap: theme.spacing['2'] },
+  routeRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['1'] },
+  routeText: { flexShrink: 1, color: theme.role.textSecondary, ...textStyle('regular', 'small') },
   categoryRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['3'] },
   categoryTextBlock: { flex: 1 },
   categoryName: { color: theme.role.textPrimary, ...textStyle('semibold', 'body') },
   paymentList: { gap: theme.spacing['2'] },
+  problem: { gap: theme.spacing['1'] },
   helperText: { color: theme.role.textSecondary, ...textStyle('regular', 'small'), textAlign: 'center' },
   footerNote: { color: theme.role.textMuted, ...textStyle('regular', 'caption'), textAlign: 'center' },
 });

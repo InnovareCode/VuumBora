@@ -1,104 +1,178 @@
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { LocateFixed, MapPin, Minus, Plus } from 'lucide-react-native';
-import { MapPreviewBackground, MockBadge, theme, textStyle, tokens } from '@vuumbora/ui';
+import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { LocateFixed, MapPin, MapPinOff } from 'lucide-react-native';
+import { LinkButton, MapPreviewBackground, MockBadge, focusRingStyle, theme, textStyle, tokens, useKeyboardFocusRing } from '@vuumbora/ui';
+import type { LocationStatus, PlaceLookupStatus } from '../../location/useLocationStore';
+import { LocationPermissionCard } from './LocationPermissionCard';
 
 // Mesmo corte do `AppShell` (`layout.screenPaddingCompact` abaixo de 375pt) — o sangramento
-// horizontal precisa cancelar EXATAMENTE o padding que o `AppShell` aplicou, senão sobra (ou
-// falta) 4pt e a borda do mapa não encosta na tela (G-09: elemento vazando a viewport).
+// horizontal precisa cancelar EXATAMENTE o padding que o `AppShell` aplicou (G-09).
 const COMPACT_WIDTH_BREAKPOINT = 375;
+const LOCATE_FOCUS_RING = focusRingStyle('outside', theme.layout.touchTarget / 2);
 
 export interface HomeMapPreviewProps {
-  readonly cityLabel: string;
-  readonly currentAddress: string;
-  readonly landmarkLabel?: string;
-  readonly onPressLocate?: () => void;
-  readonly onPressZoomIn?: () => void;
-  readonly onPressZoomOut?: () => void;
+  readonly status: LocationStatus;
+  readonly placeStatus: PlaceLookupStatus;
+  /** Nome que o servidor deu à posição (`geoPort.reverse`). */
+  readonly placeLabel?: string | undefined;
+  readonly inServiceArea?: boolean | undefined;
+  readonly onAllowLocation: () => void;
+  readonly onRelocate: () => void;
+  readonly onTypeAddress: () => void;
   /**
-   * Ficha P03 §2: "mapa sangrando até a borda e o pé" — cresce para ocupar a sobra vertical
-   * (`flex`, dentro do `ScrollView` com `flexGrow` do `AppShell`) e perde o raio/moldura de
-   * baixo, para colar nas bordas da tela em vez de ficar num cartão fechado. Quem posiciona o
-   * sangramento horizontal é o chamador (`index.tsx`, margem negativa = `screenPadding`).
+   * Ficha P03 §2: "mapa sangrando até a borda e o pé" — cresce para ocupar a sobra vertical e perde a moldura de baixo.
    */
   readonly bleed?: boolean;
 }
 
 /**
- * Mapa placeholder — SDK de mapa ainda NÃO escolhido (docs/decisions.md). Fundo:
- * `MapPreviewBackground` (asset `mapa-escuro-natal.jpg`, direção de arte §7.1/§9 item 7) —
- * NÃO é dado geográfico real, é ilustração procedural de malha urbana. Chips sobre o
- * mapa (rótulo de cidade, marco, controles, chip de endereço) usam `theme.role.glassOnMap`
- * (opaco, sem blur — ver docs/direcao-de-arte.md §5) para ficarem legíveis sobre a foto.
- * Fica em apps/passenger porque os rótulos (cidade, marco) são conteúdo deste mock
- * específico — o adaptador de mapa de verdade (MapView/RouteOverlay/LocationMarker) é
- * decisão futura de arquitetura, não algo a improvisar aqui.
+ * Mapa da P03 sobre o fundo ILUSTRATIVO (`MapPreviewBackground`) até o Mapbox nativo (C-12). O fundo não é
+ * georreferenciado; o que é real é a POSIÇÃO do aparelho (`src/location`) e o nome que o servidor deu a ela.
+ *
+ * Estados (ficha P03 §5): procurando; localizado ("você está aqui" + endereço, com aviso se estiver fora da área
+ * atendida); erro ("Não achamos sua localização" + "Tentar de novo"); pré-permissão e recusa (cartão no lugar do mapa);
+ * indisponível (nativo sem `expo-location`). Selo "mapa ilustrativo" no canto de BAIXO, fora dos controles (H1).
+ *
+ * Os botões de zoom saíram: sobre uma ilustração eles não faziam nada (G-19). "Centralizar no meu local" lê a posição
+ * de novo.
  */
 export const HomeMapPreview = memo(function HomeMapPreview({
-  cityLabel,
-  currentAddress,
-  landmarkLabel,
-  onPressLocate,
-  onPressZoomIn,
-  onPressZoomOut,
+  status,
+  placeStatus,
+  placeLabel,
+  inServiceArea,
+  onAllowLocation,
+  onRelocate,
+  onTypeAddress,
   bleed = false,
 }: HomeMapPreviewProps) {
   const { width } = useWindowDimensions();
   const bleedMargin = width < COMPACT_WIDTH_BREAKPOINT ? theme.layout.screenPaddingCompact : theme.layout.screenPadding;
+  const { focusVisible, focusProps } = useKeyboardFocusRing();
+
+  const needsPermission = status === 'needs_permission' || status === 'denied';
+  const located = status === 'located';
+  const showLocate = located || status === 'error';
+
+  const mapDescription = located
+    ? `Mapa ilustrativo. Você está em ${placeLabel ?? 'um ponto sem nome'}${inServiceArea === false ? ', fora da área atendida' : ''}.`
+    : 'Mapa ilustrativo de Natal.';
 
   return (
     <View
       style={[styles.root, bleed && [styles.rootBleed, { marginHorizontal: -bleedMargin, marginBottom: -bleedMargin }]]}
-      accessibilityRole="image"
-      accessibilityLabel={`Mapa ilustrativo (mock) de ${cityLabel}`}
+      testID="home-map"
     >
-      <MapPreviewBackground />
-
-      <View style={styles.mockTag}>
-        <MockBadge label="mapa ilustrativo" />
+      <View style={StyleSheet.absoluteFill} accessible accessibilityRole="image" accessibilityLabel={mapDescription}>
+        <MapPreviewBackground />
       </View>
 
-      <View style={styles.cityChip}>
-        <Text style={styles.cityLabel}>{cityLabel}</Text>
-      </View>
-
-      {landmarkLabel ? (
-        <View style={[styles.landmark, styles.glassChip]}>
-          <MapPin size={16} color={theme.role.warning} strokeWidth={2} fill={theme.role.warning} />
-          <Text style={styles.landmarkLabel}>{landmarkLabel}</Text>
+      {needsPermission ? (
+        <View style={styles.permissionLayer}>
+          <LocationPermissionCard
+            variant={status === 'denied' ? 'blocked' : 'ask'}
+            onAllow={onAllowLocation}
+            onTypeAddress={onTypeAddress}
+            testID="location-permission-card"
+          />
         </View>
-      ) : null}
+      ) : (
+        <>
+          {located ? (
+            <View style={styles.centerMarkerLayer} pointerEvents="none">
+              <View style={styles.centerMarkerRing}>
+                <View style={styles.centerMarkerDot} />
+              </View>
+            </View>
+          ) : null}
 
-      <View style={styles.centerMarkerLayer} pointerEvents="none">
-        <View style={styles.centerMarkerRing}>
-          <View style={styles.centerMarkerDot} />
-        </View>
-      </View>
+          <View style={styles.statusChip} testID="home-location-chip">
+            <LocationChipContent
+              status={status}
+              placeStatus={placeStatus}
+              placeLabel={placeLabel}
+              inServiceArea={inServiceArea}
+              onRelocate={onRelocate}
+            />
+          </View>
+        </>
+      )}
 
-      <View style={styles.controls}>
-        <Pressable onPress={onPressLocate} accessibilityRole="button" accessibilityLabel="Centralizar no local atual" style={styles.controlButton}>
-          <LocateFixed size={18} color={theme.role.textPrimary} strokeWidth={2} />
-        </Pressable>
-        <View style={styles.zoomGroup}>
-          <Pressable onPress={onPressZoomIn} accessibilityRole="button" accessibilityLabel="Aproximar mapa" style={styles.zoomButton}>
-            <Plus size={16} color={theme.role.textPrimary} strokeWidth={2.25} />
+      <View style={styles.bottomRow} pointerEvents="box-none">
+        <MockBadge label="mapa ilustrativo" testID="home-map-mock-badge" />
+        {showLocate ? (
+          <Pressable
+            {...focusProps}
+            onPress={onRelocate}
+            accessibilityRole="button"
+            accessibilityLabel="Centralizar no meu local"
+            style={[styles.controlButton, focusVisible && LOCATE_FOCUS_RING]}
+            testID="home-locate-button"
+          >
+            <LocateFixed size={18} color={theme.role.textPrimary} strokeWidth={2} />
           </Pressable>
-          <View style={styles.zoomDivider} />
-          <Pressable onPress={onPressZoomOut} accessibilityRole="button" accessibilityLabel="Afastar mapa" style={styles.zoomButton}>
-            <Minus size={16} color={theme.role.textPrimary} strokeWidth={2.25} />
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.addressChip}>
-        <MapPin size={14} color={theme.role.textSecondary} strokeWidth={2} />
-        <Text style={styles.addressText} numberOfLines={1}>
-          {currentAddress}
-        </Text>
+        ) : null}
       </View>
     </View>
   );
 });
+
+function LocationChipContent({
+  status,
+  placeStatus,
+  placeLabel,
+  inServiceArea,
+  onRelocate,
+}: Pick<HomeMapPreviewProps, 'status' | 'placeStatus' | 'placeLabel' | 'inServiceArea' | 'onRelocate'>) {
+  if (status === 'located') {
+    const title = placeStatus === 'ready' && placeLabel ? placeLabel : 'Você está aqui';
+    return (
+      <View style={styles.chipRow} accessibilityLiveRegion="polite">
+        <MapPin size={14} color={theme.role.textSecondary} strokeWidth={2} style={styles.chipIcon} />
+        <View style={styles.chipTextBlock}>
+          <Text style={styles.chipTitle} numberOfLines={2}>
+            {title}
+          </Text>
+          {placeStatus === 'loading' ? <Text style={styles.chipSupport}>Buscando o endereço…</Text> : null}
+          {placeStatus === 'ready' && inServiceArea === false ? (
+            <Text style={styles.chipWarning} testID="home-outside-area">
+              Fora da área atendida. Por enquanto, atendemos só a Grande Natal.
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <View style={styles.chipColumn} accessibilityLiveRegion="polite">
+        <View style={styles.chipRow}>
+          <MapPinOff size={14} color={theme.role.textSecondary} strokeWidth={2} style={styles.chipIcon} />
+          <Text style={[styles.chipTitle, styles.chipTextBlock]}>Não achamos sua localização.</Text>
+        </View>
+        <LinkButton label="Tentar de novo" onPress={onRelocate} role="button" align="flex-start" testID="home-location-retry" />
+      </View>
+    );
+  }
+
+  if (status === 'unavailable') {
+    return (
+      <View style={styles.chipRow}>
+        <MapPinOff size={14} color={theme.role.textSecondary} strokeWidth={2} style={styles.chipIcon} />
+        <Text style={[styles.chipSupport, styles.chipTextBlock]}>Localização indisponível neste aparelho. Digite o endereço de partida.</Text>
+      </View>
+    );
+  }
+
+  // idle, checking, locating
+  return (
+    <View style={styles.chipRow} accessibilityLiveRegion="polite">
+      <ActivityIndicator size="small" color={theme.role.textSecondary} />
+      <Text style={[styles.chipSupport, styles.chipTextBlock]}>Procurando sua localização…</Text>
+    </View>
+  );
+}
 
 const MAP_HEIGHT = 260;
 
@@ -111,9 +185,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.role.border,
   },
-  // Sangramento (ficha P03 §2): some a moldura de baixo e os cantos de baixo, e cresce para
-  // ocupar a sobra vertical em vez de uma altura fixa — mas nunca abaixo de `MAP_HEIGHT`
-  // (320×568, onde não há sobra para crescer).
+  // Sangramento (ficha P03 §2): some a moldura de baixo e os cantos de baixo, e cresce para ocupar a sobra vertical —
+  // mas nunca abaixo de `MAP_HEIGHT` (320×568, onde não há sobra para crescer).
   rootBleed: {
     height: undefined,
     flex: 1,
@@ -122,41 +195,13 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
   },
-  mockTag: { position: 'absolute', top: theme.spacing['2'], right: theme.spacing['2'], zIndex: 2 },
-  // Chip translúcido sobre o mapa (direção de arte §5/§9 item 7, `theme.role.glassOnMap`)
-  // — opaco, SEM blur. Precisa de fundo próprio porque o mapa agora é foto/ilustração
-  // (antes era `surfaceElevated` chapado, e o texto flutuava direto sobre ele).
-  glassChip: {
-    backgroundColor: theme.role.glassOnMap,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing['2'],
-    paddingVertical: 4,
-  },
-  cityChip: {
+  permissionLayer: {
     position: 'absolute',
     top: theme.spacing['3'],
     left: theme.spacing['3'],
-    backgroundColor: theme.role.glassOnMap,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing['2'],
-    paddingVertical: 4,
+    right: theme.spacing['3'],
   },
-  cityLabel: {
-    color: theme.role.textPrimary,
-    ...textStyle('bold', 'subtitle'),
-  },
-  landmark: {
-    position: 'absolute',
-    top: theme.spacing['8'],
-    left: theme.spacing['3'],
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  landmarkLabel: { color: theme.role.textSecondary, ...textStyle('medium', 'caption') },
-  // Camada cheia + `alignItems`/`justifyContent` centra o pino de verdade (meio exato da área
-  // visível), em vez de um `top` fixo em px que só batia com `MAP_HEIGHT`: no sangramento
-  // (`bleed`, altura variável por `flex`) o pino ficaria fora do centro.
+  // Camada cheia + `alignItems`/`justifyContent` centra o pino no meio exato da área visível.
   centerMarkerLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   centerMarkerRing: {
     width: 36,
@@ -175,12 +220,34 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: theme.role.ctaText,
   },
-  controls: {
+  // Chip translúcido sobre o mapa (`glassOnMap`, opaco, sem blur — direção de arte §5).
+  statusChip: {
     position: 'absolute',
     top: theme.spacing['3'],
+    left: theme.spacing['3'],
     right: theme.spacing['3'],
-    alignItems: 'center',
-    gap: theme.spacing['2'],
+    backgroundColor: theme.role.glassOnMap,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: theme.role.border,
+    paddingHorizontal: theme.spacing['3'],
+    paddingVertical: theme.spacing['2'],
+  },
+  chipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing['2'] },
+  chipColumn: { gap: theme.spacing['1'] },
+  chipIcon: { marginTop: 2 },
+  chipTextBlock: { flex: 1, gap: 2 },
+  chipTitle: { color: theme.role.textPrimary, ...textStyle('medium', 'small') },
+  chipSupport: { color: theme.role.textSecondary, ...textStyle('regular', 'small') },
+  chipWarning: { color: theme.role.warning, ...textStyle('medium', 'caption') },
+  bottomRow: {
+    position: 'absolute',
+    left: theme.spacing['3'],
+    right: theme.spacing['3'],
+    bottom: theme.spacing['3'],
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
   },
   controlButton: {
     width: theme.layout.touchTarget,
@@ -192,32 +259,4 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.role.border,
   },
-  zoomGroup: {
-    borderRadius: theme.layout.touchTarget / 2,
-    backgroundColor: theme.role.glassOnMap,
-    borderWidth: 1,
-    borderColor: theme.role.border,
-    overflow: 'hidden',
-  },
-  // Largura explícita (em vez de herdar do pai): com borderWidth no `zoomGroup`, o
-  // conteúdo esticado por `alignItems:stretch` mediria 2px a menos que os 44px exigidos
-  // (bug de alvo de toque já visto — ver memória bug_touch_target_hitslop_insuficiente).
-  zoomButton: { width: theme.layout.touchTarget, height: theme.layout.touchTarget, alignItems: 'center', justifyContent: 'center' },
-  zoomDivider: { height: 1, backgroundColor: theme.role.border },
-  addressChip: {
-    position: 'absolute',
-    bottom: theme.spacing['3'],
-    left: theme.spacing['3'],
-    right: theme.spacing['3'],
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: theme.role.glassOnMap,
-    borderRadius: theme.radius.pill,
-    paddingHorizontal: theme.spacing['3'],
-    paddingVertical: theme.spacing['2'],
-    borderWidth: 1,
-    borderColor: theme.role.border,
-  },
-  addressText: { flex: 1, color: theme.role.textPrimary, ...textStyle('medium', 'small') },
 });
