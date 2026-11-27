@@ -117,6 +117,82 @@ export const TELAS = [
     // Ficha P06 §título: "mesmo recorte da P05".
     recortePrancha: { x0: 1053, y0: 4, x1: 1305, y1: 516 },
   },
+  // P07/P08/P09 — onda 4: unificadas na rota `/corrida` (PP-10). `?devPhase=...` força a fase
+  // sem esperar os passos do simulador (ver `src/dev/useDevRidePhaseOverride.ts`), mesmo padrão
+  // de `?devSeed`/`?devAprovado`. Cada ID abaixo é UM estado da mesma tela, não uma rota nova.
+  {
+    id: 'P07',
+    app: 'passageiro',
+    nome: 'corrida-buscando',
+    rota: '/corrida?devPhase=searching_driver',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    // Ficha P07 §2: "sem recorte na prancha, herda o esqueleto da P05" — G-07b não se aplica.
+  },
+  {
+    id: 'P07b',
+    app: 'passageiro',
+    nome: 'corrida-nenhum-motorista',
+    rota: '/corrida?devPhase=failed',
+    estados: [ESTADOS.PADRAO],
+  },
+  {
+    id: 'P07c',
+    app: 'passageiro',
+    nome: 'corrida-motorista-cancelou',
+    rota: '/corrida?devPhase=driver_cancelled',
+    estados: [ESTADOS.PADRAO],
+  },
+  {
+    id: 'P07d',
+    app: 'passageiro',
+    nome: 'corrida-cancelada-por-terceiros',
+    rota: '/corrida?devPhase=cancelled',
+    estados: [ESTADOS.PADRAO],
+  },
+  {
+    id: 'P08',
+    app: 'passageiro',
+    nome: 'corrida-motorista-a-caminho',
+    rota: '/corrida?devPhase=driver_en_route',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_passageiro_2026-11-22.png',
+    // Ficha P08 §título: recorte "Corrida em andamento", 1309,12,1536,508 + folga de 8px.
+    recortePrancha: { x0: 1301, y0: 4, x1: 1544, y1: 516 },
+  },
+  {
+    id: 'P08b',
+    app: 'passageiro',
+    nome: 'corrida-motorista-chegou',
+    rota: '/corrida?devPhase=driver_arrived',
+    estados: [ESTADOS.PADRAO],
+    pranchaArquivo: 'alvo_passageiro_2026-11-22.png',
+    recortePrancha: { x0: 1301, y0: 4, x1: 1544, y1: 516 },
+  },
+  {
+    id: 'P09',
+    app: 'passageiro',
+    nome: 'corrida-em-andamento',
+    rota: '/corrida?devPhase=in_progress',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_passageiro_2026-11-22.png',
+    // Ficha P09 §título: "mesmo recorte da P08".
+    recortePrancha: { x0: 1301, y0: 4, x1: 1544, y1: 516 },
+  },
+  {
+    id: 'P10',
+    app: 'passageiro',
+    nome: 'concluida',
+    rota: '/concluida?devPhase=completed',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    // Ficha P10 §título: "sem recorte, herda a linguagem do Histórico (P11)" — G-07b não se aplica.
+  },
+  {
+    id: 'P10b',
+    app: 'passageiro',
+    nome: 'concluida-avaliada',
+    rota: '/concluida?devPhase=completed&devRated=1',
+    estados: [ESTADOS.PADRAO],
+  },
   {
     id: 'M05',
     app: 'motorista',
@@ -232,6 +308,58 @@ export const TELAS = [
     // Ficha M14 §Alvo visual: recorte 1336,516,1532,926 ("Suporte") + folga de 8px (mesmo recorte
     // da P14 — as duas herdam a mesma tela da prancha, cada app com a própria cópia da tela).
     recortePrancha: { x0: 1328, y0: 508, x1: 1540, y1: 934 },
+  },
+  {
+    id: 'M06',
+    app: 'motorista',
+    nome: 'nova-corrida',
+    rota: '/oferta',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_motorista_2026-11-22.png',
+    // Ficha M06 §Alvo visual: recorte "Solicitação de Corrida", 1053,14,1281,462 + folga de 8px.
+    recortePrancha: { x0: 1045, y0: 6, x1: 1289, y1: 470 },
+  },
+  {
+    id: 'M07',
+    app: 'motorista',
+    nome: 'a-caminho-do-embarque',
+    // PP-10: M07/M08/M09 são ESTADOS da mesma rota `/corrida` — `?devFase=` escolhe qual
+    // fotografar (padrão: `en_route`, nem precisa do parâmetro). `__DEV__` apenas.
+    rota: '/corrida',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_motorista_2026-11-22.png',
+    // Ficha M07 §Alvo visual: recorte "Navegação (GPS)", 290,516,487,926 + folga de 8px.
+    recortePrancha: { x0: 282, y0: 508, x1: 495, y1: 934 },
+  },
+  {
+    id: 'M08',
+    app: 'motorista',
+    nome: 'embarque',
+    rota: '/corrida?devFase=arrived',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_motorista_2026-11-22.png',
+    // Ficha M08 §Alvo visual: metade de cima do recorte "Corrida em Andamento", 1298,14,1528,462
+    // + folga de 8px (mesma caixa da M09; M08 usa só a metade de cima dela).
+    recortePrancha: { x0: 1290, y0: 6, x1: 1536, y1: 470 },
+  },
+  {
+    id: 'M09',
+    app: 'motorista',
+    nome: 'corrida-em-andamento',
+    rota: '/corrida?devFase=in_progress',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
+    pranchaArquivo: 'alvo_motorista_2026-11-22.png',
+    // Ficha M09 §Alvo visual: recorte "Corrida em Andamento", 1298,14,1528,462 + folga de 8px.
+    recortePrancha: { x0: 1290, y0: 6, x1: 1536, y1: 470 },
+  },
+  {
+    id: 'M10',
+    app: 'motorista',
+    nome: 'corrida-finalizada',
+    // Ficha M10 §Alvo visual: "sem recorte — herda o valor da M06 e o cartão-linha da M12" (mesmo
+    // padrão de P11b/M12b, sem `pranchaArquivo`/`recortePrancha` próprios).
+    rota: '/finalizada',
+    estados: [ESTADOS.PADRAO, ESTADOS.SEM_REDE],
   },
 ];
 

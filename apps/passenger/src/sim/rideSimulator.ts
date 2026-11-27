@@ -16,7 +16,7 @@
  *
  * A entrada em `searching_driver` continua sendo decidida e aplicada DIRETO pela store, de forma
  * síncrona (`requestRide`, antes de chamar `startRideSimulation`) — não dá para esperar a volta
- * de `port.request` (assíncrono) porque a tela de busca (`buscando.tsx`) navega para lá no mesmo
+ * de `port.request` (assíncrono) porque a tela de busca (`/corrida`, `corrida.tsx`) navega para lá no mesmo
  * tapa de botão e redireciona pra Home se a fase ainda não for `searching_driver` no primeiro
  * render. Este módulo só cria a corrida "de verdade" no mock em paralelo (microtask) e, ao
  * terminar, avança o MESMO mock para `searching_driver` antes de assinar — para o mock nunca
@@ -47,6 +47,8 @@ export interface RideSimulationCallbacks {
   readonly onRequestFailed: () => void;
   readonly onDriverAssigned: (driver: AssignedDriverInfo, pickupEtaMinutes: number) => void;
   readonly onPickupEta: (minutes: number) => void;
+  /** Código de embarque (D-12) lido de `port.status()`: o mock só o devolve de `driver_assigned` a `driver_arrived`. */
+  readonly onPickupCode: (code: string | undefined) => void;
   readonly onTripProgress: (percent: number, etaMinutes: number) => void;
   /** Corrida chegou a `completed` — quem chama monta o recibo (a store já sabe a tarifa pedida). */
   readonly onCompleted: () => void;
@@ -140,6 +142,11 @@ async function bootstrap(input: RideSimulationInput, callbacks: RideSimulationCa
       firstName: firstNameOf(MOCK_ASSIGNED_DRIVER.name),
       plate: MOCK_ASSIGNED_DRIVER.plate,
     });
+    // O evento de tempo real não traz o código (D-12): ele vem só do snapshot de `status()`.
+    void passengerRide.port.status(tripId).then((result) => {
+      if (myGeneration !== generation || !result.ok) return;
+      callbacks.onPickupCode(result.data.pickupCode);
+    });
   });
 }
 
@@ -170,7 +177,10 @@ function continueAfter(tripId: TripId, myGeneration: number, callbacks: RideSimu
       scheduleStep(tripId, myGeneration, callbacks, 'driver_arrived', STEP_DELAY_MS, undefined, () => callbacks.onPickupEta(0));
       break;
     case 'driver_arrived':
-      scheduleStep(tripId, myGeneration, callbacks, 'in_progress', 2200, undefined, () => callbacks.onTripProgress(0, TOTAL_TRIP_ETA_MINUTES));
+      scheduleStep(tripId, myGeneration, callbacks, 'in_progress', 2200, undefined, () => {
+        callbacks.onPickupCode(undefined); // o código só vale até o embarque
+        callbacks.onTripProgress(0, TOTAL_TRIP_ETA_MINUTES);
+      });
       break;
     case 'in_progress':
       startTripProgressTicks(tripId, myGeneration, callbacks);

@@ -1,5 +1,7 @@
 # P08 · Motorista atribuído (a caminho e chegou)
 
+> **Atualização de 27/11/2026 (Atlas):** o plano D-12 foi decidido pelo dono em 22/11/2026: **PIN em todas as categorias**. Onde esta ficha diz "se o plano D-12 for sim", leia "sempre". Contrato: `PassengerTripSnapshot.pickupCode` (4 algarismos, só de `driver_assigned` a `driver_arrived`) e `start` do motorista com `pickupCode` obrigatório.
+
 | Campo | Valor |
 |---|---|
 | App | passageiro |

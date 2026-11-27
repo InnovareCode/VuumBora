@@ -275,7 +275,7 @@ de transições **no servidor** (o app já tem a máquina dele, que só projeta)
 | `searching_driver`, `driver_assigned`, `driver_en_route`, `driver_arrived` | `cancelled` | passageiro, motorista, admin, sistema | Sempre com `actor` e `reason`; taxa de cancelamento conforme decisão 15 |
 | `driver_assigned` | `driver_en_route` | sistema | Pode ser automático no aceite; mantido separado para o app mostrar "a caminho" |
 | `driver_en_route` | `driver_arrived` | motorista | Validar distância do embarque (antifraude) |
-| `driver_arrived` | `in_progress` | motorista | Opcional: código de embarque (decisão do dono) |
+| `driver_arrived` | `in_progress` | motorista | Código de embarque obrigatório (D-12, decidido pelo dono em 22/11/2026: PIN em todas as categorias) |
 | `in_progress` | `completed` | motorista | Calcula tarifa final, grava ledger, dispara cobrança |
 | **`driver_assigned`, `driver_en_route`** | **`searching_driver`** | **motorista cancela** | **Lacuna no domínio atual:** hoje cancelamento do motorista mata a corrida. Proposta: volta para a busca, sem o passageiro refazer o pedido. Mudança de contrato para Vega + Cronos |
 

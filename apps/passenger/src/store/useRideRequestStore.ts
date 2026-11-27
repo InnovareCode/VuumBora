@@ -10,9 +10,9 @@ import { cancelActiveRide, startRideSimulation, stopRideSimulation } from '../si
 
 /**
  * Estado do PEDIDO/JORNADA DE CORRIDA, compartilhado entre Home (P03), Destino (P04),
- * Confirmação (P06), Busca (P07), Motorista a caminho (P08), Em andamento (P09) e
- * Concluída (P10) — nenhuma tela repassa isso por prop, todas leem/escrevem direto no
- * store (pedido do Atlas/arquitetura).
+ * Confirmação (P06), e `/corrida` (P07 busca + P08 motorista a caminho + P09 em andamento,
+ * unificadas pela PP-10) e Concluída (P10) — nenhuma tela repassa isso por prop, todas
+ * leem/escrevem direto no store (pedido do Atlas/arquitetura).
  *
  * `RideDraft`/`canRequestRide`/`transitionRide` vêm de `@vuumbora/domain/passenger` —
  * esta store nunca decide por conta própria se pode avançar de fase; ela sempre pergunta
@@ -59,6 +59,8 @@ export interface RideRequestState {
   readonly requestedCategory?: CategoryQuote | undefined;
 
   readonly assignedDriver?: AssignedDriverInfo | undefined;
+  /** Código de embarque (D-12) do `snapshot.pickupCode`: só existe de `driver_assigned` a `driver_arrived`. */
+  readonly pickupCode?: string | undefined;
   /** Minutos estimados até o EMBARQUE (P08) — simulado. */
   readonly pickupEtaMinutes?: number | undefined;
   /** Minutos estimados até o DESTINO (P09) — simulado. */
@@ -160,11 +162,12 @@ export const useRideRequestStore = create<RideRequestState>((set, get) => ({
 
     // A entrada em `searching_driver` fica síncrona e local (não espera `port.request` do mock,
     // que é assíncrono): a tela de busca navega pra lá no mesmo tapa de botão e checa a fase no
-    // primeiro render (`buscando.tsx`) — ver o cabeçalho de `rideSimulator.ts`.
+    // primeiro render (`/corrida`, `corrida.tsx`) — ver o cabeçalho de `rideSimulator.ts`.
     set({
       phase: toSearching.state,
       requestedCategory: selectedQuote,
       assignedDriver: undefined,
+      pickupCode: undefined,
       pickupEtaMinutes: undefined,
       tripEtaMinutes: undefined,
       tripProgressPercent: 0,
@@ -186,6 +189,7 @@ export const useRideRequestStore = create<RideRequestState>((set, get) => ({
         },
         onDriverAssigned: (driver, pickupEtaMinutes) => set({ assignedDriver: driver, pickupEtaMinutes }),
         onPickupEta: (minutes) => set({ pickupEtaMinutes: minutes }),
+        onPickupCode: (code) => set({ pickupCode: code }),
         onTripProgress: (percent, etaMinutes) => set({ tripProgressPercent: percent, tripEtaMinutes: etaMinutes }),
         onCompleted: () => {
           // O recibo sai da cotação REALMENTE pedida (`requestedCategory`), nunca da seleção atual.
@@ -205,6 +209,7 @@ export const useRideRequestStore = create<RideRequestState>((set, get) => ({
     set({
       phase: 'draft',
       assignedDriver: undefined,
+      pickupCode: undefined,
       pickupEtaMinutes: undefined,
       tripEtaMinutes: undefined,
       tripProgressPercent: 0,
@@ -230,6 +235,7 @@ export const useRideRequestStore = create<RideRequestState>((set, get) => ({
       requestedCategory: undefined,
       phase: 'draft',
       assignedDriver: undefined,
+      pickupCode: undefined,
       pickupEtaMinutes: undefined,
       tripEtaMinutes: undefined,
       tripProgressPercent: 0,

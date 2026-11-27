@@ -17,11 +17,19 @@
  * `control.setCategoryEnabled('pet', true)`. Pedir uma categoria que ainda está na lista mas ficou
  * `availability: 'none'` É aceito: se nenhum motorista aparecer no tempo máximo, a corrida termina
  * em `failed` (achado B1 da conferência).
+ *
+ * **Código de embarque (D-12, decidido pelo dono em 22/11/2026):** cada `request` gera um código
+ * de 4 algarismos para a corrida e o guarda na `TripStore` (compartilhada com o motorista, quando
+ * houver). O snapshot do passageiro só o mostra em `driver_assigned`/`driver_en_route`/
+ * `driver_arrived` (`isPickupCodeVisible`); o histórico nunca o guarda. `control.advance` para
+ * `in_progress` NÃO confere código: `control` é o simulador (faz o papel do motorista e do
+ * servidor), e quem confere é o `start` do motorista.
  */
-import { cancelTrip, TRIP_TRANSITIONS, transitionTrip } from '@vuumbora/domain';
+import { cancelTrip, isPickupCodeVisible, TRIP_TRANSITIONS, transitionTrip } from '@vuumbora/domain';
 import type { GeoPoint, Money, Place, TripId, TripStatus, TripTransitionResult } from '@vuumbora/domain';
 import { createIdempotencyCache, fingerprint } from '../trip/idempotency';
 import { createTripStore, DRIVER_ASSIGNED_STATUSES, type TripStore } from '../trip/mock-store';
+import { generatePickupCode, randomPickupCode } from '../trip/pickup-code';
 import { cancelConflict, failWith, notFound, quoteConflict, requestConflict, succeed, validation } from '../trip/result';
 import type { CancelActor, TripEvent, TripHistoryPage } from '../trip/types';
 import type {
@@ -73,6 +81,12 @@ export interface MockPassengerRideOptions {
   readonly nextId?: () => string;
   /** Fora da área de serviço (§3.1 do anexo — pino fora de Natal). Padrão: nunca. */
   readonly isOutsideServiceArea?: (place: Place) => boolean;
+  /**
+   * Gerador do código de embarque (D-12), um por corrida, chamado no `request`. Padrão: aleatório
+   * em `0000`–`9999`. Injetável para o teste saber o código; código fora do formato (4 algarismos)
+   * lança `TypeError` no `request`, porque é erro de configuração do teste.
+   */
+  readonly nextPickupCode?: () => string;
 }
 
 /** Hooks que progridem a corrida — o que o simulador antigo fazia a golpes de `setTimeout`. */
@@ -126,6 +140,7 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
   const store = options.store ?? createTripStore(clock);
   let counter = 0;
   const nextId = options.nextId ?? (() => `mock-${++counter}`);
+  const nextPickupCode = options.nextPickupCode ?? randomPickupCode;
 
   const fixtureById = new Map(fixtures.map((f) => [f.categoryId, f] as const));
   const enabledOverrides = new Map<string, boolean>();
@@ -174,6 +189,7 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
           // chegaram a cobrar nada. cancellationFee fica de fora até a decisão 15 (M6) existir.
           ...(event.status === 'completed' ? { fare: draft.fare } : {}),
           ...(driver ? { driver } : {}),
+          // D-12: o código de embarque NUNCA entra aqui (minimização, PP-14) — o rascunho nem o tem.
         });
         historyDrafts.delete(tripId);
       }
@@ -226,6 +242,7 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
 
       const tripId = nextId() as TripId;
       store.create(tripId, 'requested'); // B2: fica em requested (Pix antes da corrida, S5) — não avança sozinho
+      store.setPickupCode(tripId, generatePickupCode(nextPickupCode)); // D-12: um código por corrida, desde o pedido
       const fixture = fixtureById.get(found.categoryId);
       if (fixture) {
         historyDrafts.set(tripId, {
@@ -258,14 +275,24 @@ export function createMockPassengerRidePort(options: MockPassengerRideOptions = 
     return driverSummaries.get(record.assignedDriverId);
   }
 
+  /** D-12: o código só sai nas fases de `isPickupCodeVisible`; em qualquer outra, nem a chave existe no objeto. */
+  function pickupCodeFor(tripId: TripId, status: TripStatus): string | undefined {
+    return isPickupCodeVisible(status) ? store.pickupCode(tripId) : undefined;
+  }
+
   function buildSnapshot(
     tripId: TripId,
     record: { readonly status: TripStatus; readonly seq: number; readonly assignedDriverId?: string },
   ): PassengerTripSnapshot {
     const driver = driverSummaryFor(record);
-    return driver
-      ? { tripId, status: record.status, seq: record.seq, driver }
-      : { tripId, status: record.status, seq: record.seq };
+    const pickupCode = pickupCodeFor(tripId, record.status);
+    return {
+      tripId,
+      status: record.status,
+      seq: record.seq,
+      ...(driver ? { driver } : {}),
+      ...(pickupCode !== undefined ? { pickupCode } : {}),
+    };
   }
 
   async function status(tripId: TripId): Promise<Result<PassengerTripSnapshot>> {

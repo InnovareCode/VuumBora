@@ -22,13 +22,29 @@
  * `DriverTripSnapshot`, depois do aceite, e só para quem `assignedTripInfo` confirma ser o
  * atribuído (A3). `pickupDistanceM`/`pickupEtaS` vão arredondados (100 m / 1 min) — recomendação da
  * Nova: exatos estreitariam demais o quadrado aproximado do embarque.
+ *
+ * **Código de embarque (D-12, decidido pelo dono em 22/11/2026: PIN em todas as categorias):**
+ * `start` EXIGE o código. Ele mora na `TripStore` (é estado da corrida): com a store compartilhada,
+ * é o mesmo que o passageiro vê em `PassengerTripSnapshot.pickupCode`. Se a corrida ainda não tem
+ * código quando `control.offer` a recebe (mock só do motorista, sem passageiro), o `offer` gera um.
+ * O motorista nunca recebe o código (nem na oferta, nem no snapshot, nem no evento) — o teste, ou
+ * o simulador do app, o define por `control.setPickupCode` para "fazer o papel do passageiro".
  */
-import { cancelTrip, toApproximatePlace, toTripRange, TRIP_TRANSITIONS, transitionTrip } from '@vuumbora/domain';
+import {
+  cancelTrip,
+  isPickupCodeFormat,
+  PICKUP_CODE_LENGTH,
+  toApproximatePlace,
+  toTripRange,
+  TRIP_TRANSITIONS,
+  transitionTrip,
+} from '@vuumbora/domain';
 import type { Money, Place, TripId, TripStatus } from '@vuumbora/domain';
 import type { DriverPhase, RideOffer, VerificationStatus } from '@vuumbora/domain/driver';
 import type { Result } from '../index';
 import { createIdempotencyCache, fingerprint, type IdempotencyCache } from '../trip/idempotency';
 import { createTripStore, type TripStore } from '../trip/mock-store';
+import { generatePickupCode, randomPickupCode } from '../trip/pickup-code';
 import {
   acceptConflict,
   availabilityConflict,
@@ -47,6 +63,7 @@ import type {
   DriverJourneyPort,
   DriverLocationPort,
   DriverOfferPort,
+  DriverStartTripInput,
   DriverTripHistoryEntry,
   DriverTripHistoryInput,
   DriverTripHistoryPort,
@@ -131,6 +148,12 @@ export interface MockDriverRideOptions {
   /** Estado inicial da conta, para C3. Padrão: `'approved'`/sem documento vencido. */
   readonly verificationStatus?: VerificationStatus;
   readonly documentExpired?: boolean;
+  /**
+   * Gerador do código de embarque (D-12), usado só quando `control.offer` recebe uma corrida que
+   * ainda não tem código (mock só do motorista). Corrida criada pelo passageiro já chega com o
+   * código dele. Padrão: aleatório em `0000`–`9999`.
+   */
+  readonly nextPickupCode?: () => string;
 }
 
 export interface MockDriverRideControl {
@@ -139,7 +162,12 @@ export interface MockDriverRideControl {
   takeOffer(offerId: string): void;
   /** Força a expiração (sem esperar o relógio) — o próximo `accept` recebe `offer_expired`; emite `offer.revoked`. */
   expireOffer(offerId: string): void;
-  /** Define o código de embarque esperado por `start` (D-12, em aberto). Sem chamar isto, `start` aceita qualquer código. */
+  /**
+   * Troca o código de embarque da corrida (D-12) — o teste, ou o simulador do app, "faz o papel do
+   * passageiro" e passa a saber o código que o `start` confere. Grava na `TripStore`: com a store
+   * compartilhada, o passageiro passa a ver o mesmo código. Zera as tentativas DESTE motorista na
+   * corrida. Código fora do formato (4 algarismos) lança `TypeError` (erro de configuração do teste).
+   */
   setPickupCode(tripId: TripId, code: string): void;
   setVerificationStatus(status: VerificationStatus): void;
   setDocumentExpired(expired: boolean): void;
@@ -165,6 +193,7 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
   let counter = 0;
   const nextId = options.nextId ?? (() => `mock-${++counter}`);
   const driverId = options.driverId ?? `driver-${nextId()}`;
+  const nextPickupCode = options.nextPickupCode ?? randomPickupCode;
 
   let verificationStatus: VerificationStatus = options.verificationStatus ?? 'approved';
   let documentExpired = options.documentExpired ?? false;
@@ -172,7 +201,6 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
 
   const offers = new Map<string, OfferRecord>();
   const tripInfoById = new Map<TripId, TripInfo>();
-  const pickupCodes = new Map<TripId, string>();
   const startAttempts = new Map<TripId, number>();
   const offerSubscribers = new Set<(event: OfferEvent) => void>();
   const receivedLocations: LocationFix[] = [];
@@ -236,6 +264,9 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
   function offer(input: OfferInput): RideOffer {
     const tripId = input.tripId ?? (nextId() as TripId);
     if (!store.get(tripId)) store.create(tripId, 'searching_driver');
+    // D-12: toda corrida que chega a um motorista tem código. A do passageiro já vem com o dele;
+    // a criada aqui (mock só do motorista) ganha um agora.
+    if (store.pickupCode(tripId) === undefined) store.setPickupCode(tripId, generatePickupCode(nextPickupCode));
     const tripDistanceM = input.tripDistanceM ?? DEFAULT_TRIP_DISTANCE_M;
     const tripDurationS = input.tripDurationS ?? DEFAULT_TRIP_DURATION_S;
     tripInfoById.set(tripId, {
@@ -402,15 +433,30 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
   }
 
   /**
-   * R3 (reconferência da Nova): a ordem das checagens é 404 (não é o atribuído) → 409 (fase errada)
-   * → 400 (código errado) → 429 (muitas tentativas). Antes, o código era checado ANTES da
-   * atribuição — qualquer motorista que recebeu a oferta (o `tripId` vai em toda `RideOffer`)
-   * conseguia confirmar que a corrida existe e gastava as tentativas do motorista ATRIBUÍDO.
-   * `pickupCodes`/`startAttempts` são por INSTÂNCIA (um motorista) e só alcançados depois do 404,
-   * então as tentativas já contam por corrida E motorista, e só as do atribuído.
+   * Ordem das checagens (JSDoc de `DriverTripPort.start`): 400 de formato → 404 (não é o
+   * atribuído) → 409 (fase errada) → 429 (muitas tentativas) → 400 (código errado, conta tentativa).
+   *
+   * - **400 de formato (D-12):** o código é obrigatório. Falta ou formato inválido é validação do
+   *   CORPO, como o servidor faz antes de tocar no banco: responde igual exista a corrida ou não,
+   *   não conta tentativa e não entra no cache de idempotência (a requisição nem começou; a mesma
+   *   chave, com o corpo corrigido, segue valendo).
+   * - **R3 (reconferência da Nova):** a atribuição vem antes de tudo que toca as tentativas. Antes,
+   *   o código era checado ANTES da atribuição, e qualquer motorista que recebeu a oferta (o
+   *   `tripId` vai em toda `RideOffer`) gastava as tentativas do motorista ATRIBUÍDO.
+   *   `startAttempts` é por INSTÂNCIA (um motorista) e só é alcançado depois do 404, então as
+   *   tentativas contam por corrida E motorista, e só as do atribuído.
    */
-  async function start(tripId: TripId, input: { readonly pickupCode?: string }, idempotencyKey: string): Promise<Result<DriverTripSnapshot>> {
-    const body = fingerprint({ tripId, ...input });
+  async function start(tripId: TripId, input: DriverStartTripInput, idempotencyKey: string): Promise<Result<DriverTripSnapshot>> {
+    // Entrada não confiável: o tipo diz obrigatório, mas quem chama pode ser JS ou um corpo de rede.
+    const pickupCode: unknown = (input as { readonly pickupCode?: unknown } | null | undefined)?.pickupCode;
+    if (pickupCode === undefined || pickupCode === null || pickupCode === '') {
+      return failWith(validation({ pickupCode: 'Informe o código de embarque.' })); // 400, não conta tentativa
+    }
+    if (!isPickupCodeFormat(pickupCode)) {
+      return failWith(validation({ pickupCode: `O código de embarque tem ${PICKUP_CODE_LENGTH} números.` })); // 400, não conta tentativa
+    }
+
+    const body = fingerprint({ tripId, pickupCode });
     const cached = startCache.get(idempotencyKey);
     if (cached) return cached.fingerprint === body ? cached.result : failWith(driverActionConflict('idempotency_key_reused'));
 
@@ -420,14 +466,14 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
       const outcome = transitionTrip(found.status, 'in_progress');
       if (!outcome.ok) return failWith(driverActionConflict('invalid_transition')); // 409
 
-      const expected = pickupCodes.get(tripId);
-      if (expected !== undefined) {
-        const attempts = startAttempts.get(tripId) ?? 0;
-        if (attempts >= START_CODE_ATTEMPTS) return failWith({ kind: 'rate_limited', retryAfterSeconds: 30 }); // 429
-        if (input.pickupCode !== expected) {
-          startAttempts.set(tripId, attempts + 1);
-          return failWith(validation({ pickupCode: 'Código de embarque incorreto.' })); // 400
-        }
+      const attempts = startAttempts.get(tripId) ?? 0;
+      if (attempts >= START_CODE_ATTEMPTS) return failWith({ kind: 'rate_limited', retryAfterSeconds: 30 }); // 429
+      // Falha FECHADA por construção: `pickupCode` já é texto de 4 algarismos, então nunca é igual a
+      // `undefined`. Corrida sem código (não acontece por caminho público; o `offer` garante um)
+      // conta como código errado, nunca deixa começar sem código.
+      if (pickupCode !== store.pickupCode(tripId)) {
+        startAttempts.set(tripId, attempts + 1);
+        return failWith(validation({ pickupCode: 'Código de embarque incorreto.' })); // 400, conta tentativa
       }
       store.setStatus(tripId, outcome.state);
       startAttempts.delete(tripId);
@@ -529,7 +575,7 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
       resolveOffer(offerId, 'expired');
     },
     setPickupCode(tripId, code) {
-      pickupCodes.set(tripId, code);
+      store.setPickupCode(tripId, generatePickupCode(() => code)); // mesma conferência de formato do gerador
       startAttempts.delete(tripId);
     },
     setVerificationStatus(status) {

@@ -57,7 +57,7 @@ export default function ConfirmationScreen() {
     if (!canRequest || submitting) return;
     setSubmitting(true);
     requestRide();
-    router.replace('/buscando');
+    router.replace('/corrida');
   }
 
   return (

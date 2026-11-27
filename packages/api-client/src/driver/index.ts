@@ -14,6 +14,7 @@ export type {
   DriverJourneyPort,
   DriverLocationPort,
   DriverOfferPort,
+  DriverStartTripInput,
   DriverTripHistoryEntry,
   DriverTripHistoryInput,
   DriverTripHistoryPort,

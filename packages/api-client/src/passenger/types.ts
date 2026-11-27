@@ -80,6 +80,28 @@ export interface TripDriverSummary {
  */
 export interface PassengerTripSnapshot extends TripBaseSnapshot {
   readonly driver?: TripDriverSummary;
+  /**
+   * Código de embarque (plano D-12; decisão do dono em 22/11/2026: PIN em todas as categorias). O
+   * passageiro diz este código ao motorista, e a corrida só começa com ele
+   * (`DriverTripPort.start`).
+   *
+   * - **Formato:** exatamente 4 algarismos, como texto (`"0482"`: zero à esquerda vale, por isso não
+   *   é número). Regra em `isPickupCodeFormat`, `@vuumbora/domain`.
+   * - **Quando aparece:** só em `driver_assigned`, `driver_en_route` e `driver_arrived`
+   *   (`isPickupCodeVisible`, `@vuumbora/domain`). Ausente antes de haver motorista, ausente a partir
+   *   de `in_progress` e nas fases terminais.
+   * - **Um por corrida:** gerado no pedido e estável até o fim, mesmo se um motorista devolver a
+   *   corrida para a busca e outro assumir. Só se diz o código em `driver_arrived`, e dali a corrida
+   *   não volta para a busca; quem saiu antes nunca o ouviu, e a guarda de atribuição (A3) impede
+   *   quem saiu de usar o `start`.
+   * - **Nunca no histórico** (`PassengerTripHistoryEntry` não tem este campo, minimização PP-14) e
+   *   **nunca no lado do motorista** (`DriverTripSnapshot`, `RideOffer` e os eventos de tempo real
+   *   não o carregam): o motorista pede o código, e é isso que prova que o passageiro entrou no
+   *   carro certo.
+   * - **Não vem no evento de tempo real.** O evento `status` avisa a fase; quem precisa do código
+   *   lê `status()`, como já faz com `driver`.
+   */
+  readonly pickupCode?: string;
 }
 
 /** `GET /v1/trips?cursor`, página de histórico. Nunca "todas de uma vez" — paginação sempre. */

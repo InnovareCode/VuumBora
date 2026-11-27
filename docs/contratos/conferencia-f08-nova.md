@@ -267,7 +267,8 @@ motorista atribuído.**
 **C1. `driver/types.ts`: ações do motorista na corrida.**
 - Métodos novos, todos devolvendo `Result<DriverTripSnapshot>`:
   - `DriverTripPort.arrived(tripId, idempotencyKey)`;
-  - `start(tripId, { pickupCode? }, idempotencyKey)`;
+  - `start(tripId, { pickupCode? }, idempotencyKey)`; *(superado em 27/11/2026: com a D-12 decidida, o código é
+    obrigatório. Ver "Atualização do contrato: código de embarque, D-12", no fim deste documento.)*
   - `complete(tripId, { deliveryCode? }, idempotencyKey)`.
 - Erros: `409 invalid_transition`, `400 validation` (`pickupCode`) e `429` depois de várias tentativas erradas.
 - O mock usa a mesma validação do domínio.
@@ -296,7 +297,8 @@ motorista atribuído.**
 
 - `GET /v1/categories`: nome e descrição vindos do servidor, não do mockup. Entra antes da tela de escolha de categoria.
 - Snapshot do passageiro: veículo (modelo e cor), `etaS`, estimativa, `pickupCode` (D-12), motivo de `failed` e causa da
-  volta à busca ("seu motorista cancelou, buscando outro").
+  volta à busca ("seu motorista cancelou, buscando outro"). *(`pickupCode` entrou em 27/11/2026, ver o fim deste
+  documento.)*
 - Avaliação, recibo, histórico, compartilhar e SOS: fatia própria, antes das telas P10, P11 e P14.
 - Favorito: S4 (resposta 3). Pagamento, ledger, ganhos e repasses: S5.
 - Coerência de tipos: `Quote.expiresAt` e `TripEvent.sentAt` como `IsoDateTime`; `driverId` como `DriverId`.
@@ -560,3 +562,73 @@ Os cenários que já passavam continuam passando:
    `apps/driver/src/components/home/NewRideOfferCard.tsx` recebe `passengerName` e `pickupAddress`. As duas decisões
    do dono proíbem isso antes do aceite. O cartão passa a receber os bairros do embarque e do destino, sem o nome do
    passageiro.
+
+---
+
+## Atualização do contrato: código de embarque, D-12 (Vega, 27/11/2026)
+
+**Por quê:** o dono decidiu em 22/11/2026 "PIN em todas as categorias; o passageiro informa o código para a corrida
+começar" (`docs/decisoes-do-dono.md`, tabela "Corrida", linha D-12). Até aqui, o item C1 acima previa
+`start(tripId, { pickupCode? }, ...)` com o código opcional, e o item D deixava `pickupCode` no snapshot do passageiro
+como dívida. As duas coisas mudam. Este bloco é o contrato em vigor; o texto da Nova acima fica como registro.
+
+**Arquivos:** `packages/domain/src/pickup-code.ts` (regra), `packages/api-client/src/passenger/types.ts`,
+`packages/api-client/src/driver/types.ts`, os dois `mock-adapter.ts`, `packages/api-client/src/trip/mock-store.ts`,
+`packages/api-client/src/trip/pickup-code.ts` (gerador do mock) e o README do `api-client`, que traz a descrição completa.
+
+### Formato
+
+Exatamente **4 algarismos ASCII, como texto** (`"0482"`: zero à esquerda vale, por isso não é número). Sem espaço,
+traço ou normalização; o app envia só os algarismos. Regra única em `isPickupCodeFormat` (`@vuumbora/domain`, raiz:
+as duas pontas e o servidor usam a mesma). 4 algarismos é o que as fichas P08 e M08 desenharam. Com 5 tentativas por
+corrida e motorista antes do `429`, acertar no chute tem chance de 5 em 10.000.
+
+### Lado do passageiro: `PassengerTripSnapshot.pickupCode?: string`
+
+| Fase | `pickupCode` |
+|---|---|
+| `requested`, `searching_driver` | ausente (a chave nem existe) |
+| `driver_assigned`, `driver_en_route`, `driver_arrived` | presente |
+| `in_progress`, `completed`, `cancelled`, `failed` | ausente |
+
+- A regra das fases mora em `isPickupCodeVisible` (`@vuumbora/domain`).
+- **Um código por corrida**, gerado no pedido e estável até o fim. Se o motorista devolve a corrida para a busca e
+  outro assume, o código continua o mesmo. Isso é seguro porque o código só é dito em `driver_arrived`, e dali a
+  corrida não volta para a busca: quem saiu antes nunca o ouviu. Além disso, a guarda A3 impede quem saiu de chamar o
+  `start`.
+- **Minimização (PP-14):** nunca no histórico (`PassengerTripHistoryEntry` não tem o campo) e nunca nos eventos de
+  tempo real. O evento avisa a fase, e o código vem por `status()`, como `driver`.
+
+### Lado do motorista: nunca vê o código
+
+`DriverTripSnapshot`, `RideOffer`, `offer.created`, os eventos da corrida e o histórico do motorista não carregam o
+código em fase nenhuma. O motorista PEDE o código ao passageiro. É isso que prova que o passageiro entrou no carro
+certo, e é o risco que o item (2) desta conferência apontou.
+
+### `start(tripId, { pickupCode }, idempotencyKey)`: código obrigatório
+
+A entrada é `DriverStartTripInput = { pickupCode: string }`. A assinatura continua a mesma; só o campo deixou de ser
+opcional.
+
+| # | Situação | Resposta | Conta tentativa? |
+|---|---|---|---|
+| 1 | falta o código (`{}`, `null`, `""`) | `400 validation`, `fields.pickupCode` | não |
+| 1 | formato inválido | `400 validation`, `fields.pickupCode` | não |
+| 2 | motorista não é o atribuído, ou a corrida não existe | `404 not_found` | não |
+| 3 | corrida fora de `driver_arrived` | `409 invalid_transition` | não |
+| 4 | 5 erros anteriores nesta corrida, por este motorista | `429 rate_limited` | — |
+| 5 | código errado | `400 validation`, `fields.pickupCode` ("Código de embarque incorreto.") | sim |
+
+- O passo 1 valida o corpo e vem antes de tudo, como o servidor faz antes de ir ao banco. Ele responde igual, exista a
+  corrida ou não, e **não ocupa a chave de idempotência**.
+- A ordem do R3 continua: a atribuição vem antes de qualquer coisa que toque as tentativas.
+- O app distingue "faltou ou formato" de "errado" pelo texto de `fields.pickupCode`. Os textos estão no README.
+
+### Pontos para o S4 (servidor real)
+
+- Gerar o código com `crypto.randomInt(0, 10000)` e formatar com 4 algarismos (zero à esquerda), um por corrida, na
+  criação.
+- Guardar o código fora de qualquer projeção do motorista.
+- O `429` precisa expirar: no mock ele não expira, e isso já está na observação 2 da Reconferência 2.
+- Comparar em tempo constante não é necessário: com 4 algarismos e o limite de 5 tentativas, o limite é a proteção.
+- Apagar o código (ou deixar de devolvê-lo) a partir de `in_progress`. O histórico nunca o lê.

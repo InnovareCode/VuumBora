@@ -504,3 +504,161 @@ describe('history — PP-12, item 3 (período no histórico do passageiro)', () 
     if (page.ok) assert.deepEqual(page.data.items, []);
   });
 });
+
+describe('D-12 — código de embarque no snapshot do passageiro (decisão do dono, 22/11/2026)', () => {
+  /** Pedido com chave VARIÁVEL — `quotedAndRequested` usa chave fixa e colide se chamado duas vezes no mesmo mock. */
+  async function requestTrip(mock: ReturnType<typeof createMockPassengerRidePort>, key: string): Promise<TripId> {
+    const quoteResult = await mock.port.quote({ origin: ORIGIN, destination: DESTINATION });
+    if (!quoteResult.ok) return assert.fail('cotação de apoio deveria passar');
+    const requested = await mock.port.request({ quoteId: firstCategory(quoteResult.data).quoteId, paymentMethodId: 'pm_1' }, key);
+    if (!requested.ok) return assert.fail('pedido de apoio deveria passar');
+    return requested.data.tripId;
+  }
+
+  async function snapshotOf(mock: ReturnType<typeof createMockPassengerRidePort>, tripId: TripId) {
+    const result = await mock.port.status(tripId);
+    if (!result.ok) return assert.fail('status deveria passar');
+    return result.data;
+  }
+
+  test('antes de haver motorista (requested, searching_driver): o campo nem existe no snapshot', async () => {
+    const mock = createMockPassengerRidePort({ clock: () => 0, nextPickupCode: () => '0482' });
+    const tripId = await requestTrip(mock, 'k1');
+    assert.ok(!('pickupCode' in (await snapshotOf(mock, tripId))), 'requested');
+    mock.control.advance(tripId, 'searching_driver');
+    assert.ok(!('pickupCode' in (await snapshotOf(mock, tripId))), 'searching_driver');
+  });
+
+  test('atribuído, a caminho e no local: o MESMO código de 4 algarismos (status e control.snapshot)', async () => {
+    const mock = createMockPassengerRidePort({ clock: () => 0, nextPickupCode: () => '0482' });
+    const tripId = await requestTrip(mock, 'k1');
+    mock.control.advance(tripId, 'searching_driver');
+    mock.control.advance(tripId, 'driver_assigned', 'd1');
+    assert.equal((await snapshotOf(mock, tripId)).pickupCode, '0482', 'driver_assigned (zero à esquerda preservado: é texto)');
+    mock.control.advance(tripId, 'driver_en_route');
+    assert.equal((await snapshotOf(mock, tripId)).pickupCode, '0482', 'driver_en_route');
+    mock.control.advance(tripId, 'driver_arrived');
+    assert.equal((await snapshotOf(mock, tripId)).pickupCode, '0482', 'driver_arrived');
+    assert.equal(mock.control.snapshot(tripId)?.pickupCode, '0482');
+  });
+
+  test('some em in_progress e em completed — a chave nem existe', async () => {
+    const mock = createMockPassengerRidePort({ clock: () => 0, nextPickupCode: () => '0482' });
+    const tripId = await requestTrip(mock, 'k1');
+    for (const to of ['searching_driver', 'driver_assigned', 'driver_en_route', 'driver_arrived', 'in_progress'] as const) {
+      assert.ok(mock.control.advance(tripId, to, to === 'driver_assigned' ? 'd1' : undefined).ok, to);
+    }
+    assert.ok(!('pickupCode' in (await snapshotOf(mock, tripId))), 'in_progress');
+    mock.control.advance(tripId, 'completed');
+    assert.ok(!('pickupCode' in (await snapshotOf(mock, tripId))), 'completed');
+  });
+
+  test('passageiro cancela com o motorista no local: cancelled não mostra o código', async () => {
+    const mock = createMockPassengerRidePort({ clock: () => 0, nextPickupCode: () => '0482' });
+    const tripId = await requestTrip(mock, 'k1');
+    for (const to of ['searching_driver', 'driver_assigned', 'driver_en_route', 'driver_arrived'] as const) {
+      mock.control.advance(tripId, to, to === 'driver_assigned' ? 'd1' : undefined);
+    }
+    assert.ok((await mock.port.cancel(tripId, {}, 'cancel-1')).ok);
+    const snapshot = await snapshotOf(mock, tripId);
+    assert.equal(snapshot.status, 'cancelled');
+    assert.ok(!('pickupCode' in snapshot));
+  });
+
+  test('motorista devolve a corrida: some durante a busca e volta o MESMO código com o novo motorista (um por corrida)', async () => {
+    const mock = createMockPassengerRidePort({ clock: () => 0, nextPickupCode: () => '0482' });
+    const tripId = await requestTrip(mock, 'k1');
+    mock.control.advance(tripId, 'searching_driver');
+    mock.control.advance(tripId, 'driver_assigned', 'A');
+    assert.equal((await snapshotOf(mock, tripId)).pickupCode, '0482');
+    assert.deepEqual(mock.control.cancel(tripId, 'driver'), { ok: true, state: 'searching_driver' });
+    assert.ok(!('pickupCode' in (await snapshotOf(mock, tripId))), 'de volta à busca: sem motorista, sem código');
+    mock.control.advance(tripId, 'driver_assigned', 'B');
+    assert.equal((await snapshotOf(mock, tripId)).pickupCode, '0482');
+  });
+
+  test('nunca no histórico — nem na corrida concluída, nem na cancelada com o motorista no local', async () => {
+    const codes = ['4821', '5937'];
+    const mock = createMockPassengerRidePort({ clock: () => 0, nextPickupCode: () => codes.shift() ?? '0000' });
+    const completedTrip = await requestTrip(mock, 'k1');
+    for (const to of ['searching_driver', 'driver_assigned', 'driver_en_route', 'driver_arrived', 'in_progress', 'completed'] as const) {
+      mock.control.advance(completedTrip, to, to === 'driver_assigned' ? 'd1' : undefined);
+    }
+    const cancelledTrip = await requestTrip(mock, 'k2');
+    for (const to of ['searching_driver', 'driver_assigned', 'driver_en_route', 'driver_arrived'] as const) {
+      mock.control.advance(cancelledTrip, to, to === 'driver_assigned' ? 'd2' : undefined);
+    }
+    assert.equal((await snapshotOf(mock, cancelledTrip)).pickupCode, '5937', 'o código existia antes do cancelamento');
+    await mock.port.cancel(cancelledTrip, {}, 'cancel-2');
+
+    const page = await mock.port.history({});
+    if (!page.ok) return assert.fail('histórico deveria passar');
+    assert.equal(page.data.items.length, 2);
+    const serialized = JSON.stringify(page.data);
+    assert.ok(!serialized.includes('pickupCode'), 'o campo não existe no histórico');
+    assert.ok(!serialized.includes('4821') && !serialized.includes('5937'), 'nem o valor');
+  });
+
+  test('nunca nos eventos de tempo real — o evento avisa a fase; o código vem só pelo status()', async () => {
+    const mock = createMockPassengerRidePort({ clock: () => 0, nextPickupCode: () => '4821' });
+    const tripId = await requestTrip(mock, 'k1');
+    const events: TripEvent[] = [];
+    mock.port.subscribe(tripId, (event) => events.push(event));
+    for (const to of ['searching_driver', 'driver_assigned', 'driver_en_route', 'driver_arrived', 'in_progress', 'completed'] as const) {
+      mock.control.advance(tripId, to, to === 'driver_assigned' ? 'd1' : undefined);
+    }
+    mock.control.emitLocation(tripId, { latitude: -5.7912, longitude: -35.2034 });
+    assert.ok(events.length > 0);
+    assert.ok(!JSON.stringify(events).includes('pickupCode') && !JSON.stringify(events).includes('4821'));
+  });
+
+  test('um código por corrida: corridas diferentes ganham códigos diferentes; retry idempotente não gera outro', async () => {
+    let calls = 0;
+    const sequence = ['1111', '2222'];
+    const mock = createMockPassengerRidePort({
+      clock: () => 0,
+      nextPickupCode: () => {
+        calls += 1;
+        return sequence.shift() ?? '9999';
+      },
+    });
+    const first = await requestTrip(mock, 'k1');
+    const second = await requestTrip(mock, 'k2');
+    assert.equal(calls, 2);
+    for (const [tripId, code] of [[first, '1111'], [second, '2222']] as const) {
+      mock.control.advance(tripId, 'searching_driver');
+      mock.control.advance(tripId, 'driver_assigned', 'd1');
+      assert.equal((await snapshotOf(mock, tripId)).pickupCode, code);
+    }
+
+    // Mesma chave e mesmo corpo do pedido anterior: devolve a mesma corrida, sem gerar código novo.
+    const quote = await mock.port.quote({ origin: ORIGIN, destination: DESTINATION });
+    if (!quote.ok) return assert.fail('cotação');
+    const original = await mock.port.request({ quoteId: firstCategory(quote.data).quoteId, paymentMethodId: 'pm_1' }, 'k3');
+    if (!original.ok) return assert.fail('pedido');
+    const replay = await mock.port.request({ quoteId: firstCategory(quote.data).quoteId, paymentMethodId: 'pm_1' }, 'k3');
+    assert.ok(replay.ok && replay.data.tripId === original.data.tripId);
+    assert.equal(calls, 3, 'o replay idempotente não chamou o gerador de novo');
+  });
+
+  test('gerador padrão: sempre 4 algarismos ASCII, e varia entre corridas', async () => {
+    const mock = createMockPassengerRidePort({ clock: () => 0 });
+    const codes = new Set<string>();
+    for (let i = 0; i < 200; i += 1) {
+      const tripId = await requestTrip(mock, `k-${i}`);
+      mock.control.advance(tripId, 'searching_driver');
+      mock.control.advance(tripId, 'driver_assigned', 'd1');
+      const code = (await snapshotOf(mock, tripId)).pickupCode;
+      assert.ok(code !== undefined && /^[0-9]{4}$/.test(code), `fora do formato: ${String(code)}`);
+      codes.add(code);
+    }
+    assert.ok(codes.size > 1, 'o gerador padrão não pode devolver sempre o mesmo código');
+  });
+
+  test('gerador injetado fora do formato lança TypeError no pedido (erro de configuração do teste, falha alto)', async () => {
+    const mock = createMockPassengerRidePort({ clock: () => 0, nextPickupCode: () => '12345' });
+    const quote = await mock.port.quote({ origin: ORIGIN, destination: DESTINATION });
+    if (!quote.ok) return assert.fail('cotação');
+    await assert.rejects(mock.port.request({ quoteId: firstCategory(quote.data).quoteId, paymentMethodId: 'pm_1' }, 'k1'), TypeError);
+  });
+});

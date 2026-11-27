@@ -4,8 +4,8 @@
  * "motorista" de verdade vendo a mesma corrida que o "passageiro") passa a MESMA instância para os
  * dois lados — ver README, "os dois lados com a mesma corrida".
  *
- * Só guarda a BASE comum (status, `seq`, quem está atribuído) + quem está inscrito no canal de
- * tempo real; dado específico de perfil (resumo do motorista para o passageiro, endereço completo
+ * Só guarda a BASE comum (status, `seq`, quem está atribuído, o código de embarque) + quem está
+ * inscrito no canal de tempo real; dado específico de perfil (resumo do motorista para o passageiro, endereço completo
  * do embarque para o motorista) mora em cada `mock-adapter.ts` — isso é o B4 da conferência da
  * Nova. A validação de CADA transição é sempre do domínio (`cancelTrip`/`transitionTrip`), nunca
  * decidida aqui.
@@ -17,6 +17,8 @@ interface TripRecord {
   status: TripStatus;
   seq: number;
   assignedDriverId?: string;
+  /** Código de embarque (D-12). Fora de `TripStoreRecord`/`snapshot()` de propósito: ver `pickupCode()`. */
+  pickupCode?: string;
   readonly subscribers: Set<(event: TripEvent) => void>;
 }
 
@@ -58,6 +60,19 @@ export interface TripStore {
    * de `driver_assigned`, sem reatribuir).
    */
   setStatus(tripId: TripId, status: TripStatus, assignedDriverId?: string): void;
+  /**
+   * Código de embarque da corrida (D-12): é estado da CORRIDA no servidor, não dado de um perfil,
+   * por isso mora aqui e não num `Map` de cada mock. Com a store compartilhada, o código que o
+   * passageiro vê é exatamente o que o `start` do motorista confere (fonte única, mesma lição do
+   * R2: dado derivado nunca vive numa cópia à parte). Quem gera é o mock que cria a corrida
+   * (`request` do passageiro; `offer` do motorista quando a corrida ainda não tem código).
+   *
+   * Fica FORA de `get()`/`snapshot()` de propósito: nenhum snapshot montado a partir do registro
+   * carrega o código sem alguém pedir por ele com este nome. Só o snapshot do passageiro pede, e
+   * só nas fases de `isPickupCodeVisible`.
+   */
+  setPickupCode(tripId: TripId, code: string): void;
+  pickupCode(tripId: TripId): string | undefined;
   /** Emite um ping de localização para quem está inscrito (não muda o status, não cria `seq` novo). */
   emitLocation(tripId: TripId, point: GeoPoint, extra?: { readonly heading?: number; readonly at?: string }): void;
   /**
@@ -101,6 +116,13 @@ export function createTripStore(clock: () => number = Date.now): TripStore {
         delete record.assignedDriverId;
       }
       notify(record, statusEvent(record));
+    },
+    setPickupCode(tripId, code) {
+      const record = trips.get(tripId);
+      if (record) record.pickupCode = code;
+    },
+    pickupCode(tripId) {
+      return trips.get(tripId)?.pickupCode;
     },
     emitLocation(tripId, point, extra) {
       const record = trips.get(tripId);

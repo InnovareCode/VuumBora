@@ -1,13 +1,18 @@
 import { memo, useEffect, useRef } from 'react';
 import { AccessibilityInfo, Animated, Easing, Platform, StyleSheet, View } from 'react-native';
-import { Car } from 'lucide-react-native';
-import { SurfaceRaised, theme } from '@vuumbora/ui';
+import { theme, tokens } from '@vuumbora/ui';
 
 /**
- * Animação de "procurando motorista" (P07) — dois anéis pulsando ao redor do ícone do
- * carro. Discreta (sem rotação, sem brilho) e respeita "reduzir movimento" do sistema,
- * igual ao `LoadingSkeleton` de `@vuumbora/ui` — aqui não entrou no pacote porque é
- * composição específica desta tela (ícone de carro + 2 anéis), não um primitivo transversal.
+ * Animação de "procurando motorista" (P07, ficha §2/§6) — dois anéis traço (sem
+ * preenchimento) pulsando em volta do PINO DE EMBARQUE, sobre o mapa. Discreta (sem
+ * rotação, sem brilho) e respeita "reduzir movimento" do sistema, igual ao
+ * `LoadingSkeleton` de `@vuumbora/ui` — aqui não entrou no pacote porque é composição
+ * específica desta tela, não um primitivo transversal.
+ *
+ * Correção da ficha (§2/§3): o ícone de carro e o preenchimento amarelo saíram — "sobre o
+ * mapa, o núcleo vira o próprio pino de embarque" (mesmo círculo `map.pickup` usado nos
+ * balões da P05/P06). Posicionamento: quem ancora este componente num ponto do mapa é o
+ * CHAMADOR (`position: absolute` em volta dele) — ele só desenha o pulso centrado em si.
  */
 export const SearchingPulse = memo(function SearchingPulse() {
   const ring1 = useRef(new Animated.Value(0)).current;
@@ -48,29 +53,32 @@ export const SearchingPulse = memo(function SearchingPulse() {
   });
 
   return (
-    <View style={styles.root} accessibilityRole="progressbar" accessibilityLabel="Procurando motorista">
+    // Ficha §8: o pulso é DECORATIVO — o estado ("Procurando motorista") já é dito pelo
+    // título da tela. Antes tinha `accessibilityRole="progressbar"` sem `accessibilityValue`
+    // (progresso indeterminado e repetido no leitor de tela); saiu.
+    <View style={styles.root} accessible={false} importantForAccessibility="no-hide-descendants">
       <Animated.View style={[styles.ring, ringStyle(ring1)]} />
       <Animated.View style={[styles.ring, ringStyle(ring2)]} />
-      <SurfaceRaised style={styles.core}>
-        <Car size={32} color={theme.role.ctaBackground} strokeWidth={2} />
-      </SurfaceRaised>
+      <View style={styles.core} />
     </View>
   );
 });
 
-const CORE_SIZE = 76;
+const CORE_SIZE = 18;
+const RING_SIZE = 44;
 
 const styles = StyleSheet.create({
-  root: { width: 180, height: 180, alignItems: 'center', justifyContent: 'center' },
-  // Auditoria Apolo (S1): o amarelo era um disco CHEIO de 133/76pt — o maior bloco de
-  // cor da tela, decoração pura. Agora é só TRAÇO (borda 2pt, sem preenchimento); o
-  // núcleo vira superfície premium (`SurfaceRaised`) com borda 2pt amarela, não mais
-  // amarelo cheio.
+  root: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
+  // Auditoria Apolo (S1) + ficha P07 §3: o amarelo era um disco CHEIO de 133/76pt — o
+  // maior bloco de cor da tela, decoração pura, com um ícone de carro flutuando no meio
+  // do mapa. Agora o anel é só TRAÇO (borda 2pt, sem preenchimento) e o núcleo é o MESMO
+  // pino de embarque (`map.pickup`) dos balões da P05/P06/P07 — não inventa um segundo
+  // símbolo para o mesmo lugar.
   ring: {
     position: 'absolute',
-    width: CORE_SIZE,
-    height: CORE_SIZE,
-    borderRadius: CORE_SIZE / 2,
+    width: RING_SIZE,
+    height: RING_SIZE,
+    borderRadius: RING_SIZE / 2,
     borderWidth: 2,
     borderColor: theme.role.ctaBackground,
   },
@@ -78,9 +86,10 @@ const styles = StyleSheet.create({
     width: CORE_SIZE,
     height: CORE_SIZE,
     borderRadius: CORE_SIZE / 2,
+    backgroundColor: tokens.color.map.pickup,
+    // Contorno escuro (não amarelo, pra não duplicar a cor do anel): separa o pino do
+    // fundo de mapa, igual ao balão de origem da P05/P06.
     borderWidth: 2,
-    borderColor: theme.role.ctaBackground,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: theme.role.screen,
   },
 });

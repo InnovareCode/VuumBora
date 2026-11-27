@@ -55,6 +55,10 @@ export interface DriverOfferPort {
  * Snapshot do MOTORISTA (B4): endereço e ponto EXATOS do embarque — só existem aqui porque o
  * motorista já foi atribuído (A3 garante que só ele os recebe). `passenger` é opcional porque o
  * nome só é mostrado depois do aceite, nunca na oferta.
+ *
+ * **Sem código de embarque, em fase nenhuma** (D-12): o motorista PEDE o código ao passageiro
+ * (`PassengerTripSnapshot.pickupCode`) e o digita no `start`. Se o código viesse aqui, o motorista
+ * poderia começar a corrida sem o passageiro (conferência da Nova sobre a F08, item (2)).
  */
 export interface DriverTripSnapshot extends TripBaseSnapshot {
   readonly pickup: Place;
@@ -68,6 +72,15 @@ export interface DriverTripSnapshot extends TripBaseSnapshot {
 export type DriverCancelReason = 'passenger_no_show' | 'wrong_pickup' | 'vehicle_issue' | 'other';
 
 /**
+ * Entrada do `start` (D-12, decisão do dono em 22/11/2026: PIN em todas as categorias).
+ * `pickupCode` é OBRIGATÓRIO: exatamente 4 algarismos, como texto (`isPickupCodeFormat`,
+ * `@vuumbora/domain`) — o código que o passageiro vê em `PassengerTripSnapshot.pickupCode`.
+ */
+export interface DriverStartTripInput {
+  readonly pickupCode: string;
+}
+
+/**
  * Ações do motorista depois do aceite (C1). A passagem `driver_assigned` → `driver_en_route` é do
  * SISTEMA (automática, no aceite) — não existe método para ela aqui; o app não chama nada.
  */
@@ -76,14 +89,23 @@ export interface DriverTripPort extends TripRealtimePort {
   /** `driver_en_route` → `driver_arrived`. */
   arrived(tripId: TripId, idempotencyKey: string): Promise<Result<DriverTripSnapshot>>;
   /**
-   * `driver_arrived` → `in_progress`. `pickupCode` é opcional (D-12 em aberto). **R3 (reconferência
-   * da Nova):** a ordem das checagens é `404` (motorista não atribuído) → `409 invalid_transition`
-   * (corrida não está em `driver_arrived`) → `400 validation` (código errado) → `429 rate_limited`
-   * (muitas tentativas erradas). As tentativas contam por corrida E motorista, e só as do
-   * atribuído — checar a atribuição ANTES do código evita que quem recebeu a oferta mas não a
-   * aceitou gaste as tentativas de quem aceitou.
+   * `driver_arrived` → `in_progress`, só com o código de embarque certo (D-12). Ordem das
+   * checagens:
+   *
+   * 1. `400 validation` (`fields.pickupCode`) se o código FALTA ou está fora do formato. É
+   *    validação do corpo: vem antes de tudo, não conta tentativa e responde igual exista a corrida
+   *    ou não (não serve para descobrir corrida).
+   * 2. `404 not_found` se o motorista não é o atribuído (A3).
+   * 3. `409 invalid_transition` se a corrida não está em `driver_arrived`.
+   * 4. `429 rate_limited` se já houve 5 erros nesta corrida, por este motorista.
+   * 5. `400 validation` (`fields.pickupCode`) se o código está errado; conta uma tentativa.
+   *
+   * **R3 (reconferência da Nova):** a atribuição (2) vem ANTES de qualquer coisa que toque as
+   * tentativas (4 e 5). O `tripId` vai em toda `RideOffer`, e sem essa ordem quem recebeu a oferta
+   * sem aceitar gastaria as tentativas de quem aceitou. A falta e o formato inválido (1) não
+   * chegam a tocar as tentativas.
    */
-  start(tripId: TripId, input: { readonly pickupCode?: string }, idempotencyKey: string): Promise<Result<DriverTripSnapshot>>;
+  start(tripId: TripId, input: DriverStartTripInput, idempotencyKey: string): Promise<Result<DriverTripSnapshot>>;
   /** `in_progress` → `completed`. `deliveryCode` só importa para `kind: 'delivery'` (hoje desligado, §13.3). */
   complete(tripId: TripId, input: { readonly deliveryCode?: string }, idempotencyKey: string): Promise<Result<DriverTripSnapshot>>;
   /**

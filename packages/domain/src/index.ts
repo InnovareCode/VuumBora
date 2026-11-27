@@ -97,6 +97,9 @@ export {
 } from './trip-lifecycle';
 export type { CancelActor, TripTransitionResult } from './trip-lifecycle';
 
+/** Código de embarque (plano D-12, decidido pelo dono em 22/11/2026): formato e quando o passageiro vê. */
+export { isPickupCodeFormat, isPickupCodeVisible, PICKUP_CODE_LENGTH, PICKUP_CODE_VISIBLE_STATUSES } from './pickup-code';
+
 /** Localização aproximada (bairro + ponto arredondado) — decisão do dono em 22/11/2026. */
 export { toApproximatePlace, toTripRange } from './geo';
 export type { ApproximatePlace } from './geo';

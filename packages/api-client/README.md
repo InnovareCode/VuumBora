@@ -178,8 +178,20 @@ embarque, D-12):
   num motorista sem avaliação ainda. Os três são **opcionais no tipo** (o servidor real sempre os envia) só para não
   quebrar quem já constrói `TripDriverSummary` sem eles hoje (`apps/passenger/src/sim/rideSimulator.ts`) — a tela
   trata ausência como "dado indisponível", nunca como "motorista sem carro".
+- `PassengerTripSnapshot.pickupCode?: string` — **código de embarque (plano D-12; decisão do dono em
+  22/11/2026: PIN em todas as categorias)**. O passageiro diz o código ao motorista, e a corrida só começa com
+  ele (`DriverTripPort.start`, abaixo). Formato: **exatamente 4 algarismos, como texto** (`"0482"`: zero à
+  esquerda vale, por isso não é número; regra em `isPickupCodeFormat`, `@vuumbora/domain`). Aparece **só em
+  `driver_assigned`, `driver_en_route` e `driver_arrived`** (`isPickupCodeVisible`, `@vuumbora/domain`); antes
+  disso e a partir de `in_progress` a chave nem existe no objeto. **Um por corrida**, gerado no pedido e estável
+  até o fim, mesmo se um motorista devolver a corrida e outro assumir (o código só é dito em `driver_arrived`,
+  e dali a corrida não volta para a busca). **Nunca** aparece no histórico (`PassengerTripHistoryEntry` não tem
+  o campo, minimização PP-14), nos eventos de tempo real (o evento avisa a fase; o código vem por `status()`,
+  como `driver`) nem em nada do motorista.
 - `DriverTripSnapshot`: `pickup`/`destination` **completos** (`Place`, endereço e ponto exatos — só porque
-  o motorista já foi atribuído), `categoryId`, `estimatedPayout`, `passenger?: { firstName }`.
+  o motorista já foi atribuído), `categoryId`, `estimatedPayout`, `passenger?: { firstName }`. **Sem código
+  de embarque, em fase nenhuma (D-12):** o motorista PEDE o código ao passageiro; se o recebesse aqui,
+  poderia começar a corrida sem o passageiro.
 
 `404 not_found` se a corrida não existe **ou** (do lado do motorista) não é a ele atribuída — achado A3,
 ver "Visibilidade do motorista", abaixo.
@@ -262,18 +274,46 @@ entregar eventos depois do cancelamento" não distinguia QUEM cancelou.
 
 ### Ações depois do aceite — `DriverTripPort` (achado C1)
 
-`arrived` (`driver_en_route` → `driver_arrived`), `start({ pickupCode? })` (`driver_arrived` →
-`in_progress`; `pickupCode` é opcional — D-12 em aberto; errado é `400 validation`, a 6ª tentativa errada é
-`429 rate_limited`), `complete({ deliveryCode? })` (`in_progress` → `completed`; `deliveryCode` só importa
-para `kind: 'delivery'`, hoje desligado). Todas recebem `idempotencyKey` e devolvem
-`Result<DriverTripSnapshot>`; `409 conflict` (`invalid_transition` ou `idempotency_key_reused`).
+`arrived` (`driver_en_route` → `driver_arrived`), `start({ pickupCode })` (`driver_arrived` →
+`in_progress`, só com o código de embarque certo — ver abaixo), `complete({ deliveryCode? })` (`in_progress`
+→ `completed`; `deliveryCode` só importa para `kind: 'delivery'`, hoje desligado). Todas recebem
+`idempotencyKey` e devolvem `Result<DriverTripSnapshot>`; `409 conflict` (`invalid_transition` ou
+`idempotency_key_reused`).
 
-**R3 (reconferência) — ordem das checagens em `start`:** `404` (motorista não é o atribuído) → `409
-invalid_transition` (corrida não está em `driver_arrived`) → `400 validation` (código errado) → `429
-rate_limited` (muitas tentativas). Checar a atribuição ANTES do código importa porque o `tripId` vai em
-TODA `RideOffer`: sem essa ordem, qualquer motorista que recebeu a oferta (mesmo sem aceitar) confirmava
-que a corrida existe e gastava as tentativas do motorista ATRIBUÍDO. As tentativas contam por corrida E
+**`start` EXIGE o código de embarque (D-12, decisão do dono em 22/11/2026).** Entrada:
+`DriverStartTripInput = { pickupCode: string }`, obrigatório — o mesmo valor que o passageiro vê em
+`PassengerTripSnapshot.pickupCode` (4 algarismos, como texto). Ordem das checagens:
+
+| # | Situação | Resposta | Conta tentativa? |
+|---|---|---|---|
+| 1 | `pickupCode` falta (`{}`, `null`, `""`) | `400 validation`, `fields.pickupCode: "Informe o código de embarque."` | não |
+| 1 | `pickupCode` fora do formato (3 ou 5 algarismos, letra, espaço, número em vez de texto) | `400 validation`, `fields.pickupCode: "O código de embarque tem 4 números."` | não |
+| 2 | motorista não é o atribuído (ou corrida não existe) | `404 not_found` | não |
+| 3 | corrida não está em `driver_arrived` | `409 conflict`, `invalid_transition` | não |
+| 4 | já houve 5 erros nesta corrida, por este motorista | `429 rate_limited` (até com o código certo) | — |
+| 5 | código errado | `400 validation`, `fields.pickupCode: "Código de embarque incorreto."` | sim |
+
+O passo 1 é validação do CORPO (como o servidor faz antes de tocar no banco): responde igual exista a
+corrida ou não (não serve para descobrir corrida) e **não entra no cache de idempotência** — a requisição
+nem começou, então a mesma chave com o corpo corrigido segue valendo. O app distingue "faltou/formato" de
+"errado" pelo texto de `fields.pickupCode`; o `CodeInput` da M08 já não deixa enviar menos de 4 algarismos,
+então na prática só o passo 5 chega à tela.
+
+**R3 (reconferência) — a atribuição vem antes de tudo que toca as tentativas.** O `tripId` vai em TODA
+`RideOffer`: sem essa ordem, qualquer motorista que recebeu a oferta (mesmo sem aceitar) confirmava que a
+corrida existe e gastava as tentativas do motorista ATRIBUÍDO. As tentativas contam por corrida E
 motorista, e só as do atribuído chegam a ser contadas.
+
+**No mock:** o código mora na `TripStore` (é estado da corrida, fonte única). O `request` do passageiro gera
+um por corrida; o `control.offer` do motorista só gera quando a corrida ainda não tem (mock só do motorista,
+sem passageiro). Para o teste ou o simulador do app "fazer o papel do passageiro", há dois caminhos:
+`createMock*RidePort({ nextPickupCode: () => '4821' })` (o gerador) ou `control.setPickupCode(tripId,
+'4821')` do motorista (troca o código da corrida, zera as tentativas deste motorista; com a store
+compartilhada, o passageiro passa a ver o novo código). Código fora do formato em qualquer dos dois lança
+`TypeError` — é erro de configuração, falha alto. `control.advance(tripId, 'in_progress')` do passageiro
+**não** confere código: `control` é o simulador, quem confere é o `start` do motorista. O gerador do mock
+usa `crypto.getRandomValues` quando existe e `Math.random` quando não (Hermes) — o código de verdade nasce no
+servidor (S4), com gerador criptográfico.
 
 ### Disponibilidade — `DriverJourneyPort.setAvailability` (achado C3, revisado por R7)
 
@@ -382,6 +422,7 @@ setTimeout(() => control.advance(tripId, 'searching_driver'), 0);
 setTimeout(() => control.advance(tripId, 'driver_assigned', driverId), 2600);
 setTimeout(() => control.setDriverSummary(tripId, { driverId, firstName, plate }), 2600);
 setTimeout(() => control.advance(tripId, 'driver_en_route'), 2600 + 2600);
+// D-12: daqui até driver_arrived, port.status(tripId) traz pickupCode (4 algarismos) — a tela P08 o mostra.
 // control.cancel(tripId, 'driver') simula o motorista desistindo — volta para searching_driver (A2 limpa o resumo).
 ```
 

@@ -19,5 +19,14 @@ export default function AppLayout() {
 
   if (gate.status === 'checking') return <ConsentChecking />;
   if (gate.status === 'reaccept') return <ConsentReacceptScreen pending={gate.pending} onDone={clear} />;
-  return <Stack screenOptions={stackScreenOptions} />;
+  return (
+    <Stack screenOptions={stackScreenOptions}>
+      {/* M06 (PP-10): modal de tela cheia sobre a M05 — sem gesto de arrastar pra fechar (recusar é
+          decisão, D-34; o voltar do Android também não fecha, tratado dentro da própria tela). */}
+      <Stack.Screen name="oferta" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
+      {/* M07/M08/M09 (PP-10): em corrida ativa não se volta por gesto (D-32); o voltar do Android
+          sem destino na pilha minimiza o app sozinho, sem tratamento extra aqui. */}
+      <Stack.Screen name="corrida" options={{ gestureEnabled: false }} />
+    </Stack>
+  );
 }
