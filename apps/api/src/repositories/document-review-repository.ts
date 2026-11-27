@@ -207,11 +207,13 @@ export interface DocumentForDecision {
   readonly reviewedAt: Date | null;
   readonly expiresOn: string | null;
   readonly rejectionCode: string | null;
+  /** Nota interna gravada na recusa: é com ELA que se confere se a recusa repetida é a mesma (nunca com a trilha). */
+  readonly reviewNote: string | null;
 }
 
 const DOCUMENT_FOR_DECISION_SQL = `
   SELECT doc.id, doc.driver_id, doc.type_code, doc.vehicle_id, doc.status, doc.storage_key, acc.email, d.city_code,
-         doc.reviewed_at, to_char(doc.expires_on, 'YYYY-MM-DD') AS expires_on, doc.rejection_code
+         doc.reviewed_at, to_char(doc.expires_on, 'YYYY-MM-DD') AS expires_on, doc.rejection_code, doc.review_note
     FROM driver_documents doc
     JOIN drivers d ON d.account_id = doc.driver_id
     JOIN accounts acc ON acc.id = doc.driver_id
@@ -219,7 +221,7 @@ const DOCUMENT_FOR_DECISION_SQL = `
 
 interface DocumentForDecisionRow {
   id: string; driver_id: string; type_code: string; vehicle_id: string | null; status: string; storage_key: string; email: string;
-  city_code: string; reviewed_at: Date | null; expires_on: string | null; rejection_code: string | null;
+  city_code: string; reviewed_at: Date | null; expires_on: string | null; rejection_code: string | null; review_note: string | null;
 }
 
 function toDocumentForDecision(row: DocumentForDecisionRow | undefined): DocumentForDecision | null {
@@ -227,7 +229,7 @@ function toDocumentForDecision(row: DocumentForDecisionRow | undefined): Documen
     ? {
         documentId: row.id, driverId: row.driver_id, typeCode: row.type_code, vehicleId: row.vehicle_id, status: row.status,
         storageKey: row.storage_key, driverEmail: row.email, cityCode: row.city_code, reviewedAt: row.reviewed_at,
-        expiresOn: row.expires_on, rejectionCode: row.rejection_code,
+        expiresOn: row.expires_on, rejectionCode: row.rejection_code, reviewNote: row.review_note,
       }
     : null;
 }
@@ -320,17 +322,27 @@ export async function listActiveRejectionReasons(db: Queryable): Promise<{ code:
   return result.rows.map((row) => ({ code: row.code, text: row.driver_text }));
 }
 
-/** A decisão já gravada na trilha para este documento (para repetir a resposta de um pedido igual). */
-export async function lastDecisionAudit(db: Queryable, documentId: string): Promise<{ action: string; idempotencyKey: string | null; fingerprint: string | null } | null> {
-  const result = await db.query<{ action: string; key: string | null; fingerprint: string | null }>(
-    `SELECT action, after ->> 'idempotencyKey' AS key, after ->> 'fingerprint' AS fingerprint
+/**
+ * A decisão já gravada na trilha para este documento (para repetir a resposta de um pedido igual): a chave e os campos
+ * NÃO sensíveis do pedido (validade, código do motivo). A nota interna não está na trilha.
+ */
+export interface DecisionAudit {
+  readonly action: string;
+  readonly idempotencyKey: string | null;
+  readonly expiresOn: string | null;
+  readonly reasonCode: string | null;
+}
+
+export async function lastDecisionAudit(db: Queryable, documentId: string): Promise<DecisionAudit | null> {
+  const result = await db.query<{ action: string; key: string | null; expires_on: string | null; reason_code: string | null }>(
+    `SELECT action, after ->> 'idempotencyKey' AS key, after ->> 'expiresOn' AS expires_on, after ->> 'reasonCode' AS reason_code
        FROM admin_audit_log
       WHERE target_type = 'driver_document' AND target_id = $1 AND action IN ('document.approved', 'document.rejected')
       ORDER BY created_at DESC, id DESC LIMIT 1`,
     [documentId],
   );
   const row = result.rows[0];
-  return row ? { action: row.action, idempotencyKey: row.key, fingerprint: row.fingerprint } : null;
+  return row ? { action: row.action, idempotencyKey: row.key, expiresOn: row.expires_on, reasonCode: row.reason_code } : null;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

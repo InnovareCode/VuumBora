@@ -6,7 +6,6 @@
  * 500 (`drivers_suspension_reason_len`; o contrato K0 dizia 1000 e foi corrigido). Validar aqui, antes do SQL, faz da
  * restrição do banco a última linha de defesa.
  */
-import { createHash } from 'node:crypto';
 import { hasControlCharacter, isCalendarDate, isUuid } from './driver-onboarding.js';
 
 export const QUEUE_STATUSES = ['submitted', 'approved', 'rejected', 'expired'] as const;
@@ -100,13 +99,4 @@ export function parseSuspendBody(body: unknown): { readonly reason: string } | n
   if (reason.length < SUSPENSION_REASON_MIN || reason.length > SUSPENSION_REASON_MAX) return null;
   if (hasControlCharacter(reason.replace(/[\r\n\t]/g, ' '))) return null;
   return { reason };
-}
-
-/**
- * Impressão digital do pedido (para "mesma chave, mesmo corpo"). Hash, nunca o texto: a nota interna e o motivo não vão
- * para a trilha (append-only, sobrevive à exclusão da conta), só a prova de que o pedido repetido é o mesmo.
- */
-export function requestFingerprint(parts: Readonly<Record<string, string | null>>): string {
-  const canonical = JSON.stringify(Object.keys(parts).sort().map((key) => [key, parts[key]]));
-  return createHash('sha256').update(canonical).digest('hex');
 }

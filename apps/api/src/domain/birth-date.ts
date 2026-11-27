@@ -4,8 +4,14 @@
  * que faz a MESMA conta com `now() AT TIME ZONE 'America/Fortaleza'`).
  *
  * A data de nascimento é dado pessoal: trafega como TEXTO `AAAA-MM-DD` (nunca vira `Date` do JS — o `pg`
- * desloca `DATE` pelo fuso do processo), entra no banco com `$n::date` e NUNCA é lida de volta, logada nem
- * devolvida em resposta.
+ * desloca `DATE` pelo fuso do processo), entra no banco com `$n::date`, nunca é logada e não é devolvida em resposta
+ * nenhuma dos apps nem da identidade.
+ *
+ * EXCEÇÃO ÚNICA (D5, aval do Órion em 27/11/2026): o detalhe do motorista no painel, `GET /v1/admin/drivers/:id`, lê a
+ * data de volta (`to_char`, nunca `Date`) para o revisor conferir com a CNH. Vale só para conta de MOTORISTA, só nessa
+ * rota (que grava `driver.viewed` no `admin_audit_log` antes de responder, sem cache) e só para os papéis de revisão
+ * (`revisor_documentos` e `dono`; os demais levam 403). Qualquer outra leitura da data é uma exceção NOVA, a ser
+ * aprovada do mesmo jeito.
  */
 
 export const MINIMUM_AGE_YEARS = 18;

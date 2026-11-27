@@ -424,6 +424,35 @@ describe('POST /documents/:id/reject e GET /document-rejection-reasons', () => {
   });
 });
 
+describe('D5-S1: a repetição da recusa confere a nota sem deixar resíduo dela na trilha', () => {
+  test('mesma chave + mesma nota = mesma resposta; nota diferente = 409; a trilha não tem hash nenhum (nada a testar por dicionário)', async () => {
+    const driver = await driverWithSubmittedDocuments();
+    const id = driver.docs['profile_photo']!;
+    const k = key();
+    const NOTE = 'óculos escuros';
+    const body = { reasonCode: 'photo_not_compliant', internalNote: NOTE };
+    const first = await post(reviewer, `/documents/${id}/reject`, body, k);
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+    const again = await post(reviewer, `/documents/${id}/reject`, { ...body, internalNote: `  ${NOTE}  ` }, k);
+    assert.equal(again.status, 200, 'a nota é comparada já aparada, como foi gravada');
+    assert.deepEqual(again.body.data, first.body.data);
+    assertRefused(await post(reviewer, `/documents/${id}/reject`, { ...body, internalNote: 'óculos de grau' }, k), 'idempotency_key_reused');
+    assertRefused(await post(reviewer, `/documents/${id}/reject`, { reasonCode: 'photo_not_compliant' }, k), 'idempotency_key_reused');
+    assertRefused(await post(reviewer, `/documents/${id}/reject`, { ...body, reasonCode: 'other' }, k), 'idempotency_key_reused');
+
+    const trail = await owner.query<{ after: Record<string, unknown>; t: string }>(
+      `SELECT after, after::text AS t FROM admin_audit_log WHERE target_id = $1 AND action = 'document.rejected'`,
+      [id],
+    );
+    assert.equal(trail.rows.length, 1);
+    const row = trail.rows[0]!;
+    assert.ok(!('fingerprint' in row.after), 'impressão digital na trilha');
+    assert.ok(!/[0-9a-f]{32,}/i.test(row.t.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '')), `hash na trilha: ${row.t}`);
+    assert.ok(!row.t.includes(NOTE));
+    assert.equal(row.after['hasInternalNote'], true);
+  });
+});
+
 describe('POST /drivers/:id/suspend e /reinstate', () => {
   test('400 validation_failed (curto, longo, controle), 404, 200; suspenso de novo = suspensão original; trilha', async () => {
     const driver = await driverWithSubmittedDocuments();

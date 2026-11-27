@@ -18,6 +18,7 @@
     "driver-applications:export": "node scripts/export-driver-applications.mjs",
     "driver-applications:delete": "node scripts/delete-driver-application.mjs",
     "identity:retention": "node scripts/retention-identity.mjs",
+    "documents:expiry": "node scripts/document-expiry.mjs",
     "legal:publish": "node scripts/publish-legal.mjs",
     "create-admin": "node scripts/create-admin.mjs",
     "reissue-2fa-enrollment": "node scripts/reissue-2fa-enrollment.mjs",

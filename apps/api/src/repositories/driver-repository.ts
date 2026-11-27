@@ -128,8 +128,9 @@ export async function saveProfile(db: Queryable, accountId: string, profile: Pro
 }
 
 /**
- * Conta antiga (de antes da 0019) sem data de nascimento: grava a da etapa 2. Conta que já tem, não muda (e a data nunca
- * é lida de volta, `domain/birth-date.ts`). O gatilho da 0019 recusa menor de 18.
+ * Conta antiga (de antes da 0019) sem data de nascimento: grava a da etapa 2. Conta que já tem, não muda, e nada aqui
+ * lê a data de volta (a única leitura é a exceção registrada em `domain/birth-date.ts`: o detalhe auditado do painel,
+ * só para os papéis de revisão). O gatilho da 0019 recusa menor de 18.
  */
 export async function fillMissingBirthDate(db: Queryable, accountId: string, birthDate: string): Promise<void> {
   await db.query(`UPDATE accounts SET birth_date = $2::date WHERE id = $1 AND birth_date IS NULL`, [accountId, birthDate]);

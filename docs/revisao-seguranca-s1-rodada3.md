@@ -109,6 +109,7 @@ Liberação: pode seguir para o ambiente de produção FECHADO (sem divulgar o c
 
 ## Confirmado sem problema nesta rodada
 - Gatilho de idade e `checkBirthDate` equivalentes (fuso `America/Fortaleza`, corte hoje menos 18 anos, 29/02); `birth_date` nunca lida de volta, nunca em resposta, e o log só leva o motivo; erros de domínio mapeados por `err.constraint` sem ecoar a data (`identity-repository.ts:93-100`); `safe-error.ts` evita o `detail` do `pg` (que traria a linha inteira).
+  - **Exceção posterior (M3, fatia D5, aval do Órion em 27/11/2026):** o detalhe do motorista no painel (`GET /v1/admin/drivers/:id`) devolve a data para o revisor conferir com a CNH. Só conta de motorista, só essa rota (auditada como `driver.viewed`, sem cache) e só os papéis de revisão (`revisor_documentos` e `dono`). O princípio continua valendo para todo o resto; o texto de referência é o cabeçalho de `apps/api/src/domain/birth-date.ts`.
 - Aceite na MESMA transação da conta; versão nunca do cliente (`domain/auth.ts:30`); 503 fechado sem versão.
 - Recadastro revertido por inteiro (ROLLBACK) se qualquer passo falha depois da exclusão (data inválida, código não emitido).
 - Separação de CORS (`app.ts:143-197`) com `credentials:true` só em `/v1/admin/*` e lista própria (`ADMIN_ALLOWED_ORIGINS`): a pendência de CSRF da minha memória está resolvida (li o código, não testei no navegador).

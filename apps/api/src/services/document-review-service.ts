@@ -6,13 +6,16 @@
  *   há decisão. A visualização grava a trilha ANTES de assinar a URL (N5).
  * - N4: aprovar o último obrigatório aprova o motorista na mesma transação, só se ele estiver `pending`.
  * - Idempotência: a decisão do documento só acontece uma vez (`UPDATE ... WHERE status = 'submitted'` sob `FOR UPDATE`).
- *   Repetir o MESMO pedido (mesma `Idempotency-Key`, mesmo corpo) devolve a mesma resposta; a chave e a impressão
- *   digital do pedido ficam na própria linha da trilha da decisão (não há coluna para isso no documento).
+ *   Repetir o MESMO pedido (mesma `Idempotency-Key`, mesmo corpo) devolve a mesma resposta. A chave e os campos NÃO
+ *   sensíveis do pedido (validade, código do motivo) ficam na linha da trilha da decisão; a nota interna é conferida
+ *   contra a própria `review_note` do documento. Nenhum hash dela vai para a trilha (revisão D5, S-1): um SHA-256 sem
+ *   segredo sobre texto curto se testa por dicionário, e a trilha é append-only (sobrevive à exclusão da conta, que
+ *   apaga a `review_note`).
  * - Conflito de interesse: ninguém decide sobre o próprio cadastro (o gatilho da 0025 também recusa).
  */
 import type { Pool, PoolClient } from 'pg';
 import { decodeCursor, encodeCursor } from '../domain/pagination.js';
-import { expiresOnProblem, requestFingerprint, type QueueQuery, type RejectInput } from '../domain/document-review.js';
+import { expiresOnProblem, type QueueQuery, type RejectInput } from '../domain/document-review.js';
 import { isUuid, type VerificationStatus } from '../domain/driver-onboarding.js';
 import type { DocumentStorage } from '../lib/document-storage.js';
 import { insertAuditLog } from '../repositories/admin-audit-repository.js';
@@ -218,14 +221,26 @@ async function decisionResponse(db: Pool | PoolClient, documentId: string): Prom
   };
 }
 
+/** O pedido repetido, para comparar com a decisão gravada. */
+type DecisionRequest =
+  | { readonly action: 'document.approved'; readonly expiresOn: string | null }
+  | { readonly action: 'document.rejected'; readonly reasonCode: string; readonly internalNote: string | null };
+
+/** O pedido é o MESMO que gerou a decisão? Validade e motivo pela trilha; a nota, pela `review_note` do documento. */
+function sameRequest(last: repo.DecisionAudit, doc: repo.DocumentForDecision, request: DecisionRequest): boolean {
+  if (last.action !== request.action) return false;
+  if (request.action === 'document.approved') return last.expiresOn === request.expiresOn;
+  return last.reasonCode === request.reasonCode && doc.reviewNote === request.internalNote;
+}
+
 /**
  * Documento que já não está `submitted`: se a ÚLTIMA decisão gravada foi este mesmo pedido (chave e corpo), devolve a
  * mesma resposta; mesma chave com outro corpo é `idempotency_key_reused`; o resto é `invalid_transition`.
  */
-async function replayOrConflict(db: PoolClient, doc: repo.DocumentForDecision, action: string, key: string, fingerprint: string): Promise<DecisionOutcome> {
+async function replayOrConflict(db: PoolClient, doc: repo.DocumentForDecision, key: string, request: DecisionRequest): Promise<DecisionOutcome> {
   const last = await repo.lastDecisionAudit(db, doc.documentId);
   if (last && last.idempotencyKey === key) {
-    if (last.action !== action || last.fingerprint !== fingerprint) return { kind: 'idempotency_key_reused' };
+    if (!sameRequest(last, doc, request)) return { kind: 'idempotency_key_reused' };
     return { kind: 'ok', decision: await decisionResponse(db, doc.documentId) };
   }
   return { kind: 'invalid_transition' };
@@ -233,11 +248,10 @@ async function replayOrConflict(db: PoolClient, doc: repo.DocumentForDecision, a
 
 /** Ordem: 404 → repetição do mesmo pedido → 409 `invalid_transition` → 403 próprio cadastro → 422 validade. */
 export async function approve(pool: Pool, documentId: string, expiresOn: string | null, actor: AdminActor, idempotencyKey: string): Promise<DecisionOutcome> {
-  const fingerprint = requestFingerprint({ action: 'approve', documentId, expiresOn });
   return attempt<DecisionOutcome>(pool, async (client) => {
     const doc = await repo.lockDocument(client, documentId);
     if (!doc || !VISIBLE.has(doc.status)) throw new Abort<DecisionOutcome>({ kind: 'not_found' });
-    if (doc.status !== 'submitted') throw new Abort(await replayOrConflict(client, doc, 'document.approved', idempotencyKey, fingerprint));
+    if (doc.status !== 'submitted') throw new Abort(await replayOrConflict(client, doc, idempotencyKey, { action: 'document.approved', expiresOn }));
     if (await repo.isSameEmail(client, actor.adminId, doc.driverEmail)) throw new Abort<DecisionOutcome>({ kind: 'own_registration' });
     const rule = await repo.expiryRule(client, doc.cityCode, doc.typeCode);
     // Tipo que saiu da lista vigente depois do envio: o banco recusaria a aprovação (0025); não é decisão possível.
@@ -251,7 +265,7 @@ export async function approve(pool: Pool, documentId: string, expiresOn: string 
     await insertAuditLog(client, {
       adminId: actor.adminId, action: 'document.approved', targetType: 'driver_document', targetId: documentId,
       before: { status: 'submitted' },
-      after: { status: 'approved', driverId: doc.driverId, typeCode: doc.typeCode, expiresOn, idempotencyKey, fingerprint },
+      after: { status: 'approved', driverId: doc.driverId, typeCode: doc.typeCode, expiresOn, idempotencyKey },
       ipAddress: actor.ipAddress,
     });
     if (driverApproved) {
@@ -266,11 +280,12 @@ export async function approve(pool: Pool, documentId: string, expiresOn: string 
 
 /** Ordem: 404 → repetição → 409 → 403 próprio cadastro → 422 motivo fora do catálogo ativo. */
 export async function reject(pool: Pool, documentId: string, input: RejectInput, actor: AdminActor, idempotencyKey: string): Promise<DecisionOutcome> {
-  const fingerprint = requestFingerprint({ action: 'reject', documentId, reasonCode: input.reasonCode, internalNote: input.internalNote });
   return attempt<DecisionOutcome>(pool, async (client) => {
     const doc = await repo.lockDocument(client, documentId);
     if (!doc || !VISIBLE.has(doc.status)) throw new Abort<DecisionOutcome>({ kind: 'not_found' });
-    if (doc.status !== 'submitted') throw new Abort(await replayOrConflict(client, doc, 'document.rejected', idempotencyKey, fingerprint));
+    if (doc.status !== 'submitted') {
+      throw new Abort(await replayOrConflict(client, doc, idempotencyKey, { action: 'document.rejected', reasonCode: input.reasonCode, internalNote: input.internalNote }));
+    }
     if (await repo.isSameEmail(client, actor.adminId, doc.driverEmail)) throw new Abort<DecisionOutcome>({ kind: 'own_registration' });
     if (!(await repo.isActiveRejectionReason(client, input.reasonCode))) throw new Abort<DecisionOutcome>({ kind: 'unknown_reason' });
 
@@ -279,7 +294,7 @@ export async function reject(pool: Pool, documentId: string, input: RejectInput,
     await insertAuditLog(client, {
       adminId: actor.adminId, action: 'document.rejected', targetType: 'driver_document', targetId: documentId,
       before: { status: 'submitted' },
-      after: { status: 'rejected', driverId: doc.driverId, typeCode: doc.typeCode, reasonCode: input.reasonCode, hasInternalNote: input.internalNote !== null, idempotencyKey, fingerprint },
+      after: { status: 'rejected', driverId: doc.driverId, typeCode: doc.typeCode, reasonCode: input.reasonCode, hasInternalNote: input.internalNote !== null, idempotencyKey },
       ipAddress: actor.ipAddress,
     });
     return { kind: 'ok', decision: await decisionResponse(client, documentId) };
