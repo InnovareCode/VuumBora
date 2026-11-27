@@ -96,6 +96,7 @@ abaixo chegarem antes do ponto em que travam. É a soma dos esforços do plano m
 | **Antes de publicar a M04** | Teto de validade por documento: CNH 10 anos, CRLV 2 anos, certidão de antecedentes 1 ano (proposta da equipe, ajustável sem deploy) | Cronos, migração 0025 |
 | **Antes do beta** | Motorista excluído que se recadastra pode reaproveitar a candidatura? Guardar uma lista mínima de impedidos (motorista suspenso que exclui a conta e volta com o mesmo CPF) e por quanto tempo (decisão 16, com o advogado) | Levantados pelo Cronos e pelo Órion em 27/11 |
 | **Antes das rotas de cadastro do motorista (D2)** | Concluir a F05c (papel restrito) e pedir no Easypanel `log_error_verbosity = terse` no Postgres; `BACKUP_PASSPHRASE` obrigatória | Órion, revisão M3-D1 (relatório privado) |
+| **Fim do M4** | Confirmar a área atendida (hoje: Natal, Parnamirim, São Gonçalo do Amarante, Macaíba e Extremoz; Ceará-Mirim e São José de Mipibu fora) e os textos das categorias | Cronos, migração 0026 |
 | **Fim do M4** | **Tarifa** e faixas da taxa (decisão 7) | Simulador pronto em `tools/simulador-tarifa/` |
 | **Início do M6** | **Gateway** (D-03) e saque (decisão 6), com o contador | Comparação pronta em `docs/decisao-gateway-pagamento.md` |
 | **M8** | **Seguro APP** (D-11); **conta Google Play**; checklist do advogado | Abertas |

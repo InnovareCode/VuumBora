@@ -50,6 +50,8 @@ const WRITES: Record<string, readonly ('INSERT' | 'UPDATE' | 'DELETE')[]> = {
   // trocar papel. Nunca DELETE: ninguém é apagado, só desativado (`deactivated_at`). Ver a migração para a
   // compensação (CSRF + reautenticação por senha + nunca derruba o último dono ativo + auditoria).
   admin_users: ['INSERT', 'UPDATE'],
+  // 0026 (G1): pontos próprios da busca — a API só LÊ; quem muda é o operador.
+  curated_places: [],
   // 0024 (D1): catálogo da lista de documentos e configuração do motorista — a API só LÊ; quem muda é o operador.
   cities: [],
   devices: ['INSERT', 'UPDATE'],
@@ -63,12 +65,20 @@ const WRITES: Record<string, readonly ('INSERT' | 'UPDATE' | 'DELETE')[]> = {
   driver_settings: [],
   drivers: ['INSERT', 'UPDATE'],
   email_settings: ['INSERT', 'UPDATE'],
+  // 0026 (G1): cotação emitida só ENTRA (preço fechado; a purga e a exclusão de conta apagam por função do dono).
+  fare_quotes: ['INSERT'],
+  // 0026 (G1): valores da tarifa só entram (no rascunho); a versão a API cria e publica (o gatilho limita o UPDATE ao rascunho).
+  fare_rule_rates: ['INSERT'],
+  fare_rule_versions: ['INSERT', 'UPDATE'],
   // Catálogo de versões dos Termos/Política (0021): a API só LÊ; quem publica é o operador (`npm run legal:publish`, credencial dona).
   legal_document_versions: [],
   login_attempts: ['INSERT'],
   refresh_token_families: ['INSERT', 'UPDATE'],
   refresh_tokens: ['INSERT', 'UPDATE'],
+  // 0026 (G1): categorias (liga/desliga) e área de serviço — a API só LÊ; quem muda é o operador.
+  ride_categories: [],
   schema_migrations: [],
+  service_areas: [],
   vehicles: ['INSERT', 'UPDATE'],
   waitlist_signups: ['INSERT'],
 };
@@ -161,6 +171,34 @@ describe('matriz de privilégios do papel vuumbora_api', () => {
     assert.deepEqual((await pool.query('SELECT blocker FROM driver_availability_blockers(gen_random_uuid())')).rows, [{ blocker: 'driver_not_found' }]);
   });
 
+  test('0026: as views de tarifa são só leitura e as funções de tarifa/cotação só executam para o papel da API (e funcionam com ele)', async () => {
+    for (const view of ['fare_rule_version_periods', 'current_fare_rules']) {
+      const v = await owner.query<{ kind: string; s: boolean; i: boolean; u: boolean; d: boolean; t: boolean }>(
+        `SELECT c.relkind AS kind,
+                has_table_privilege('vuumbora_api', c.oid, 'SELECT') AS s,
+                has_table_privilege('vuumbora_api', c.oid, 'INSERT') AS i,
+                has_table_privilege('vuumbora_api', c.oid, 'UPDATE') AS u,
+                has_table_privilege('vuumbora_api', c.oid, 'DELETE') AS d,
+                has_table_privilege('vuumbora_api', c.oid, 'TRUNCATE') AS t
+           FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace AND c.relname = $1`,
+        [view],
+      );
+      assert.deepEqual(v.rows, [{ kind: 'v', s: true, i: false, u: false, d: false, t: false }], `${view}: a API só lê`);
+    }
+    for (const fn of ['current_fare_rule_version(text)', 'purge_fare_quotes(integer)']) {
+      const grants = await owner.query<{ api: boolean; pub: boolean }>(
+        `SELECT has_function_privilege('vuumbora_api', $1, 'EXECUTE') AS api, has_function_privilege('public', $1, 'EXECUTE') AS pub`,
+        [fn],
+      );
+      assert.deepEqual(grants.rows[0], { api: true, pub: false }, `${fn}: EXECUTE só para o papel da API`);
+    }
+    const current = (await pool.query<{ id: string | null }>(`SELECT current_fare_rule_version('natal') AS id`)).rows[0]!.id;
+    assert.ok(current, 'a API acha a tarifa vigente');
+    assert.ok((await pool.query(`SELECT 1 FROM current_fare_rules WHERE version_id = $1`, [current])).rowCount! >= 2, 'a API lê os valores vigentes');
+    assert.ok((await pool.query(`SELECT 1 FROM fare_rule_version_periods LIMIT 1`)).rowCount === 1, 'a API lê o histórico');
+    assert.equal(typeof (await pool.query<{ n: number }>('SELECT purge_fare_quotes(1) AS n')).rows[0]!.n, 'number', 'a API roda a purga');
+  });
+
   test('a conexão do app é de fato o papel restrito', async () => {
     const who = await pool.query('SELECT current_user AS u');
     assert.equal(who.rows[0].u, 'vuumbora_api');
@@ -210,6 +248,18 @@ describe('matriz de privilégios do papel vuumbora_api', () => {
     await denied(`DELETE FROM cities`);
     // 0025: o teto de validade por tipo é catálogo (só o operador muda).
     await denied(`UPDATE document_types SET max_validity_days = 3653`);
+    // 0026 (G1): categoria, área e pontos próprios são do operador; tarifa só entra; cotação nunca muda nem se apaga pela API.
+    await denied(`UPDATE ride_categories SET is_enabled = true`);
+    await denied(`DELETE FROM ride_categories`);
+    await denied(`UPDATE service_areas SET is_active = false`);
+    await denied(`INSERT INTO curated_places (code, city_code, name, address, category, lat, lng) VALUES ('forjado', 'natal', 'Forjado', 'Natal', 'landmark', -5.8, -35.2)`);
+    await denied(`DELETE FROM curated_places`);
+    await denied(`DELETE FROM fare_rule_versions`);
+    await denied(`UPDATE fare_rule_rates SET base_cents = 0`);
+    await denied(`DELETE FROM fare_rule_rates`);
+    await denied(`UPDATE fare_quotes SET price_cents = 1`);
+    await denied(`DELETE FROM fare_quotes`);
+    await denied(`TRUNCATE fare_quotes`);
   });
 });
 

@@ -9,6 +9,8 @@
  *  4. 0024 em diante sobre a 0023 com dados do S1: sobe, desce pelos rollbacks (schema volta igual) e sobe de novo.
  *  5. 0025 em diante sobre a 0024 com dados de motorista (aprovado, suspenso, excluído com nota de revisor): sobe sem
  *     perder dado, limpa a nota da conta excluída, desce pelos rollbacks (schema igual ao da 0024) e sobe de novo.
+ *  6. 0026 em diante sobre a 0025 com contas: sobe com as sementes de geografia e tarifa, cota sobre a conta antiga
+ *     (e a exclusão dela apaga a cotação), desce pelos rollbacks (schema igual ao da 0025) e sobe de novo.
  *
  * Usa um banco descartável por cenário (`..._test`), nunca o banco da suíte.
  * Se a credencial não puder criar banco, os cenários se declaram pulados.
@@ -395,5 +397,75 @@ describe('runner de migração com várias réplicas ao mesmo tempo', () => {
     const reup = await runMany(db, 2);
     for (const r of reup) assert.ok(r.report.ok && r.code === 0, `reaplicar falhou: ${r.report.error}`);
     assert.deepEqual(reup.flatMap(applied).sort(), after24, 'sobe de novo depois do rollback');
+  });
+
+  test('0026 EM DIANTE SOBRE A 0025 COM DADOS: sobe por 3 réplicas com as sementes de geografia e tarifa, cota sobre conta antiga, desce pelos rollbacks (schema igual ao da 0025) e sobe de novo', async (t) => {
+    if (!(await ensureCanCreate())) return t.skip('a credencial não cria banco neste ambiente');
+    const db = scratchName();
+    created.push(db);
+    await admin((c) => c.query(`CREATE DATABASE "${db}"`));
+    const upTo25 = FILES.filter((f) => f <= '0025_zzz');
+    assert.equal(upTo25.length, 25);
+    const after25 = FILES.slice(25);
+    assert.ok(after25[0]?.startsWith('0026_'), 'a 0026 existe');
+
+    const ids = { passenger: '', driver: '' };
+    // Banco na 0025 com contas (passageiro e motorista vinculado), candidatura e trilha.
+    const before = await inDb(db, async (c) => {
+      await c.query(`CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+      for (const f of upTo25) {
+        await c.query('BEGIN');
+        await c.query(readFileSync(join(MIGRATIONS_DIR, f), 'utf8'));
+        await c.query('INSERT INTO schema_migrations (id) VALUES ($1)', [f]);
+        await c.query('COMMIT');
+      }
+      const one = async (sql: string, params: unknown[] = []) => (await c.query<{ id: string }>(sql, params)).rows[0]!.id;
+      const dono = await one(`INSERT INTO admin_users (name, email, password_hash, role) VALUES ('dono', 'dono@teste.vuumbora.dev', $1, 'dono') RETURNING id`, [`$2b$04$${'x'.repeat(53)}`]);
+      await c.query(`INSERT INTO admin_audit_log (admin_id, action, target_type, target_id) VALUES ($1::uuid, 'admin.login', 'admin_user', $1::text)`, [dono]);
+      await c.query(`INSERT INTO driver_applications (name, email, phone, city, state, status, decided_by, decided_at) VALUES ('Motorista Um', 'm1@teste.vuumbora.dev', '84999990001', 'Natal', 'RN', 'approved', $1, now())`, [dono]);
+      ids.driver = await one(`INSERT INTO accounts (account_type, email, full_name, birth_date, email_verified_at) VALUES ('driver', 'm1@teste.vuumbora.dev', 'Motorista Um', '1990-01-01', now()) RETURNING id`);
+      ids.passenger = await one(`INSERT INTO accounts (account_type, email, full_name, birth_date, email_verified_at) VALUES ('passenger', 'p1@teste.vuumbora.dev', 'Passageira', '1992-02-02', now()) RETURNING id`);
+      assert.deepEqual((await c.query(`SELECT result FROM link_driver_application($1, 'natal')`, [ids.driver])).rows, [{ result: 'linked' }]);
+      return (await catalogSnapshot(c)).rows;
+    });
+
+    const up = await runMany(db, 3);
+    for (const r of up) assert.ok(r.report.ok && r.code === 0, `um processo falhou: ${r.report.error}\n${r.report.lines.join('\n')}`);
+    assert.deepEqual(up.flatMap(applied).sort(), after25, 'só o que vem depois da 0025 entra, uma vez cada');
+
+    await inDb(db, async (c) => {
+      const n = async (sql: string) => (await c.query<{ n: number }>(sql)).rows[0]!.n;
+      const counts = async () => [await n('SELECT count(*)::int AS n FROM accounts'), await n('SELECT count(*)::int AS n FROM drivers'), await n('SELECT count(*)::int AS n FROM admin_audit_log')];
+      assert.deepEqual(await counts(), [2, 1, 1], 'contas, motorista e trilha da 0025 intactos');
+      // Sementes: 5 categorias (2 ligadas), uma área ativa, ~20 pontos próprios e a tarifa de TESTE vigente.
+      assert.equal(await n('SELECT count(*)::int AS n FROM ride_categories'), 5);
+      assert.equal(await n('SELECT count(*)::int AS n FROM ride_categories WHERE is_enabled'), 2);
+      assert.equal(await n(`SELECT count(*)::int AS n FROM service_areas WHERE city_code = 'natal' AND is_active`), 1);
+      assert.ok((await n('SELECT count(*)::int AS n FROM curated_places')) >= 18);
+      const current = (await c.query<{ is_test: boolean; n: number }>(`SELECT bool_and(is_test) AS is_test, count(*)::int AS n FROM current_fare_rules WHERE city_code = 'natal'`)).rows[0];
+      assert.deepEqual(current, { is_test: true, n: 2 });
+      // A conta anterior à 0026 cota; excluída, a cotação sai junto (gatilho em accounts).
+      const version = (await c.query<{ id: string }>(`SELECT current_fare_rule_version('natal') AS id`)).rows[0]!.id;
+      await c.query(
+        `INSERT INTO fare_quotes (account_id, fare_version_id, category_slug, origin_lat, origin_lng, origin_label, destination_lat, destination_lng, destination_label, distance_m, duration_s, price_cents, signature, expires_at)
+         VALUES ($1, $2, 'vuumbora', -5.811, -35.2065, 'Midway Mall', -5.8429, -35.2113, 'Natal Shopping', 4200, 600, 1500, repeat('a', 64), clock_timestamp() + interval '300 seconds')`,
+        [ids.passenger, version],
+      );
+      assert.equal(await n('SELECT count(*)::int AS n FROM fare_quotes'), 1);
+      // Versão fechada é imutável também aqui (o banco que a migração criou, não o da suíte).
+      await assert.rejects(c.query(`UPDATE fare_rule_versions SET note = 'x' WHERE id = $1`, [version]), (e: { code?: string }) => e.code === '42501');
+      assert.equal((await c.query<{ r: string }>('SELECT delete_account($1, $2) AS r', [ids.passenger, `$2b$04$${'x'.repeat(53)}`])).rows[0]!.r, 'ok');
+      assert.equal(await n('SELECT count(*)::int AS n FROM fare_quotes'), 0, 'a exclusão da conta apagou a cotação');
+
+      // Desce (ordem inversa): o schema volta exatamente ao da 0025; contas, motorista e trilha ficam.
+      for (const f of [...after25].reverse()) await c.query(rollbackOf(f));
+      assert.deepEqual((await catalogSnapshot(c)).rows, before, 'schema depois do rollback == schema na 0025');
+      assert.deepEqual(await counts(), [2, 1, 1]);
+      assert.equal(await n('SELECT count(*)::int AS n FROM schema_migrations'), 25);
+    });
+
+    const reup = await runMany(db, 2);
+    for (const r of reup) assert.ok(r.report.ok && r.code === 0, `reaplicar falhou: ${r.report.error}`);
+    assert.deepEqual(reup.flatMap(applied).sort(), after25, 'sobe de novo depois do rollback');
   });
 });

@@ -12,7 +12,9 @@
  *
  * Migrações 0024/0025 (documentos do motorista): o papel não apaga documento, não escreve no
  * catálogo de documentos (nem no teto de validade da 0025) e EXECUTA a função de disponibilidade
- * da 0025. Os grants das migrações não derrubam o boot quando falham (viram aviso no log): por
+ * da 0025. Migração 0026 (geografia e preço): categorias, área e pontos próprios são só leitura; a
+ * tarifa só entra (nunca muda nem se apaga pela API); a cotação emitida não muda nem se apaga; a
+ * API lê a tarifa vigente e pode executar a purga. Os grants das migrações não derrubam o boot quando falham (viram aviso no log): por
  * isso este script confere os dois lados. As provas usam `WHERE false` — o banco confere o
  * privilégio sem tocar em linha nenhuma. Tabela/coluna/função ausente = migração não aplicada.
  *
@@ -130,6 +132,40 @@ async function main() {
         'a API executa driver_availability_blockers (0025)',
         "SELECT blocker FROM driver_availability_blockers('00000000-0000-0000-0000-000000000000'::uuid)",
         (rows) => rows.length === 1 && rows[0]?.blocker === 'driver_not_found',
+      ),
+    );
+    // 0026: categoria, área e pontos próprios são do operador; tarifa publicada e cotação emitida não mudam pela API.
+    results.push(
+      await checkDenied(client, 'UPDATE em ride_categories (ligar categoria) é recusado (0026)', 'UPDATE ride_categories SET is_enabled = is_enabled WHERE false'),
+    );
+    results.push(
+      await checkDenied(client, 'UPDATE em service_areas é recusado (0026)', 'UPDATE service_areas SET is_active = is_active WHERE false'),
+    );
+    results.push(
+      await checkDenied(
+        client,
+        'INSERT em curated_places é recusado (0026)',
+        "INSERT INTO curated_places (code, city_code, name, address, category, lat, lng) SELECT 'conferir-papel', 'natal', 'Conferir', 'Natal', 'landmark', -5.8, -35.2 WHERE false",
+      ),
+    );
+    results.push(await checkDenied(client, 'DELETE em fare_rule_versions é recusado (0026)', 'DELETE FROM fare_rule_versions WHERE false'));
+    results.push(await checkDenied(client, 'UPDATE em fare_rule_rates é recusado (0026)', 'UPDATE fare_rule_rates SET base_cents = base_cents WHERE false'));
+    results.push(await checkDenied(client, 'UPDATE em fare_quotes é recusado (0026)', 'UPDATE fare_quotes SET price_cents = price_cents WHERE false'));
+    results.push(await checkDenied(client, 'DELETE em fare_quotes é recusado (0026)', 'DELETE FROM fare_quotes WHERE false'));
+    results.push(
+      await checkAllowed(
+        client,
+        'a API lê a tarifa vigente (current_fare_rule_version e current_fare_rules, 0026)',
+        "SELECT current_fare_rule_version('natal') AS id, (SELECT count(*)::int FROM current_fare_rules WHERE city_code = 'natal') AS n",
+        (rows) => typeof rows[0]?.id === 'string' && rows[0]?.n >= 1,
+      ),
+    );
+    results.push(
+      await checkAllowed(
+        client,
+        'a API pode executar a purga de cotações (purge_fare_quotes, 0026)',
+        "SELECT has_function_privilege(current_user, 'purge_fare_quotes(integer)', 'EXECUTE') AS ok",
+        (rows) => rows[0]?.ok === true,
       ),
     );
   } finally {
