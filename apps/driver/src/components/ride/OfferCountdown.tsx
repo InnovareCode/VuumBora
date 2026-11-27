@@ -37,7 +37,12 @@ export const OfferCountdown = memo(function OfferCountdown({ expiresAt, totalSec
       accessibilityLabel={`Tempo para responder: ${secondsLeft} segundos`}
       accessibilityLiveRegion={warning ? 'assertive' : 'none'}
     >
-      <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
+      {/* Gira o SVG inteiro por `style` (RN puro), não o `Circle` por `rotation`/`origin`
+          (react-native-svg): no web, `rotation`+`origin` viravam um `transform-origin` com a
+          sintaxe errada ("22  22", sem unidade) — o DOM acusava "Invalid DOM property
+          `transform-origin`", e o aviso de desenvolvimento (LogBox) cobria o "Recusar" por cima,
+          interceptando o toque. Girar o `<Svg>` por fora não passa por esse caminho. */}
+      <Svg width={SIZE} height={SIZE} style={[StyleSheet.absoluteFill, styles.rotated]}>
         <Circle cx={SIZE / 2} cy={SIZE / 2} r={RADIUS} stroke={tokens.color.border.default} strokeWidth={STROKE} fill="none" />
         <Circle
           cx={SIZE / 2}
@@ -48,8 +53,6 @@ export const OfferCountdown = memo(function OfferCountdown({ expiresAt, totalSec
           fill="none"
           strokeDasharray={`${CIRCUMFERENCE * fraction} ${CIRCUMFERENCE}`}
           strokeLinecap="round"
-          rotation={-90}
-          origin={`${SIZE / 2}, ${SIZE / 2}`}
         />
       </Svg>
       <Text style={[styles.text, { color }]}>{Math.max(secondsLeft, 0)}s</Text>
@@ -59,5 +62,7 @@ export const OfferCountdown = memo(function OfferCountdown({ expiresAt, totalSec
 
 const styles = StyleSheet.create({
   root: { width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' },
+  // Começa no topo (12h), não aos 3h (padrão do SVG): gira o desenho inteiro, não o traço.
+  rotated: { transform: [{ rotate: '-90deg' }] },
   text: { ...textStyle('bold', 'caption'), ...tabularNums },
 });

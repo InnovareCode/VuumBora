@@ -1,7 +1,8 @@
-import { memo, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Check, MapPin, MoreHorizontal, Navigation } from 'lucide-react-native';
+import { DESTINATION_PROXIMITY_METERS, PASSENGER_NO_SHOW_WAIT_SECONDS, PICKUP_PROXIMITY_METERS } from '@vuumbora/domain';
 import {
   AppShell,
   Avatar,
@@ -24,16 +25,19 @@ import {
   theme,
   tokens,
   useKeyboardFocusRing,
-  useNetworkStatus,
+  type TextInputHandle,
 } from '@vuumbora/ui';
+import { useRobustOnlineStatus } from '../../src/lib/useRobustOnlineStatus';
 import { MoreOptionsSheet } from '../../src/components/ride/MoreOptionsSheet';
 import { useElapsedSeconds } from '../../src/components/ride/useElapsedSeconds';
 import { openEmergencyCall } from '../../src/support/openSupportChannel';
 import { openNavigation } from '../../src/navigation/openNavigation';
+import { ensureAssignedTrip, getDriverTripPort, MOCK_TRIP_ID, newIdempotencyKey } from '../../src/ride/driverRideClient';
 import { formatDistanceKm, formatElapsedClock, formatPickupDistance, formatPickupEta } from '../../src/utils/offerFormat';
 
 const COMPACT_WIDTH_BREAKPOINT = 375;
-const NO_SHOW_WAIT_S = 5 * 60; // decisão do dono, 22/11/2026: 5 min de espera no local (README, onda 4)
+/** Código deliberadamente ERRADO (≠ do que `driverRideClient` configura), só para as simulações de dev abaixo. */
+const DEV_WRONG_PICKUP_CODE = '1111';
 
 type RidePhase = 'en_route' | 'arrived' | 'in_progress';
 
@@ -85,7 +89,7 @@ export default function RideInProgressScreen() {
   const compact = width < COMPACT_WIDTH_BREAKPOINT;
   const narrowAddress = width < 360;
   const panelPadding = compact ? theme.layout.screenPaddingCompact : theme.layout.screenPadding;
-  const online = useNetworkStatus();
+  const online = useRobustOnlineStatus();
   const offline = devEstado === 'sem-rede' || !online;
 
   const [phase, setPhase] = useState<RidePhase>(forcedPhase ?? 'en_route');
@@ -98,8 +102,14 @@ export default function RideInProgressScreen() {
   const [navError, setNavError] = useState(devEstado === 'sem-app-navegacao');
   const [startLoading, setStartLoading] = useState(devEstado === 'iniciando');
   const [code, setCode] = useState('');
+  // M08 (D-12): o PIN real mora no mock (`driverRideClient`) — estes dois só refletem a RESPOSTA
+  // do `tripPort.start`, nunca um texto fixo por `devEstado`.
+  const [codeError, setCodeError] = useState<string | undefined>(undefined);
+  const [rateLimited, setRateLimited] = useState(false);
   const [finishDialogVisible, setFinishDialogVisible] = useState(devEstado === 'confirmar' || devEstado === 'confirmar-longe');
   const [finishLoading, setFinishLoading] = useState(devEstado === 'finalizando');
+  const codeInputRef = useRef<TextInputHandle>(null);
+  const handledArrivalRef = useRef<string | null>(null);
 
   const elapsedSinceArrival = useElapsedSeconds(arrivedAtMs);
   const loading = devEstado === 'carregando';
@@ -107,10 +117,11 @@ export default function RideInProgressScreen() {
   const passengerName = textoLongo ? LONG_PASSENGER_NAME : MOCK_PASSENGER_NAME;
   const pickupAddress = textoLongo ? LONG_PICKUP_ADDRESS : MOCK_PICKUP_ADDRESS;
   const destinationLabel = textoLongo ? LONG_DESTINATION_LABEL : MOCK_DESTINATION_LABEL;
-  const showCode = devEstado === 'codigo' || devEstado === 'codigo-errado' || devEstado === 'bloqueado';
-  const codeError = devEstado === 'codigo-errado' ? 'Código incorreto. Confira com o passageiro.' : undefined;
-  const rateLimited = devEstado === 'bloqueado';
-  const showNoShow = devEstado === 'espera-longa' || elapsedSinceArrival >= NO_SHOW_WAIT_S;
+  // "Perto" (dev, sem GPS real) simula uma distância ABAIXO do limiar oficial do domínio; "longe" é o
+  // valor padrão da oferta (1,8 km), já acima dele — PICKUP_PROXIMITY_METERS vem de `@vuumbora/domain`,
+  // não duplicado aqui (pedido do Atlas, 27/11/2026: "prazos num lugar só").
+  const pickupDistanceM = nearPickup ? PICKUP_PROXIMITY_METERS - 50 : MOCK_PICKUP_DISTANCE_M;
+  const showNoShow = devEstado === 'espera-longa' || elapsedSinceArrival >= PASSENGER_NO_SHOW_WAIT_SECONDS;
   const farFromDestination = devEstado === 'confirmar-longe';
 
   function handleMoreOptions() {
@@ -162,14 +173,79 @@ export default function RideInProgressScreen() {
     }, 700);
   }
 
-  function handleStart() {
-    if (startLoading || rateLimited || (showCode && code.length < 4) || offline) return;
+  /**
+   * M08 (D-12) — chama o `DriverTripPort.start` REAL do mock, com uma chave de idempotência NOVA
+   * a cada tentativa (uma chave reaproveitada faria o mock devolver o resultado CACHEADO da
+   * tentativa anterior, mesmo com um código diferente). `assignedTripInfo` só existe depois de
+   * `ensureAssignedTrip`+`arrived` — por isso `attemptStart` sempre garante os dois antes de
+   * chamar `start`, mesmo que o efeito de `phase==='arrived'` já tenha rodado (idempotente).
+   */
+  async function attemptStart(pickupCode: string): Promise<void> {
     setStartLoading(true);
-    setTimeout(() => {
-      setStartLoading(false);
+    await ensureAssignedTrip();
+    await getDriverTripPort().arrived(MOCK_TRIP_ID, newIdempotencyKey());
+    const result = await getDriverTripPort().start(MOCK_TRIP_ID, { pickupCode }, newIdempotencyKey());
+    setStartLoading(false);
+    if (result.ok) {
+      setCodeError(undefined);
       setPhase('in_progress');
-    }, 700);
+      return;
+    }
+    if (result.error.kind === 'rate_limited') {
+      setCodeError(undefined); // o aviso de bloqueio substitui o do campo, não soma a ele
+      setRateLimited(true);
+      return;
+    }
+    if (result.error.kind === 'validation') {
+      // Copy da FICHA (M08 §7), não a mensagem literal do mock (`fields.pickupCode` do servidor é
+      // "Código de embarque incorreto." — mais genérica, pensada pra qualquer motivo de validação,
+      // não só o código errado). "Informe o código" (campo vazio) não deveria chegar aqui de verdade
+      // (o botão já fica desabilitado com menos de 4 dígitos).
+      setCodeError('Código incorreto. Confira com o passageiro.');
+      setCode('');
+      codeInputRef.current?.focus();
+    }
   }
+
+  function handleStart() {
+    if (startLoading || rateLimited || code.length < 4 || offline) return;
+    void attemptStart(code);
+  }
+
+  // Garante a corrida mock desde o 1º render (M07 também precisa dela: "Cheguei" só muda a FASE da
+  // tela, mas o `start` da M08 exige que o `DriverTripPort` já tenha `tripId` atribuído).
+  useEffect(() => {
+    void ensureAssignedTrip();
+  }, []);
+
+  // Ao entrar na M08 (botão "Cheguei" OU `?devFase=arrived` direto): transiciona o mock para
+  // `driver_arrived` (condição para o `start` aceitar) e, só em DEV, simula as tentativas que o
+  // `?devEstado=codigo-errado`/`bloqueado` pedem para capturar sem digitar nada na tela.
+  //
+  // A guarda é por CHAVE (fase + devEstado), não um booleano único: a ferramenta de qualidade-tela
+  // troca de `devEstado` por navegação CLIENTE (`pushState`, sem remontar a tela — mesmo padrão de
+  // `irPara` no roteiro da Íris), então um booleano "já rodei uma vez" travaria a simulação de
+  // `codigo-errado` para `bloqueado` na MESMA instância do componente (achado real, 27/11/2026: o
+  // roteiro ao vivo pegou isso, um `devEstado` sozinho nunca teria mostrado).
+  useEffect(() => {
+    const key = `${phase}:${devEstado ?? ''}`;
+    if (phase !== 'arrived' || handledArrivalRef.current === key) return;
+    handledArrivalRef.current = key;
+    void (async () => {
+      await ensureAssignedTrip();
+      await getDriverTripPort().arrived(MOCK_TRIP_ID, newIdempotencyKey());
+      if (devEstado === 'codigo-errado') {
+        await attemptStart(DEV_WRONG_PICKUP_CODE);
+      } else if (devEstado === 'bloqueado') {
+        // START_CODE_ATTEMPTS (mock) = 5: a 6ª tentativa é a que devolve `rate_limited`.
+        for (let attempt = 0; attempt < 6; attempt += 1) {
+          // eslint-disable-next-line no-await-in-loop -- simulação sequencial de propósito (cada tentativa depende do contador da anterior).
+          await attemptStart(DEV_WRONG_PICKUP_CODE);
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `attemptStart` fecha sobre estado que muda a cada chamada; só `phase`/`devEstado` decidem se o efeito roda.
+  }, [phase, devEstado]);
 
   function handleConfirmFinish() {
     if (finishLoading) return;
@@ -242,7 +318,7 @@ export default function RideInProgressScreen() {
             ) : (
               <>
                 <Text style={styles.panelTitle} testID="corrida-eta">
-                  {formatPickupEta(MOCK_PICKUP_ETA_S)} · {formatDistanceKm(MOCK_PICKUP_DISTANCE_M)}
+                  {formatPickupEta(MOCK_PICKUP_ETA_S)} · {formatDistanceKm(pickupDistanceM)}
                 </Text>
                 <View style={styles.passengerRow}>
                   <Avatar name={passengerName} size="md" />
@@ -334,7 +410,7 @@ export default function RideInProgressScreen() {
               label="Iniciar corrida"
               onPress={handleStart}
               loading={startLoading}
-              disabled={rateLimited || (showCode && code.length < 4) || offline}
+              disabled={rateLimited || code.length < 4 || offline}
               accessibilityLabel={offline ? 'Iniciar corrida, indisponível: sem conexão' : 'Iniciar corrida'}
               testID="start-ride-button"
             />
@@ -395,19 +471,24 @@ export default function RideInProgressScreen() {
                 </View>
               </SurfaceRaised>
 
-              {showCode ? (
-                <View style={styles.codeBlock} testID="corrida-codigo-embarque">
-                  <CodeInput
-                    label="Código de embarque"
-                    length={4}
-                    value={code}
-                    onChangeText={setCode}
-                    error={Boolean(codeError)}
-                    testID="corrida-codigo-input"
-                    {...(codeError ? { errorMessage: codeError } : { helperText: 'Peça o código ao passageiro.' })}
-                  />
-                </View>
-              ) : null}
+              {/* D-12: o PIN de embarque aparece SEMPRE no estado "chegou" (ficha M08 §2/§5) — nunca só
+                  num estado de dev. `inputRef` é pra onde o foco vai quando o mock responde "código
+                  incorreto" (campo limpo + foco, igual a um formulário real). */}
+              <View style={styles.codeBlock} testID="corrida-codigo-embarque">
+                <CodeInput
+                  label="Código de embarque"
+                  length={4}
+                  value={code}
+                  onChangeText={(text) => {
+                    setCode(text);
+                    setCodeError(undefined); // qualquer edição nova limpa o erro anterior, como um campo normal
+                  }}
+                  error={Boolean(codeError)}
+                  inputRef={codeInputRef}
+                  testID="corrida-codigo-input"
+                  {...(codeError ? { errorMessage: codeError } : { helperText: 'Peça o código ao passageiro.' })}
+                />
+              </View>
 
               {rateLimited ? (
                 <InlineAlert tone="danger" message="Muitas tentativas. Fale com o suporte." testID="corrida-bloqueado">
@@ -536,7 +617,11 @@ export default function RideInProgressScreen() {
       <ConfirmDialog
         visible={finishDialogVisible}
         title="Finalizar a corrida?"
-        description={farFromDestination ? `Confirme a chegada ao destino. Você está a ${formatPickupDistance(650)} do destino.` : 'Confirme a chegada ao destino.'}
+        description={
+          farFromDestination
+            ? `Confirme a chegada ao destino. Você está a ${formatPickupDistance(DESTINATION_PROXIMITY_METERS + 150)} do destino.`
+            : 'Confirme a chegada ao destino.'
+        }
         confirmLabel="Finalizar"
         cancelLabel="Voltar"
         loading={finishLoading}

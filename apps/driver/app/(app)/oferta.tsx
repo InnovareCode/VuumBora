@@ -17,13 +17,16 @@ import {
   textStyle,
   theme,
   tokens,
-  useNetworkStatus,
+  useSecondsUntil,
 } from '@vuumbora/ui';
+import { useRobustOnlineStatus } from '../../src/lib/useRobustOnlineStatus';
 import { OfferCountdown } from '../../src/components/ride/OfferCountdown';
 import { formatPickupDistance, formatPickupEta, formatTripDistanceRange, formatTripDurationRange } from '../../src/utils/offerFormat';
 
 const OFFER_TTL_S = 15;
 const SHORT_WINDOW_HEIGHT = 640;
+/** M06 §5 ("contador em zero"): sem resposta do servidor em 3 s depois de zerar, a tela fecha sozinha. */
+const AUTO_EXPIRE_AFTER_ZERO_MS = 3000;
 
 interface MockOffer {
   readonly pickupNeighborhood: string;
@@ -97,11 +100,12 @@ export default function RideOfferScreen() {
   const forcedState = __DEV__ && isDevState(devEstado) ? devEstado : undefined;
   const { height: windowHeight } = useWindowDimensions();
   const compactHeight = windowHeight < SHORT_WINDOW_HEIGHT;
-  const online = useNetworkStatus();
+  const online = useRobustOnlineStatus();
 
   const offerData = forcedState === 'texto-longo' ? LONG_TEXT_OFFER : DEFAULT_OFFER;
   const offline = forcedState === 'sem-rede' || !online;
-  const revokedReason = forcedState === 'tomada' ? 'taken' : forcedState === 'expirou' ? 'expired' : forcedState === 'cancelada' ? 'cancelled' : undefined;
+  const forcedRevokedReason =
+    forcedState === 'tomada' ? 'taken' : forcedState === 'expirou' ? 'expired' : forcedState === 'cancelada' ? 'cancelled' : undefined;
 
   // Instante fixo no MONTE da tela (nunca recalculado a cada render) — `expiresAt` é o que manda,
   // igual ao servidor de verdade (M06 §0: "o contador visual NÃO é fonte de verdade").
@@ -110,6 +114,21 @@ export default function RideOfferScreen() {
   const [accepting, setAccepting] = useState(forcedState === 'aceitando');
   const [declining, setDeclining] = useState(false);
   const [acceptNetworkError, setAcceptNetworkError] = useState(forcedState === 'erro-rede');
+  const [autoExpired, setAutoExpired] = useState(false);
+
+  // M06 §5 ("contador local em zero"): o anel chega a 0 e os botões CONTINUAM ativos (o servidor é
+  // quem decide, não o relógio local) — só depois de 3 s sem resposta nenhuma é que a tela fecha
+  // sozinha com "A oferta expirou.". `useSecondsUntil` é a MESMA leitura que o `OfferCountdown` usa
+  // (por instante, não por um `setInterval` próprio) — os dois nunca podem discordar sobre quando
+  // zerou.
+  const secondsLeft = useSecondsUntil(Date.parse(expiresAt));
+  useEffect(() => {
+    if (secondsLeft > 0 || autoExpired || forcedRevokedReason || accepting || declining) return undefined;
+    const timer = setTimeout(() => setAutoExpired(true), AUTO_EXPIRE_AFTER_ZERO_MS);
+    return () => clearTimeout(timer);
+  }, [secondsLeft, autoExpired, forcedRevokedReason, accepting, declining]);
+
+  const revokedReason = forcedRevokedReason ?? (autoExpired ? 'expired' : undefined);
 
   // Voltar do Android NÃO fecha a oferta (D-34): recusar é uma decisão, não um gesto acidental.
   useEffect(() => {
