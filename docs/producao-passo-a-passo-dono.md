@@ -631,6 +631,7 @@ opcionais mudam o alvo — o comentário no topo do próprio arquivo explica (`V
 - [ ] Admin de produção criado; login com 2FA funcionou
 - [ ] `ADMIN_ALLOWED_ORIGINS` e `ADMIN_TOTP_ENCRYPTION_KEY` preenchidas, sem barra final
 - [ ] `REQUIRE_SECRETS=true` no `vuumbora-backend`
+- [ ] **Estado em 27/11/2026:** papel restrito `vuumbora_api` ativo e conferido (tudo OK), `RUN_MIGRATIONS_ON_BOOT=false`, migrações até a 0026 aplicadas, credencial dona guardada no gerenciador de senhas do dono. `AUTH_PEPPER` trocado; `AUTH_JWT_SECRET` provavelmente trocado (o gerador foi interrompido nele: conferir); **`ADMIN_TOTP_ENCRYPTION_KEY` ainda é o antigo, que passou pela conversa** — o dono adiou a troca ("estamos em desenvolvimento"). Trocar antes de abrir o cadastro, rodando de novo `tools/producao/gerar-segredos.ps1` e refazendo o 2FA (`reissue-2fa-enrollment.mjs --reset-2fa` com a credencial dona em `MIGRATION_DATABASE_URL`).
 - [ ] **Trocar os três segredos antes de abrir o cadastro** (`AUTH_PEPPER`, `AUTH_JWT_SECRET`,
       `ADMIN_TOTP_ENCRYPTION_KEY`). Os da primeira publicação, em 22/11/2026, foram gerados na conversa com a equipe
       porque o dono estava no celular, e ficaram no histórico. Gere os novos com
