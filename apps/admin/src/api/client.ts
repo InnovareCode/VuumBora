@@ -36,8 +36,15 @@ export function onUnauthorized(listener: UnauthorizedListener): () => void {
   return () => unauthorizedListeners.delete(listener);
 }
 
-function mapStatusToError(status: number, body: Envelope<unknown> | undefined): ApiError {
+function mapStatusToError(status: number, body: Envelope<unknown> | undefined, fieldByCode?: Readonly<Record<string, string>>): ApiError {
   const err = body && body.ok === false ? body.error : undefined;
+  // Rotas do M3 (fila de documentos): o servidor manda só `{ code, message }`, sem `fields` — o CAMPO vem do
+  // catálogo da área, que a porta passa em `fieldByCode` (ver `DOCUMENT_REVIEW_FIELD_BY_CODE`). Só vale para quem
+  // passa o mapa: as rotas antigas continuam exatamente como antes.
+  const mappedField = fieldByCode && err?.code && Object.hasOwn(fieldByCode, err.code) ? fieldByCode[err.code] : undefined;
+  if ((status === 400 || status === 413 || status === 422) && mappedField) {
+    return { kind: 'validation', fields: { [mappedField]: err?.message ?? '' } };
+  }
   if (status === 400) {
     // `activation_token_invalid` (`POST /auth/activate`) ANTES do genérico: não é um campo de formulário com
     // mensagem própria (é sempre a mesma resposta para as quatro causas — ver o `kind` em result.ts).
@@ -108,11 +115,13 @@ export interface RequestInput {
    * docs/plano-sistema.md §Idempotency-Key, `src/lib/idempotency.ts`).
    */
   readonly idempotencyKey?: string;
+  /** `code` de validação → campo (ver `mapStatusToError`). Ausente = comportamento de sempre. */
+  readonly fieldByCode?: Readonly<Record<string, string>>;
 }
 
 /** `baseUrl` sem barra final. Sempre com cookie (`credentials: 'include'`). */
 export function createHttpRequester(baseUrl: string) {
-  return async function request<T>({ path, method = 'GET', body, idempotencyKey }: RequestInput): Promise<Result<T>> {
+  return async function request<T>({ path, method = 'GET', body, idempotencyKey, fieldByCode }: RequestInput): Promise<Result<T>> {
     try {
       const init: RequestInit = { method, credentials: 'include' };
       const headers: Record<string, string> = {};
@@ -131,7 +140,7 @@ export function createHttpRequester(baseUrl: string) {
       const json: Envelope<T> | undefined = await response.json().catch(() => undefined);
 
       if (!response.ok || !json || json.ok === false) {
-        const error = mapStatusToError(response.status, json);
+        const error = mapStatusToError(response.status, json, fieldByCode);
         if (error.kind === 'unauthorized') {
           // Sessão morreu — o token de CSRF dela não serve para a próxima
           // (ver src/api/csrf.ts).

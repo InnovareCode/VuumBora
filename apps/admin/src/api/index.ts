@@ -1,14 +1,18 @@
-import { createHttpAuthAdapter, createMockAuthAdapter, type AuthPort } from './auth';
+import { createHttpAuthAdapter, createMockAuthAdapter, readMockSessionRole, type AuthPort } from './auth';
 import { createHttpTwoFactorAdapter, createMockTwoFactorAdapter, type TwoFactorPort } from './twoFactor';
 import { createHttpEmailSettingsAdapter, createMockEmailSettingsAdapter, type EmailSettingsPort } from './emailSettings';
 import { createHttpDriverApplicationAdapter, createMockDriverApplicationAdapter, type DriverApplicationPort } from './driverApplications';
 import { createHttpAdminUserAdapter, createMockAdminUserAdapter, type AdminUserPort } from './adminUsers';
+import { createHttpDocumentReviewAdapter, type DocumentReviewPort } from './documentReview';
+import { createMockDocumentReviewAdapter } from './documentReviewMock';
 
 export type { AuthPort } from './auth';
 export type { TwoFactorPort } from './twoFactor';
 export type { EmailSettingsPort } from './emailSettings';
 export type { DriverApplicationPort } from './driverApplications';
 export type { AdminUserPort } from './adminUsers';
+export type { DocumentReviewPort } from './documentReview';
+export * from './documentReviewTypes';
 export * from './types';
 export * from './result';
 export { onUnauthorized } from './client';
@@ -20,6 +24,7 @@ export interface Api {
   readonly emailSettings: EmailSettingsPort;
   readonly driverApplications: DriverApplicationPort;
   readonly adminUsers: AdminUserPort;
+  readonly documentReview: DocumentReviewPort;
 }
 
 /**
@@ -39,6 +44,8 @@ export function createApi(): Api {
       emailSettings: createMockEmailSettingsAdapter(),
       driverApplications: createMockDriverApplicationAdapter(),
       adminUsers: createMockAdminUserAdapter(),
+      // O papel vem da sessão mock a cada chamada: o 403 por papel aparece igual ao do servidor.
+      documentReview: createMockDocumentReviewAdapter({ role: readMockSessionRole }),
     };
   }
 
@@ -53,5 +60,6 @@ export function createApi(): Api {
     emailSettings: createHttpEmailSettingsAdapter(baseUrl),
     driverApplications: createHttpDriverApplicationAdapter(baseUrl),
     adminUsers: createHttpAdminUserAdapter(baseUrl),
+    documentReview: createHttpDocumentReviewAdapter(baseUrl),
   };
 }

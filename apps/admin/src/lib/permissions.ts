@@ -1,4 +1,5 @@
 import type { AdminRole } from '../api/types';
+import { DOCUMENT_REVIEW_ROLES } from '../api/documentReviewTypes';
 
 /**
  * Mesmos papéis que a rota de decisão (`approve`/`reject`) exige no backend
@@ -28,4 +29,13 @@ export function canManageAdminUsers(role: AdminRole | null | undefined): boolean
  */
 export function roleRequiresSecondFactorGate(role: AdminRole): boolean {
   return role === 'dono' || role === 'financeiro';
+}
+
+/**
+ * Espelha `canReviewDocuments` de `@vuumbora/api-client/admin` (papéis `dono` e `revisor_documentos`; o teste de
+ * contrato confere a lista). Quem não está aqui leva `403 forbidden` em TODA rota de documento, antes de qualquer
+ * outra checagem — isto só evita mostrar a fila, o CPF e o arquivo a quem o servidor vai recusar.
+ */
+export function canReviewDocuments(role: AdminRole | null | undefined): boolean {
+  return !!role && DOCUMENT_REVIEW_ROLES.includes(role);
 }

@@ -57,6 +57,10 @@ jobs:
       # packages/ui/src/device. O `npm run check` so tipa estes testes.
       - name: Testes do packages/ui
         run: npm test -w @vuumbora/ui
+      # Painel: contrato espelhado do api-client (validadores contra o mock do pacote), adaptador http e mock da fila de
+      # documentos (D7). O typecheck do contrato ja roda no `npm run check`; estes sao os testes de comportamento.
+      - name: Testes do apps/admin
+        run: npm test -w @vuumbora/admin
       # nginx.conf nunca foi executado nesta maquina de desenvolvimento (sem nginx nem Docker).
       # Mesma imagem dos Dockerfiles; o arquivo entra onde eles o copiam. Pega erro de sintaxe e
       # de diretiva antes de o Easypanel tentar subir o contêiner (M-4, revisao-seguranca-s1-rodada3).

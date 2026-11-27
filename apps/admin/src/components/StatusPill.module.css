@@ -27,3 +27,10 @@
   color: var(--role-danger);
   border-color: color-mix(in srgb, var(--role-danger) 45%, transparent);
 }
+
+/* Estado sem urgência nem veredito (ex.: cadastro do motorista ainda sem documentos) — fila de documentos, D7. */
+.neutral {
+  background: var(--role-surface-elevated);
+  color: var(--role-text-secondary);
+  border-color: var(--role-border);
+}

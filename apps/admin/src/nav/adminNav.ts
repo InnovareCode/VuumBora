@@ -1,6 +1,8 @@
-import { Mail, ShieldCheck, UserCheck, Users } from 'lucide-react';
+import { FileCheck2, Mail, ShieldCheck, UserCheck, Users } from 'lucide-react';
+import type { AdminRole } from '../api/types';
+import { DOCUMENT_REVIEW_ROLES } from '../api/documentReviewTypes';
 import type { NavGroup, NavItem } from './types';
-import { flattenNav, matchNavItem } from './types';
+import { filterNavForRole, flattenNav, matchNavItem } from './types';
 
 /**
  * Mapa de navegação do painel administrativo.
@@ -31,6 +33,17 @@ export const ADMIN_NAV: readonly NavGroup[] = [
         // também, senão o menu passa a mentir sobre quem pode abrir isto
         // (o backend ainda protege com 403; isto é só o menu não mentir).
         roles: ['dono', 'operacao'],
+      },
+      {
+        label: 'Documentos',
+        href: '/document-reviews',
+        icon: FileCheck2,
+        hint: 'Fila de documentos do motorista: conferir, aprovar ou recusar',
+        // `DOCUMENT_REVIEW_ROLES` (dono e revisor de documentos), espelho de `@vuumbora/api-client/admin`. O
+        // servidor devolve 403 em toda rota de documento para os outros papéis; isto é só o menu não mentir.
+        // O detalhe do motorista mora DENTRO deste prefixo (`/document-reviews/drivers/:id`) de propósito: a
+        // tela de acesso negado do `AppShell` casa por prefixo e cobre as duas rotas.
+        roles: DOCUMENT_REVIEW_ROLES,
       },
     ],
   },
@@ -73,6 +86,16 @@ export const ADMIN_NAV: readonly NavGroup[] = [
 
 /** Lista achatada — conveniente para busca e para casar a rota atual. */
 export const ADMIN_NAV_ITEMS: readonly NavItem[] = flattenNav(ADMIN_NAV);
+
+/**
+ * Primeira área que o papel ENXERGA no menu — destino de `/` e do pós-login. Antes era sempre
+ * `/driver-applications`, e quem não abre o pré-cadastro (revisor de documentos, suporte, financeiro)
+ * entrava direto na tela de "acesso restrito". Para `dono` e `operacao` continua o pré-cadastro (primeiro
+ * item do mapa). Sem papel (deslogado/checando) cai no primeiro item sem restrição.
+ */
+export function homePathForRole(role: AdminRole | null | undefined): string {
+  return filterNavForRole(ADMIN_NAV, role)[0]?.items[0]?.href ?? '/security';
+}
 
 /** Item cuja rota casa com o pathname atual (o mais específico vence). */
 export function matchAdminNavItem(pathname: string): NavItem | undefined {

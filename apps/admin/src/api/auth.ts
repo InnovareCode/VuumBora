@@ -134,6 +134,14 @@ function writeMockSession(session: AdminUser | null): void {
 }
 
 /**
+ * Papel do admin fictício da sessão mock, lido de novo a CADA chamada pelos mocks que respondem 403 por
+ * papel (fila de documentos, `documentReviewMock.ts`). Só leitura: não muda a sessão.
+ */
+export function readMockSessionRole(): AdminUser['role'] | null {
+  return readMockSession()?.role ?? null;
+}
+
+/**
  * Mock explícito (nunca fallback silencioso — ver src/api/index.ts). Aceita
  * qualquer e-mail que pareça e-mail e qualquer senha com 4+ caracteres, só
  * para a tela ter o que mostrar enquanto `/v1/admin/*` não existe.

@@ -8,6 +8,7 @@ import { DriverApplicationsListPage } from './pages/DriverApplicationsListPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { LoadingState } from './components/RequestState';
 import { SessionUnavailable } from './components/SessionUnavailable';
+import { homePathForRole } from './nav/adminNav';
 
 // Detalhe é a tela mais pesada (grade de campos + botão de copiar) e não é a
 // primeira coisa que o admin vê — lazy load por rota.
@@ -23,6 +24,14 @@ const EmailSettingsPage = lazy(() => import('./pages/EmailSettingsPage').then((m
 
 // Gestão de usuários: só o papel `dono` abre, e não é a primeira tela de ninguém — lazy por rota.
 const UsersPage = lazy(() => import('./pages/UsersPage').then((m) => ({ default: m.UsersPage })));
+
+// Fila de documentos (D7): só `dono` e `revisor_documentos` abrem — lazy por rota, como as outras áreas restritas.
+const DocumentReviewQueuePage = lazy(() =>
+  import('./pages/DocumentReviewQueuePage').then((m) => ({ default: m.DocumentReviewQueuePage })),
+);
+const DocumentReviewDriverPage = lazy(() =>
+  import('./pages/DocumentReviewDriverPage').then((m) => ({ default: m.DocumentReviewDriverPage })),
+);
 
 /**
  * Rota de layout: decide entre checando/deslogado/logado e, só quando
@@ -41,11 +50,12 @@ function RequireAuth() {
 }
 
 export function App() {
-  const { status, postLoginPath } = useAuth();
+  const { status, postLoginPath, admin } = useAuth();
+  const homePath = homePathForRole(admin?.role);
 
   return (
     <Routes>
-      <Route path="/login" element={status === 'signedIn' ? <Navigate to={postLoginPath ?? '/driver-applications'} replace /> : <LoginPage />} />
+      <Route path="/login" element={status === 'signedIn' ? <Navigate to={postLoginPath ?? homePath} replace /> : <LoginPage />} />
       {/* Pública, sem cookie (docs/contrato-admin-usuarios.md §6) — mas se a pessoa já está logada, não faz
           sentido oferecer "ativar conta" de novo; manda para a área de sempre, igual `/login` faz. */}
       <Route path="/activate" element={status === 'signedIn' ? <Navigate to="/" replace /> : <ActivateAccountPage />} />
@@ -68,6 +78,22 @@ export function App() {
           }
         />
         <Route
+          path="/document-reviews"
+          element={
+            <Suspense fallback={<LoadingState label="Carregando…" />}>
+              <DocumentReviewQueuePage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/document-reviews/drivers/:driverId"
+          element={
+            <Suspense fallback={<LoadingState label="Carregando…" />}>
+              <DocumentReviewDriverPage />
+            </Suspense>
+          }
+        />
+        <Route
           path="/email"
           element={
             <Suspense fallback={<LoadingState label="Carregando…" />}>
@@ -84,7 +110,9 @@ export function App() {
           }
         />
       </Route>
-      <Route path="/" element={<Navigate to="/driver-applications" replace />} />
+      {/* Espera a sessão: o destino depende do papel, e decidir antes (papel ainda nulo) mandaria todo mundo para
+          a primeira área sem restrição. */}
+      <Route path="/" element={status === 'checking' ? <LoadingState label="Verificando sessão…" /> : <Navigate to={homePath} replace />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
