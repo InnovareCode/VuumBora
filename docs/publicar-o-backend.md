@@ -218,6 +218,35 @@ Fatia D5 (M3). Detalhes e motivos no `apps/api/README.md` e no cabeçalho de `ap
 
 Ainda sem prova: o agendamento no Easypanel em si, porque não tenho acesso ao painel do servidor.
 
+### Rotina diária: apagar cotações com mais de 30 dias (`quotes:purge`)
+
+Fatia G4 (M4). As cotações guardam origem, destino e rótulos: são localização da pessoa e só podem ficar 30 dias. A
+retenção depende deste agendamento (Órion, revisão M4 G2-G4, S-9): sem ele, nada é apagado.
+
+- **Quando:** uma vez por dia, às 04:00 de Natal = **07:00 UTC**. Cron em UTC: `0 7 * * *`.
+- **Comando, dentro do contêiner da API:** `node scripts/purge-fare-quotes.mjs` (ou `npm run quotes:purge`, **sem** `-w`).
+  Repete a limpeza em lotes de 5.000 até zerar (`--batch=N` muda o lote).
+- **Variáveis:** `DATABASE_URL` com o papel restrito basta.
+- **Duas execuções ao mesmo tempo:** a segunda desiste com código 0 (evento `quotes_purge_skipped`). **Falha:** código 1.
+  O log só tem contagens.
+
+### Busca de endereço e cotação: variáveis do Mapbox no servidor
+
+Fatias G3 e G4 (M4). **Antes de pôr `MAPBOX_SERVER_TOKEN` em produção**, o dono decide os termos do Mapbox (o modo
+temporário de busca não permite guardar resultado; ver `docs/cronograma.md`) e liga o alerta de cobrança no painel do Mapbox.
+Sem o token, busca, pino e cotação respondem 503 `geo_unavailable`, e o resto da API funciona.
+
+| Variável | Padrão | Para quê |
+|---|---|---|
+| `MAPBOX_SERVER_TOKEN` | — | Token **secreto do servidor**, separado do público dos apps, com escopo mínimo. Nunca reutilizar o `pk.` dos apps |
+| `QUOTE_SIGNING_SECRET` | — | Assinatura das cotações (32 caracteres ou mais). Sem ele, cotar responde 503 |
+| `ALLOW_TEST_FARES` | falso | Só `true` em homologação. Em produção a tarifa de teste é recusada (503 `fare_not_configured`); o `/healthz` informa o estado |
+| `GEO_CACHE_TTL_SECONDS` | `0` | Cache do Mapbox **desligado**. Só ligar se os termos contratados permitirem guardar resultado |
+| `GEO_DAILY_BUDGET_GEOCODING` / `_SEARCHBOX` / `_REVERSE` / `_DIRECTIONS` | 2000 / 1000 / 1000 / 3000 | Teto global de chamadas por dia (de Natal) e por motor; esgotado, 503 e o evento `geo_budget_exhausted`. Ajustar ao plano contratado. O teto fica em memória: reiniciar zera o dia e, com várias instâncias, vale por instância |
+| `GEO_SEARCH_PER_DAY` / `GEO_REVERSE_PER_DAY` / `QUOTES_PER_DAY` | 600 / 300 / 150 | Cota diária por conta, além do limite por minuto |
+
+As demais variáveis opcionais estão em `apps/api/.env.example`.
+
 ### Termos de Uso e Política: `LEGAL_DOCUMENTS_BASE_URL` e a primeira versão publicada
 
 Achado B-7 da Órion (`docs/revisao-seguranca-s1-rodada3b.md`). **Sem isto o cadastro dos apps responde 503
