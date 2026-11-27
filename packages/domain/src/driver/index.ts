@@ -3,6 +3,7 @@
  * Nunca importar a partir de apps/passenger.
  */
 import type { ApproximatePlace, IsoDateTime, Money, NumericRange, TripId } from '../index';
+import type { VerificationStatus } from './onboarding';
 
 /** Fases de jornada do motorista (DESIGN_SYSTEM_MESTRE §8). */
 export type DriverPhase =
@@ -15,7 +16,31 @@ export type DriverPhase =
   | 'in_progress'
   | 'completed';
 
-export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'correction_requested';
+/** Cadastro do motorista (M3, fatia K0): estados, documentos, veículo e a regra de ficar online. */
+export {
+  DOCUMENT_CONTENT_TYPES,
+  DOCUMENT_MAX_SIZE_BYTES,
+  DOCUMENT_URL_MAX_TTL_SECONDS,
+  deriveVerificationStatus,
+  documentUploadProblem,
+  goOnlineBlocker,
+  isCalendarDate,
+  isDocumentContentType,
+  isDocumentExpired,
+  isReadyForApproval,
+  isSha256Hex,
+  isValidPlate,
+  isVehicleTooOld,
+  natalCalendarDate,
+  normalizePlate,
+} from './onboarding';
+export type {
+  DocumentContentType,
+  DriverDocumentStatus,
+  GoOnlineBlocker,
+  VerificationFacts,
+  VerificationStatus,
+} from './onboarding';
 
 /**
  * Oferta de corrida (plano-sistema.md §6.2, despacho sequencial, uma por vez).
@@ -53,7 +78,10 @@ export interface RideOffer {
   readonly tripDurationS: NumericRange;
 }
 
-/** Regra (MOTORISTA.md): não permitir ficar online antes de cadastro e documentação aprovados. */
+/**
+ * Regra (MOTORISTA.md): não permitir ficar online antes de cadastro e documentação aprovados. Só olha
+ * o estado; a regra completa do M3 (com documento vencido) é `goOnlineBlocker`.
+ */
 export function canGoOnline(verification: VerificationStatus): boolean {
   return verification === 'approved';
 }

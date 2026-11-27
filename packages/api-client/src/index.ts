@@ -59,6 +59,19 @@ export type Result<T> =
   | { readonly ok: true; readonly data: T; readonly origin: DataOrigin }
   | { readonly ok: false; readonly error: ApiError };
 
+/**
+ * Página de lista por cursor (contratos do M3 e do M4: fila de documentos, versões de tarifa). `nextCursor`
+ * ausente = não há próxima página. Nenhuma porta devolve "todos os registros" sem limite.
+ */
+export interface CursorPage<T> {
+  readonly items: readonly T[];
+  readonly nextCursor?: string;
+}
+
+/** Erro do servidor → `ApiError` (M3/M4): o mock e o http usam a mesma função e o mesmo catálogo. */
+export { apiErrorFromServerReply, catalogError, fieldsOfCatalog, NETWORK_FAILURE } from './server-error';
+export type { ErrorCatalog, ErrorCatalogEntry, FieldByCode, ServerErrorReply } from './server-error';
+
 /*
  * A porta de autenticação mora em `@vuumbora/api-client/identity` (contrato: docs/contrato-identidade-apps.md):
  * `createIdentityClient({ mode, baseUrl, accountType })`. O `AuthPort` antigo (`signIn` → `sessionId`, "papel decidido

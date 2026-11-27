@@ -92,6 +92,8 @@ abaixo chegarem antes do ponto em que travam. É a soma dos esforços do plano m
 | **Já** (abrir o cadastro) | Textos legais revisados pelo advogado | Rascunho em `docs/juridico/` |
 | **Início do M3** | Lista de documentos da **STTU** de Natal | Ação do dono; a estrutura nasce configurável sem ela |
 | **Início do M3** | Provedor de armazenamento no Brasil (custo) | A Nova recomenda na abertura do M3 |
+| **Antes de publicar a M04** | Prazo de análise dos documentos (48 h corridas na 0024; o plano propunha "2 dias úteis", que não é o mesmo no fim de semana), os 11 motivos de recusa propostos e a idade máxima do veículo (10 anos, provisório) | Propostos pela Nova e pelo Cronos em 27/11 |
+| **Antes do beta** | Motorista excluído que se recadastra pode reaproveitar a candidatura? Guardar o CPF de quem foi suspenso (decisão 16, com o advogado) | Levantados pelo Cronos em 27/11 |
 | **Fim do M4** | **Tarifa** e faixas da taxa (decisão 7) | Simulador pronto em `tools/simulador-tarifa/` |
 | **Início do M6** | **Gateway** (D-03) e saque (decisão 6), com o contador | Comparação pronta em `docs/decisao-gateway-pagamento.md` |
 | **M8** | **Seguro APP** (D-11); **conta Google Play**; checklist do advogado | Abertas |

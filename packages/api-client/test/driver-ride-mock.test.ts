@@ -1,7 +1,7 @@
 /**
  * `createMockDriverRidePort` — disponibilidade (C3), oferta/aceite atômico (C2), corrida depois
  * do aceite (C1) e posição (C4), nos erros do contrato (`offer_taken`, `offer_expired`,
- * `invalid_transition`, `idempotency_key_reused`, `driver_not_approved`, `not_eligible`,
+ * `invalid_transition`, `idempotency_key_reused`, `driver_not_approved`, `document_expired`,
  * `not_found`). Cobre os achados A1, A3 e A4 da conferência da Nova
  * (`docs/contratos/conferencia-f08-nova.md`) e a privacidade do embarque E do destino (decisão do
  * dono, 22/11/2026): a oferta nunca leva o endereço nem o ponto exato de nenhum dos dois.
@@ -668,17 +668,17 @@ describe('journeyPort (C3)', () => {
   });
 
   test('conta não aprovada: 409 conflict driver_not_approved', async () => {
-    const mock = createMockDriverRidePort({ verificationStatus: 'pending' });
+    const mock = createMockDriverRidePort({ verificationStatus: 'under_review' });
     const result = await mock.journeyPort.setAvailability({ online: true, point: { latitude: -5.79, longitude: -35.2 } });
     assert.equal(result.ok, false);
-    if (!result.ok) assert.deepEqual(result.error, { kind: 'conflict', reason: 'driver_not_approved' });
+    if (!result.ok) assert.deepEqual(result.error, { kind: 'conflict', reason: 'driver_not_approved', code: 'driver_not_approved' });
   });
 
-  test('documento vencido: 409 conflict not_eligible', async () => {
+  test('documento vencido: 409 conflict document_expired (§3 do plano M3/M4; era not_eligible)', async () => {
     const mock = createMockDriverRidePort({ documentExpired: true });
     const result = await mock.journeyPort.setAvailability({ online: true, point: { latitude: -5.79, longitude: -35.2 } });
     assert.equal(result.ok, false);
-    if (!result.ok) assert.deepEqual(result.error, { kind: 'conflict', reason: 'not_eligible' });
+    if (!result.ok) assert.deepEqual(result.error, { kind: 'conflict', reason: 'document_expired', code: 'document_expired' });
   });
 
   test('aprovado, com documento em dia e posição: liga e desliga', async () => {
@@ -691,12 +691,12 @@ describe('journeyPort (C3)', () => {
     if (off.ok) assert.equal(off.data.phase, 'offline');
   });
 
-  test('verification() reflete o que control.setVerificationStatus configurou', async () => {
+  test('control.setVerificationStatus muda a regra de ficar online (a verificação completa é do DriverOnboardingPort)', async () => {
     const mock = fresh();
-    mock.control.setVerificationStatus('rejected');
-    const result = await mock.journeyPort.verification();
-    assert.ok(result.ok);
-    if (result.ok) assert.equal(result.data.status, 'rejected');
+    mock.control.setVerificationStatus('suspended');
+    const result = await mock.journeyPort.setAvailability({ online: true, point: { latitude: -5.79, longitude: -35.2 } });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error.code, 'driver_not_approved');
   });
 
   test('10) R7: documento vencido ou conta não aprovada ainda consegue ficar OFFLINE', async () => {
@@ -705,7 +705,7 @@ describe('journeyPort (C3)', () => {
     assert.ok(off1.ok);
     if (off1.ok) assert.equal(off1.data.phase, 'offline');
 
-    const pending = createMockDriverRidePort({ verificationStatus: 'pending' });
+    const pending = createMockDriverRidePort({ verificationStatus: 'under_review' });
     const off2 = await pending.journeyPort.setAvailability({ online: false });
     assert.ok(off2.ok);
     if (off2.ok) assert.equal(off2.data.phase, 'offline');

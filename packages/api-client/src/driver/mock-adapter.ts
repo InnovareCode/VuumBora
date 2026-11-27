@@ -1,7 +1,7 @@
 /**
  * Adaptador `mock` do MOTORISTA: disponibilidade (C3), oferta/aceite atômico (C2), corrida depois
  * do aceite (C1) e posição (C4) — nos mesmos erros do contrato (`offer_taken`, `offer_expired`,
- * `invalid_transition`, `idempotency_key_reused`, `driver_not_approved`, `not_eligible`,
+ * `invalid_transition`, `idempotency_key_reused`, `driver_not_approved`, `document_expired`,
  * `not_found`).
  *
  * **A3 (achado da conferência da Nova):** `DriverTripPort` (status, eventos, ações) só vale para o
@@ -40,7 +40,7 @@ import {
   transitionTrip,
 } from '@vuumbora/domain';
 import type { Money, Place, TripId, TripStatus } from '@vuumbora/domain';
-import type { DriverPhase, RideOffer, VerificationStatus } from '@vuumbora/domain/driver';
+import type { DriverPhase, GoOnlineBlocker, RideOffer, VerificationStatus } from '@vuumbora/domain/driver';
 import type { Result } from '../index';
 import { createIdempotencyCache, fingerprint, type IdempotencyCache } from '../trip/idempotency';
 import { createTripStore, type TripStore } from '../trip/mock-store';
@@ -145,9 +145,15 @@ export interface MockDriverRideOptions {
   readonly nextId?: () => string;
   /** Identidade desta instância (um motorista). Padrão: gerado. */
   readonly driverId?: string;
-  /** Estado inicial da conta, para C3. Padrão: `'approved'`/sem documento vencido. */
+  /** Estado inicial da conta, para C3. Padrão: `'approved'`/sem documento vencido. Ignorado com `availabilityGate`. */
   readonly verificationStatus?: VerificationStatus;
   readonly documentExpired?: boolean;
+  /**
+   * A regra de ficar online vinda do CADASTRO (fatia K0): passe
+   * `createMockDriverOnboarding().control.goOnlineBlocker` para o "ficar online" deste mock obedecer ao
+   * que o motorista enviou e o revisor decidiu. Sem isto, valem `verificationStatus`/`documentExpired`.
+   */
+  readonly availabilityGate?: () => GoOnlineBlocker | null;
   /**
    * Gerador do código de embarque (D-12), usado só quando `control.offer` recebe uma corrida que
    * ainda não tem código (mock só do motorista). Corrida criada pelo passageiro já chega com o
@@ -511,10 +517,6 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
     return result;
   }
 
-  async function verification(): Promise<Result<{ readonly status: VerificationStatus }>> {
-    return succeed({ status: verificationStatus });
-  }
-
   /**
    * R7 (reconferência da Nova): as checagens de aprovação/documento valem só para ficar ONLINE —
    * um motorista com documento vencido, ou cuja conta nunca foi aprovada, ainda precisa conseguir
@@ -522,8 +524,14 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
    */
   async function setAvailability(input: DriverAvailabilityInput): Promise<Result<{ readonly phase: DriverPhase }>> {
     if (input.online) {
-      if (verificationStatus !== 'approved') return failWith(availabilityConflict('driver_not_approved'));
-      if (documentExpired) return failWith(availabilityConflict('not_eligible'));
+      const blocker = options.availabilityGate
+        ? options.availabilityGate()
+        : verificationStatus !== 'approved'
+          ? 'driver_not_approved'
+          : documentExpired
+            ? 'document_expired'
+            : null;
+      if (blocker) return failWith(availabilityConflict(blocker));
       if (!input.point) return failWith(validation({ point: 'Posição obrigatória para ficar online.' }));
     }
     phase = input.online ? 'online' : 'offline';
@@ -596,7 +604,7 @@ export function createMockDriverRidePort(options: MockDriverRideOptions = {}): M
   return {
     offerPort: { accept, decline, subscribeOffers },
     tripPort: { status, subscribe, arrived, start, complete, cancel },
-    journeyPort: { verification, setAvailability },
+    journeyPort: { setAvailability },
     locationPort: { sendLocations },
     historyPort: { history },
     control,

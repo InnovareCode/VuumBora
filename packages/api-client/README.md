@@ -15,6 +15,7 @@ Portas (interfaces) que as telas consomem + adaptadores `mock` e `http` **distin
 - `@vuumbora/api-client/driver`: `DriverJourneyPort` (disponibilidade), `DriverOfferPort`
   (oferta/aceite atômico/tempo real das ofertas), `DriverTripPort` (ações depois do aceite),
   `DriverLocationPort` (posição) — só `apps/driver`.
+- `@vuumbora/api-client/admin`: fila de documentos e tarifa do PAINEL (M3/M4, fatia K0) — ver o fim deste arquivo.
 - `@vuumbora/api-client/waitlist`: `WaitlistPort` + `createWaitlistHttpAdapter` — só `apps/site`. Primeiro
   adaptador `http` real do monorepo (backend em `apps/api`); contrato completo em
   `docs/lista-de-espera.md`.
@@ -461,3 +462,69 @@ Cobrem: renovação em voo único (20 chamadas concorrentes com 401 = 1 `POST /r
 adaptador `http` contra um servidor HTTP falso em processo (cabeçalhos, corpo, mapeamento de erro, timeout, fluxo
 completo) e o mock contra o contrato. A prova contra a API real (Postgres + Fastify) não é automática aqui: roda-se à
 mão (ver o handoff da A2).
+
+## Cadastro do motorista, fila de documentos, área e cotação (M3 e M4, fatia K0)
+
+Contrato do §3 de `docs/plano-m3-m4.md`. Só existe o adaptador `mock`; o `http` entra com as rotas
+(D4, D5, G3, G4, G5). Os dois passam pela MESMA função de erro (`apiErrorFromServerReply`, raiz do
+pacote) e pelo MESMO catálogo de `code` de cada área: a tela ramifica em `error.kind` e escolhe texto e
+ação por `error.code`, nunca pela mensagem.
+
+| Status | `kind` | Observação |
+|---|---|---|
+| 400, 413, 422 | `validation` | `fields[campo]` = mensagem; o campo vem do catálogo (`cpf`, `cnh.ear`, `year`, `typeCode`, `sizeBytes`, `expiresOn`, `reasonCode`, `reason`) ou `form` |
+| 409 | `conflict` | `reason` = `code` |
+| 502, 503 | `unavailable` | inclui `route_unavailable`, `geo_unavailable` e `fare_not_configured` (este NÃO é "tente de novo": é "ainda não operamos") |
+
+**Motorista** (`@vuumbora/api-client/driver`, só `apps/driver`): `createMockDriverOnboarding()` →
+`{ port: DriverOnboardingPort, uploader: DocumentUploadPort, control, store }`.
+
+- `linkApplication()` · `saveOnboarding(DriverOnboardingInput)` · `saveVehicle(DriverVehicleInput)` ·
+  `verification()` → `DriverVerification` · `requestUploadUrl(DocumentUploadRequest)` →
+  `DocumentUploadTarget` · `uploader.upload(target, { uri }, onProgress)` · `submitDocument(documentId)`.
+- Códigos: `DRIVER_ONBOARDING_ERRORS` (`application_not_approved`, `email_not_verified`,
+  `driver_not_linked`, `invalid_cpf`, `cnh_without_ear`, `plate_in_use`, `vehicle_too_old`,
+  `unknown_document_type`, `file_too_large`, `upload_missing`, `document_under_review`,
+  `invalid_transition`, `not_found`, `invalid_body`). A ordem das checagens está no JSDoc de cada método.
+- `VerificationStatus` (`@vuumbora/domain/driver`): `not_started`, `pending_documents`, `under_review`,
+  `changes_requested`, `approved`, `suspended` — derivado por `deriveVerificationStatus`.
+- `control`: `review(documentId, { approve: true, expiresOn? } | { reject: code })` (faz o papel do
+  revisor), `expireDocument`, `suspend`, `setApplication`, `setEmailVerified`, `failNext(code | 'network')`,
+  `failNextUpload('network' | 'expired_url' | 'corrupted')`, `goOnlineBlocker()`.
+- Ficar online: `createMockDriverRidePort({ availabilityGate: onboarding.control.goOnlineBlocker })` faz o
+  `setAvailability` responder `409 driver_not_approved` / `409 document_expired` pelo cadastro. O
+  `verification()` saiu do `DriverJourneyPort` (a forma completa é a do `DriverOnboardingPort`), e o antigo
+  `not_eligible` virou `document_expired`.
+
+**Painel** (`@vuumbora/api-client/admin`, sem DOM nem React Native): `createMockDocumentReview({ role, store? })`
+→ `DocumentReviewPort` (`queue`, `driver`, `viewUrl`, `approve`, `reject`, `rejectionReasons`, `suspend`) e
+`createMockFareAdmin({ role })` → `FareAdminPort` (`fareTables`, `createFareTable`, `simulate`, `serviceAreas`).
+
+- `suporte`, `financeiro` e `operacao` recebem `403 forbidden` em toda rota de documento, antes de qualquer
+  outra checagem; tarifa e área são só do `dono`.
+- `viewUrl` grava na trilha (`control.auditLog()`) antes de devolver a URL de 300 s (N5). Nenhuma lista
+  traz URL de arquivo.
+- Aprovar o último obrigatório aprova a conta sozinho (N4): a resposta traz `driverStatus`.
+- Sem `store`, a fila nasce com a semente `'demo'` (três motoristas fictícios). Com a MESMA
+  `createDocumentStore()` nos dois mocks, o que o motorista envia aparece na fila e a decisão volta para ele.
+
+**Passageiro** (`@vuumbora/api-client/passenger`): `createMockPassengerGeo()` → `{ geoPort: GeoPort, quotePort:
+FareQuotePort, control }`.
+
+- `geoPort.search({ q, kind, near })` (pontos próprios primeiro), `reverse({ lat, lng })` (com
+  `inServiceArea`), `serviceArea()`, `categories()` (só as ligadas).
+- `quotePort.createQuotes({ origin, destination, categorySlugs? })` → `{ route: { distanceM, durationS,
+  polyline }, quotes: FareQuote[] }`; `getQuote(quoteId)` → `409 quote_expired` depois de 5 min.
+- Códigos: `GEO_QUOTE_ERRORS` (`outside_service_area`, `route_too_short`, `route_unavailable`,
+  `fare_not_configured`, `quote_expired`, `geo_unavailable`, `rate_limited`, `not_found`, `invalid_body`).
+- `control`: `failNext`, `setAllowTestFares(false)` (reproduz a produção: `503 fare_not_configured`),
+  `setCategoryEnabled`, `expireQuote`. Opção `delayMs` para a tela mostrar o carregando.
+- `PassengerRidePort.quote()` (F08) continua até o M5, porque `request()` ainda consome aquele `quoteId`.
+
+Regras puras usadas pelos mocks (e pelas telas, para validar antes de enviar) em `@vuumbora/domain`:
+`isPointInServiceArea`, `isQuoteExpired`, `isFareVersionQuotable`, `decodePolyline`, `isValidCpf`; e em
+`@vuumbora/domain/driver`: `isValidPlate`, `isVehicleTooOld`, `documentUploadProblem`,
+`deriveVerificationStatus`, `isReadyForApproval`, `goOnlineBlocker`, `natalCalendarDate`.
+
+Testes: `test/server-error.test.ts`, `test/driver-onboarding-mock.test.ts`, `test/document-review-mock.test.ts`,
+`test/passenger-geo-mock.test.ts`, `test/fare-admin-mock.test.ts`.

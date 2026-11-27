@@ -13,7 +13,7 @@
  *   o destino na oferta também é só o bairro").
  */
 import type { ApproximatePlace, GeoPoint, Money, Place, TripId, TripStatus } from '@vuumbora/domain';
-import type { DriverPhase, RideOffer, VerificationStatus } from '@vuumbora/domain/driver';
+import type { DriverPhase, RideOffer } from '@vuumbora/domain/driver';
 import type { Result } from '../index';
 import type { TripBaseSnapshot, TripHistoryPage, TripRealtimePort } from '../trip/types';
 
@@ -23,13 +23,17 @@ export interface DriverAvailabilityInput {
   readonly point?: GeoPoint;
 }
 
+/**
+ * Jornada do motorista. A VERIFICAÇÃO do cadastro saiu daqui na fatia K0 (`docs/plano-m3-m4.md`): ela
+ * é `DriverOnboardingPort.verification()`, com a forma completa do §3 (estado, prazo, exigências).
+ */
 export interface DriverJourneyPort {
-  verification(): Promise<Result<{ readonly status: VerificationStatus }>>;
   /**
-   * `409 conflict`: `driver_not_approved` ou `not_eligible` (documento vencido). `400 validation`
-   * sem `point` ao ligar. **R7 (reconferência da Nova):** essas checagens valem só para
-   * `online: true` — ficar OFFLINE sempre funciona, mesmo com documento vencido ou conta não
-   * aprovada (senão o motorista trava online sem conseguir saída).
+   * `409 conflict`: `driver_not_approved` ou `document_expired` (documento obrigatório vencido; regra
+   * `goOnlineBlocker`, `@vuumbora/domain/driver`). `400 validation` sem `point` ao ligar. **R7
+   * (reconferência da Nova):** essas checagens valem só para `online: true` — ficar OFFLINE sempre
+   * funciona, mesmo com documento vencido ou conta não aprovada (senão o motorista trava online sem
+   * conseguir saída).
    */
   setAvailability(input: DriverAvailabilityInput): Promise<Result<{ readonly phase: DriverPhase }>>;
 }

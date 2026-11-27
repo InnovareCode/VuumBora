@@ -45,9 +45,12 @@ export const cancelConflict = (reason: CancelConflictReason): ApiError => ({ kin
 export type AcceptConflictReason = 'offer_taken' | 'offer_expired' | 'idempotency_key_reused';
 export const acceptConflict = (reason: AcceptConflictReason): ApiError => ({ kind: 'conflict', reason });
 
-/** `PUT /v1/driver/availability`. */
-export type AvailabilityConflictReason = 'driver_not_approved' | 'not_eligible';
-export const availabilityConflict = (reason: AvailabilityConflictReason): ApiError => ({ kind: 'conflict', reason });
+/**
+ * `PUT /v1/driver/availability` (§3 do `docs/plano-m3-m4.md`, fatia K0): `document_expired` substituiu
+ * o antigo `not_eligible`. Leva também o `code` (= `reason`), como o adaptador `http` entrega um 409.
+ */
+export type AvailabilityConflictReason = 'driver_not_approved' | 'document_expired';
+export const availabilityConflict = (reason: AvailabilityConflictReason): ApiError => ({ kind: 'conflict', reason, code: reason });
 
 /** `POST /v1/driver/trips/:id/{arrived,start,complete}` (C1). */
 export type DriverActionConflictReason = 'invalid_transition' | 'idempotency_key_reused';

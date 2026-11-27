@@ -115,3 +115,17 @@ export type { ApproximatePlace } from './geo';
 /** Cálculo de tarifa — simulador do dono (decisão 7) e, depois, cotação real do M4. */
 export { calculateFare, resolvePlatformFeeTier, splitFare } from './fare';
 export type { FareRates, FareInput, FareBreakdown, PlatformFeeTier, DriverStanding, FareSplit } from './fare';
+
+/** Área de serviço (M4, N7): polígono GeoJSON + caixa, ponto-no-polígono puro (sem PostGIS). */
+export { assertValidPolygon, isPointInBoundingBox, isPointInPolygon, isPointInServiceArea } from './service-area';
+export type { BoundingBox, GeoJsonLinearRing, GeoJsonPolygon, GeoJsonPosition, ServiceArea } from './service-area';
+
+/** Cotação (M4, N8/N9): validade de 5 min e a trava da tarifa de teste. */
+export { isFareVersionQuotable, isQuoteExpired, QUOTE_TTL_SECONDS, quoteExpiresAtMs } from './quote';
+export type { FareVersionFlags } from './quote';
+
+/** Polilinha codificada (precisão 5) — o `route.polyline` da cotação. */
+export { decodePolyline, encodePolyline } from './polyline';
+
+/** CPF: dígitos verificadores (etapa 2 do motorista; depois, pagamento). */
+export { isValidCpf, normalizeCpf } from './cpf';

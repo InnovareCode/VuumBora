@@ -24,6 +24,33 @@ export type {
   OfferEvent,
 } from './types';
 
+/** M3 (fatia K0 do `docs/plano-m3-m4.md`): vínculo, etapa 2, veículo, verificação e documentos. */
+export { DRIVER_ONBOARDING_ERRORS } from './onboarding-types';
+export type {
+  DocumentUploadPort,
+  DocumentUploadRequest,
+  DocumentUploadTarget,
+  DriverOnboardingErrorCode,
+  DriverOnboardingInput,
+  DriverOnboardingPort,
+  DriverVerification,
+  LinkApplicationResult,
+  UploadSource,
+} from './onboarding-types';
+export type {
+  CnhCategory,
+  DocumentRejection,
+  DocumentRequirement,
+  DriverAddress,
+  DriverCnh,
+  DriverDocumentSummary,
+  DriverVehicleInput,
+} from '../documents/types';
+export { createMockDriverOnboarding } from './onboarding-mock-adapter';
+export type { MockDriverOnboarding, MockDriverOnboardingControl, MockDriverOnboardingOptions, MockReviewDecision } from './onboarding-mock-adapter';
+export { createDocumentStore } from '../documents/mock-store';
+export type { DocumentStore, DocumentStoreOptions } from '../documents/mock-store';
+
 export { createMockDriverRidePort } from './mock-adapter';
 export type {
   MockDriverRide,
