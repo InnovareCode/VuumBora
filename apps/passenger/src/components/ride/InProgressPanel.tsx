@@ -1,11 +1,11 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { MockBadge, theme, textStyle, tabularNums } from '@vuumbora/ui';
 import { DriverInfoCard } from '../assignedDriver/DriverInfoCard';
 import { TripProgressBar } from '../trip/TripProgressBar';
 import { EmergencyCallRow } from './EmergencyCallRow';
 import type { AssignedDriverInfo } from '../../data/mockDriverAssignment';
-import { formatEtaMinutes } from '../../utils/time';
+import { formatClockTime, formatEtaMinutes } from '../../utils/time';
 
 export interface InProgressPanelProps {
   readonly driver: AssignedDriverInfo;
@@ -21,10 +21,9 @@ export interface InProgressPanelProps {
  * "Ligar 190" (PP-11, decidida em 22/11/2026) entra no pé do painel — "Compartilhar viagem"
  * continua fora até existir `POST /v1/trips/:id/share` (S4).
  *
- * N2 é só "em {n} min" (achado da Íris, onda 4) — a ficha original tinha "{hh:mm} · em {n}
- * min", mas o horário de chegada (calculado no aparelho a partir de `Date.now()`) é relógio
- * local simulado, não um dado real; mostrar só os minutos evita um horário que parece oficial
- * sem ser.
+ * N2 é "{hh:mm} · em {n} min" (ficha §2: "a hora de chegada ANTES dos minutos" — na viagem a
+ * pessoa planeja pela hora, só depois confere o andamento pelos minutos). A revisão da Íris
+ * (onda 4, 048b4dd) apontou que uma versão anterior só mostrava os minutos, contra a ficha.
  */
 export const InProgressPanel = memo(function InProgressPanel({
   driver,
@@ -34,12 +33,16 @@ export const InProgressPanel = memo(function InProgressPanel({
   testID,
 }: InProgressPanelProps) {
   const chegando = tripEtaMinutes !== undefined && tripEtaMinutes <= 0;
+  const arrivalClock = useMemo(() => {
+    if (tripEtaMinutes === undefined || chegando) return undefined;
+    return formatClockTime(new Date(Date.now() + tripEtaMinutes * 60_000));
+  }, [tripEtaMinutes, chegando]);
 
   return (
     <View style={styles.content} testID={testID}>
       <Text style={styles.caption}>Chegada ao destino</Text>
       <Text style={styles.headline} accessibilityRole="header">
-        {chegando ? 'Chegando ao destino' : tripEtaMinutes !== undefined ? `em ${formatEtaMinutes(tripEtaMinutes)}` : '—'}
+        {chegando ? 'Chegando ao destino' : arrivalClock && tripEtaMinutes !== undefined ? `${arrivalClock} · em ${formatEtaMinutes(tripEtaMinutes)}` : '—'}
       </Text>
       <Text style={styles.destination} numberOfLines={2}>
         {destinationAddress ?? 'destino'}

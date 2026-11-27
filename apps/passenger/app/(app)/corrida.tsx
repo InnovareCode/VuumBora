@@ -129,8 +129,6 @@ export default function RideScreen() {
             category={requestedCategory}
             elapsedSeconds={elapsedSearchSeconds}
             driverCancelledNotice={false}
-            online={online}
-            onCancelPress={handleCancelPress}
             onRetry={handleRetry}
             onBackHome={handleBackHome}
             testID="ride-outcome-panel"
@@ -142,7 +140,25 @@ export default function RideScreen() {
 
   if (searching) {
     return (
-      <AppShell padded={false} scroll testID="ride-screen-searching">
+      <AppShell
+        padded={false}
+        scroll
+        testID="ride-screen-searching"
+        footer={
+          // Mesma solução da P08 (achado da Íris, onda 4): "Cancelar pedido" ficava abaixo da
+          // dobra em 320px dentro do conteúdo que rola.
+          <FooterActions testID="searching-footer">
+            <DangerButton
+              label="Cancelar pedido"
+              onPress={handleCancelPress}
+              disabled={!online}
+              accessibilityLabel={online ? 'Cancelar pedido de corrida' : 'Cancelar pedido de corrida, indisponível: sem conexão'}
+              testID="cancel-search-button"
+            />
+            {!online ? <Text style={footerStyles.offlineHint}>Sem conexão</Text> : null}
+          </FooterActions>
+        }
+      >
         <RideMapLayout
           mapAccessibilityLabel={`Mapa ilustrativo (mock) da rota de ${origin?.address ?? 'sua localização atual'} até ${destination?.address ?? 'o destino'}`}
           mapContent={
@@ -165,8 +181,6 @@ export default function RideScreen() {
             category={requestedCategory}
             elapsedSeconds={elapsedSearchSeconds}
             driverCancelledNotice={driverCancelledNotice}
-            online={online}
-            onCancelPress={handleCancelPress}
             onRetry={handleRetry}
             onBackHome={handleBackHome}
             testID="searching-panel"
@@ -265,6 +279,10 @@ export default function RideScreen() {
         mapAccessibilityLabel={
           subphase === 'driver_arrived' ? 'Mapa ilustrativo: motorista no local de embarque' : 'Mapa ilustrativo: motorista a caminho do embarque'
         }
+        // Mapa menor no "chegou" (achado da Íris, onda 4): o carro já está parado — o código de
+        // embarque vale mais que o mapa aqui, e o painel precisa do espaço pra "Ligar 190" e
+        // "Cancelar corrida" (rodapé fixo) não cobrirem o cartão do código em 320-390px.
+        compactMap={subphase === 'driver_arrived'}
         mapContent={
           subphase === 'driver_arrived' ? (
             <View style={mapStyles.vehicleAnchorArrived}>

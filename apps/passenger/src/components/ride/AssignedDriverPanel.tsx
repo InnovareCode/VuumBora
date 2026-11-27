@@ -66,14 +66,9 @@ export const AssignedDriverPanel = memo(function AssignedDriverPanel({
         {headline(subphase, driver, pickupEtaMinutes)}
       </Text>
 
-      <DriverInfoCard driver={driver} testID="assigned-driver-card" />
-
-      {subphase === 'driver_arrived' ? (
-        <Text style={styles.waiting}>
-          Aguardando você há <Text style={tabularNums}>{formatElapsedClock(waitingSeconds)}</Text>
-        </Text>
-      ) : null}
-
+      {/* O código vem ANTES do cartão do motorista (achado da Íris, onda 4): é o que a pessoa
+          precisa resolver assim que o motorista chega — o cartão (já visto nas subfases
+          anteriores) pode ficar mais abaixo, até fora da dobra, sem prejuízo. */}
       {subphase === 'driver_arrived' && embarkCode ? (
         <SurfaceRaised style={styles.embarkCard} testID="embark-code-card">
           <Text style={styles.embarkLabel}>Seu código de embarque</Text>
@@ -83,6 +78,14 @@ export const AssignedDriverPanel = memo(function AssignedDriverPanel({
           <Text style={styles.embarkHint}>Diga ao motorista antes de entrar no carro.</Text>
         </SurfaceRaised>
       ) : null}
+
+      {subphase === 'driver_arrived' ? (
+        <Text style={styles.waiting}>
+          Aguardando você há <Text style={tabularNums}>{formatElapsedClock(waitingSeconds)}</Text>
+        </Text>
+      ) : null}
+
+      <DriverInfoCard driver={driver} testID="assigned-driver-card" />
 
       <MockBadge label="corrida simulada" testID="assigned-driver-mock-badge" />
     </View>

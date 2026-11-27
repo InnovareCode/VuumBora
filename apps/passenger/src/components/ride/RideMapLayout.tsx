@@ -11,6 +11,11 @@ import { MapPreviewBackground, MockBadge, theme } from '@vuumbora/ui';
 const COMPACT_HEIGHT_BREAKPOINT = 360;
 const COMPACT_MAP_HEIGHT = 200;
 const MAP_HEIGHT_RATIO = 0.45;
+// Mapa menor (ficha P08, opção da Íris): no estado "chegou", o carro já está parado — o mapa
+// vale menos que o código de embarque, e o painel ganha o espaço que falta pra "Ligar 190" e
+// "Cancelar corrida" (no rodapé fixo) não cobrirem o cartão do código em 320-390px.
+const COMPACT_MAP_HEIGHT_SMALL = 130;
+const MAP_HEIGHT_RATIO_SMALL = 0.26;
 
 export interface RideMapLayoutProps {
   readonly mapAccessibilityLabel: string;
@@ -18,6 +23,8 @@ export interface RideMapLayoutProps {
   readonly mapContent?: ReactNode;
   /** Conteúdo do painel (sheet) embaixo do mapa. */
   readonly children: ReactNode;
+  /** `true`: mapa reduzido (ver `COMPACT_MAP_HEIGHT_SMALL`/`MAP_HEIGHT_RATIO_SMALL`). */
+  readonly compactMap?: boolean;
   readonly testID?: string;
 }
 
@@ -27,9 +34,11 @@ export interface RideMapLayoutProps {
  * cada fase" (ficha P07 §12). Quem chama decide o conteúdo do mapa (pulso, carro, pinos) e do
  * painel; esta moldura só resolve tamanho/arredondamento/selo de mock.
  */
-export const RideMapLayout = memo(function RideMapLayout({ mapAccessibilityLabel, mapContent, children, testID }: RideMapLayoutProps) {
+export const RideMapLayout = memo(function RideMapLayout({ mapAccessibilityLabel, mapContent, children, compactMap = false, testID }: RideMapLayoutProps) {
   const { width, height: windowHeight } = useWindowDimensions();
-  const minMapHeight = width < COMPACT_HEIGHT_BREAKPOINT ? COMPACT_MAP_HEIGHT : Math.round(windowHeight * MAP_HEIGHT_RATIO);
+  const compactHeight = compactMap ? COMPACT_MAP_HEIGHT_SMALL : COMPACT_MAP_HEIGHT;
+  const heightRatio = compactMap ? MAP_HEIGHT_RATIO_SMALL : MAP_HEIGHT_RATIO;
+  const minMapHeight = width < COMPACT_HEIGHT_BREAKPOINT ? compactHeight : Math.round(windowHeight * heightRatio);
   // Mesmo corte do `RouteMapBanner`/`categoria.tsx`: o painel (não o `AppShell padded={false}`)
   // aplica o respiro lateral ao próprio conteúdo.
   const panelPadding = width < 375 ? theme.layout.screenPaddingCompact : theme.layout.screenPadding;

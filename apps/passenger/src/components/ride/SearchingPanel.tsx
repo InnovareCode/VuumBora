@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Car, Circle, MapPin } from 'lucide-react-native';
 import { SLOW_DRIVER_SEARCH_SECONDS, type Place } from '@vuumbora/domain';
 import type { CategoryQuote } from '@vuumbora/api-client/passenger';
-import { DangerButton, InlineAlert, LinkButton, MockBadge, MoneyText, PrimaryButton, SurfaceRaised, theme, textStyle, tabularNums, tokens } from '@vuumbora/ui';
+import { InlineAlert, LinkButton, MockBadge, MoneyText, PrimaryButton, SurfaceRaised, theme, textStyle, tabularNums, tokens } from '@vuumbora/ui';
 import { RouteSummaryRow } from '../confirmation/RouteSummaryRow';
 import { rideCategoryName } from '../../data/rideCategoryDisplay';
 import { formatElapsedClock } from '../../utils/time';
@@ -17,9 +17,6 @@ export interface SearchingPanelProps {
   readonly category?: CategoryQuote | undefined;
   readonly elapsedSeconds: number;
   readonly driverCancelledNotice: boolean;
-  /** `false`: "Cancelar pedido" fica desabilitado com "Sem conexão" embaixo (ficha §5, "Sem rede"). */
-  readonly online: boolean;
-  readonly onCancelPress: () => void;
   readonly onRetry: () => void;
   readonly onBackHome: () => void;
   readonly testID?: string;
@@ -30,6 +27,11 @@ export interface SearchingPanelProps {
  * `searching` (padrão/demorada), `failed` ("nenhum motorista") e `cancelled` (cancelada por
  * terceiros). O pulso sobre o mapa é desenhado por quem chama (`corrida.tsx`), não aqui —
  * este componente é só o conteúdo do painel (sheet).
+ *
+ * "Cancelar pedido" NÃO mora aqui no estado `searching` — `corrida.tsx` o renderiza no rodapé
+ * fixo (`FooterActions`), igual à P08 (achado da Íris, onda 4: ficava abaixo da dobra em
+ * 320px). Nos desfechos `failed`/`cancelled` o CTA continua dentro do painel — são telas
+ * curtas, sem o problema.
  */
 export const SearchingPanel = memo(function SearchingPanel({
   status,
@@ -38,8 +40,6 @@ export const SearchingPanel = memo(function SearchingPanel({
   category,
   elapsedSeconds,
   driverCancelledNotice,
-  online,
-  onCancelPress,
   onRetry,
   onBackHome,
   testID,
@@ -113,15 +113,6 @@ export const SearchingPanel = memo(function SearchingPanel({
         ) : null}
       </SurfaceRaised>
       <MockBadge label="busca de motorista simulada" testID="searching-mock-badge" />
-
-      <DangerButton
-        label="Cancelar pedido"
-        onPress={onCancelPress}
-        disabled={!online}
-        accessibilityLabel={online ? 'Cancelar pedido de corrida' : 'Cancelar pedido de corrida, indisponível: sem conexão'}
-        testID="cancel-search-button"
-      />
-      {!online ? <Text style={styles.offlineHint}>Sem conexão</Text> : null}
     </View>
   );
 });
@@ -141,7 +132,6 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: theme.role.border },
   categoryRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing['2'] },
   categoryName: { flex: 1, color: theme.role.textPrimary, ...textStyle('semibold', 'body') },
-  offlineHint: { color: theme.role.textMuted, ...textStyle('regular', 'caption'), textAlign: 'center' },
   outcome: { gap: theme.spacing['3'], alignItems: 'stretch' },
   outcomeTitle: { color: theme.role.textPrimary, ...textStyle('bold', 'title'), textAlign: 'center' },
   outcomeSupport: { color: theme.role.textSecondary, ...textStyle('regular', 'small'), textAlign: 'center' },
