@@ -40,6 +40,10 @@ seção com o comando/clique exato — você não precisa pesquisar nada, só se
    `DATABASE_URL` pela URL impressa **e** `RUN_MIGRATIONS_ON_BOOT` para `false`, e só então faça o Deploy. Se subir com o
    papel restrito e a migração no boot ainda ligada, a API tenta o `CREATE TABLE IF NOT EXISTS schema_migrations` do
    `migrate.ts`, o papel não tem permissão de DDL e o boot falha.
+   **Antes de trocar, faça um Deploy simples da main atual** (ainda com a credencial dona e a migração no boot ligada):
+   ele aplica as migrações novas que a main já tem (0024 em diante, documentos do motorista). Confira no log a linha das
+   migrações aplicadas; só então siga para a troca acima. Sem isso, o banco fica para trás da main sem ninguém notar
+   (Órion, revisão M3-D1, 27/11/2026).
    Daí em diante, as migrações rodam por tarefa de operador, com `MIGRATION_DATABASE_URL` só durante o comando
    (`docs/publicar-o-backend.md`, "Duas credenciais de banco"). Sem esse passo, a API roda com a credencial dona do
    banco, e as proteções das migrações 0017 e 0023 deixam de valer na prática. (`docs/sql/ativar-papel-api.sql` tem o
