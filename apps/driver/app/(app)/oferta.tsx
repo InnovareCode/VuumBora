@@ -17,9 +17,9 @@ import {
   textStyle,
   theme,
   tokens,
+  useNetworkStatus,
   useSecondsUntil,
 } from '@vuumbora/ui';
-import { useRobustOnlineStatus } from '../../src/lib/useRobustOnlineStatus';
 import { startNewOfferCycle } from '../../src/ride/driverRideClient';
 import { OfferCountdown } from '../../src/components/ride/OfferCountdown';
 import { formatPickupDistance, formatPickupEta, formatTripDistanceRange, formatTripDurationRange } from '../../src/utils/offerFormat';
@@ -103,7 +103,7 @@ export default function RideOfferScreen() {
   const forcedState = __DEV__ && isDevState(devEstado) ? devEstado : undefined;
   const { height: windowHeight } = useWindowDimensions();
   const compactHeight = windowHeight < SHORT_WINDOW_HEIGHT;
-  const online = useRobustOnlineStatus();
+  const online = useNetworkStatus();
 
   // Uma oferta NOVA = um `tripId` NOVO no mock (`driverRideClient`) — síncrono no 1º render (não um
   // `useEffect`), para já valer antes de qualquer toque em "Aceitar". Sem isto, uma 2ª corrida na

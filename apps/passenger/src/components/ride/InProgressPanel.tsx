@@ -3,7 +3,6 @@ import { StyleSheet, Text, View } from 'react-native';
 import { MockBadge, theme, textStyle, tabularNums } from '@vuumbora/ui';
 import { DriverInfoCard } from '../assignedDriver/DriverInfoCard';
 import { TripProgressBar } from '../trip/TripProgressBar';
-import { EmergencyCallRow } from './EmergencyCallRow';
 import type { AssignedDriverInfo } from '../../data/mockDriverAssignment';
 import { formatClockTime, formatEtaMinutes } from '../../utils/time';
 
@@ -18,8 +17,10 @@ export interface InProgressPanelProps {
 /**
  * Painel da P09 (ficha §2/§3/§4) — corrida em andamento. Sem "Cancelar corrida" (D-33: o
  * domínio só permite cancelar até `driver_arrived`, `isRideCancellable` em `corrida.tsx`).
- * "Ligar 190" (PP-11, decidida em 22/11/2026) entra no pé do painel — "Compartilhar viagem"
- * continua fora até existir `POST /v1/trips/:id/share` (S4).
+ * "Ligar 190" (PP-11, decidida em 22/11/2026) NÃO mora aqui: `corrida.tsx` o põe no rodapé fixo
+ * (`FooterActions`), como na P08 — no painel que rola, a faixa "Sem conexão" o empurrava para
+ * baixo da dobra a 320 (Íris, portão da onda 4). "Compartilhar viagem" continua fora até existir
+ * `POST /v1/trips/:id/share` (S4).
  *
  * N2 é "{hh:mm} · em {n} min" (ficha §2: "a hora de chegada ANTES dos minutos" — na viagem a
  * pessoa planeja pela hora, só depois confere o andamento pelos minutos). A revisão da Íris
@@ -57,8 +58,6 @@ export const InProgressPanel = memo(function InProgressPanel({
       />
 
       <MockBadge label="trajeto e posição simulados" testID="in-progress-mock-badge" />
-
-      <EmergencyCallRow testID="in-progress-emergency-row" />
     </View>
   );
 });

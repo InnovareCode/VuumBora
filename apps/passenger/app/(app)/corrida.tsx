@@ -215,7 +215,18 @@ export default function RideScreen() {
 
   if (phase === 'in_progress') {
     return (
-      <AppShell padded={false} scroll testID="ride-screen-in-progress">
+      <AppShell
+        padded={false}
+        scroll
+        testID="ride-screen-in-progress"
+        footer={
+          // "Ligar 190" no MESMO rodapé fixo da P08 (ressalva da Íris, portão da onda 4): dentro do painel que rola, a
+          // faixa "Sem conexão" o empurrava para baixo da dobra a 320 — e sem rede é justamente quando ele mais importa.
+          <FooterActions testID="in-progress-footer">
+            <EmergencyCallRow testID="in-progress-emergency-row" />
+          </FooterActions>
+        }
+      >
         <RideMapLayout
           mapAccessibilityLabel={`Rota até ${destination?.address ?? 'o destino'}`}
           mapContent={

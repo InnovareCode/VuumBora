@@ -10,7 +10,7 @@
  * WebCrypto). O arquivo vira uma URL `blob:` que a tela solta (`releasePickedDocument`) ao trocar ou terminar.
  *
  * Tipos do navegador declarados à mão (mínimos): o app compila sem a `lib` DOM, e puxá-la para um arquivo a puxa
- * para o programa inteiro (lição do `useRobustOnlineStatus`).
+ * para o programa inteiro (mesma lição de `packages/ui/src/browserOnline.ts`).
  */
 import { CryptoDigestAlgorithm, digest } from 'expo-crypto';
 import { DOCUMENT_MAX_SIZE_BYTES, isDocumentContentType, type DocumentContentType } from '@vuumbora/domain/driver';

@@ -67,3 +67,33 @@ export function focusRingStyle(placement: FocusRingPlacement, borderRadius: numb
     outlineOffset: placement === 'inside' ? -FOCUS_RING_WIDTH : FOCUS_RING_GAP,
   };
 }
+
+/**
+ * Desliga o contorno do navegador no alvo focado, para quem desenha o anel numa CAMADA (`focusRingLayerStyle`) e não
+ * quer o contorno padrão por baixo dela, em dobro. Largura 0, e não `outlineStyle: 'none'`, que o tipo do RN não aceita.
+ */
+export const NO_BROWSER_OUTLINE: ViewStyle = { outlineStyle: 'solid', outlineWidth: 0 };
+
+/**
+ * O mesmo anel de `focusRingStyle`, mas como uma CAMADA (`View` absoluta, último filho do alvo) em vez de `outline`.
+ *
+ * Quando usar: o alvo tem um filho com sombra (`boxShadow`). No react-native-web todo `View` é `position: relative` com
+ * `z-index: 0` — cada filho é pintado DEPOIS do contorno do pai, e a sombra do filho escurece o anel por cima. Medido no
+ * CTA (`ButtonCore` primário, sombra `elevation.cta` de 4pt para baixo): a base do anel saía `rgb(192,153,0)` contra
+ * `rgb(255,204,0)` no topo sem a sombra — "anel cortado embaixo" (Íris, M10 e outras). A camada, por ser o último filho,
+ * é pintada por cima da sombra. Mesma geometria do `outline`: 2pt de traço, 2pt de vão (`outside`), raio acompanhando.
+ */
+export function focusRingLayerStyle(placement: FocusRingPlacement, borderRadius: number): ViewStyle {
+  const offset = placement === 'inside' ? 0 : FOCUS_RING_GAP + FOCUS_RING_WIDTH;
+  return {
+    position: 'absolute',
+    top: -offset,
+    right: -offset,
+    bottom: -offset,
+    left: -offset,
+    borderWidth: FOCUS_RING_WIDTH,
+    borderColor: theme.role.ctaBackground,
+    borderRadius: borderRadius + offset,
+    pointerEvents: 'none',
+  };
+}

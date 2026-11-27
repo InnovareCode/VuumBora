@@ -18,13 +18,13 @@ import {
   theme,
   textStyle,
   tabularNums,
+  useNetworkStatus,
 } from '@vuumbora/ui';
 import type { ApiError } from '@vuumbora/api-client';
 import type { DocumentUploadTarget } from '@vuumbora/api-client/driver';
 import { CadastroNotOpenScreen } from '../../../src/components/onboarding/CadastroNotOpenScreen';
 import { ProgressBar } from '../../../src/components/onboarding/ProgressBar';
 import { useFocusAfterRender } from '../../../src/lib/focusAfterRender';
-import { useRobustOnlineStatus } from '../../../src/lib/useRobustOnlineStatus';
 import { goBackOr } from '../../../src/navigation/goBack';
 import {
   PICK_FAILURE_MESSAGE,
@@ -114,7 +114,7 @@ function DocumentUploadView({ typeCode }: { readonly typeCode: string }) {
   const { mode: sessionMode, signOut } = useSession();
   const { view, refresh } = useOnboarding();
   const summaryAction = useSummaryAction();
-  const online = useRobustOnlineStatus();
+  const online = useNetworkStatus();
   const { devEnvio } = useLocalSearchParams<{ devEnvio?: string }>();
   const devSend = parseDevSend(devEnvio);
 

@@ -1,11 +1,10 @@
 import { memo } from 'react';
 import { Image, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import { theme } from '@vuumbora/tokens';
+import { avatarDiameter, avatarInitialsFontSize, type AvatarSize } from './avatarScale';
 import { textStyleForSize } from './typography';
 
-export type AvatarSize = 'sm' | 'md' | 'lg';
-
-const SIZE: Record<AvatarSize, number> = { sm: 32, md: 44, lg: 64 };
+export type { AvatarDiameter, AvatarSize, AvatarSizeName } from './avatarScale';
 
 export interface AvatarProps {
   /** Nome usado para gerar as iniciais quando não há `imageUri`/`imageSource`. */
@@ -19,6 +18,7 @@ export interface AvatarProps {
    * `string` de URI — essa API não existe no `react-native-web`.
    */
   readonly imageSource?: ImageSourcePropType;
+  /** Diâmetro da escala das fichas (32, 40, 48, 56, 64, 88 — ver `avatarScale.ts`). Padrão: `'md'` (44, legado). */
   readonly size?: AvatarSize;
   readonly testID?: string;
 }
@@ -36,7 +36,7 @@ function initialsOf(name: string): string {
  * amarelo competindo com o CTA; o anel mantém o destaque de marca sem virar fundo).
  */
 export const Avatar = memo(function Avatar({ name, imageUri, imageSource, size = 'md', testID }: AvatarProps) {
-  const dimension = SIZE[size];
+  const dimension = avatarDiameter(size);
   const style = [styles.circle, { width: dimension, height: dimension, borderRadius: dimension / 2 }];
   const source = imageSource ?? (imageUri ? { uri: imageUri } : undefined);
 
@@ -48,7 +48,7 @@ export const Avatar = memo(function Avatar({ name, imageUri, imageSource, size =
 
   return (
     <View style={[style, styles.fallback]} accessibilityRole="image" accessibilityLabel={`Foto de perfil de ${name}`} testID={testID}>
-      <Text style={[styles.initials, textStyleForSize('bold', Math.round(dimension * 0.38))]}>{initialsOf(name)}</Text>
+      <Text style={[styles.initials, textStyleForSize('bold', avatarInitialsFontSize(dimension))]}>{initialsOf(name)}</Text>
     </View>
   );
 });

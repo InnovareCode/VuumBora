@@ -106,7 +106,8 @@ export const ListRow = memo(function ListRow({
       onPress={handlePress}
       style={focusVisible ? FOCUS_RING : undefined}
       accessibilityRole={toggle ? 'switch' : 'button'}
-      accessibilityState={toggle ? { checked: toggle.value } : undefined}
+      // `aria-checked` direto (o `switch` exige): o react-native-web não traduz `accessibilityState` para `aria-*`.
+      aria-checked={toggle ? toggle.value : undefined}
       accessibilityLabel={rowLabel}
       testID={testID}
     >

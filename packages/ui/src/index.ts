@@ -86,7 +86,7 @@ export type { ConsentCheckboxProps } from './ConsentCheckbox';
 export { LinkButton } from './LinkButton';
 export type { LinkButtonProps } from './LinkButton';
 
-export { useKeyboardFocusRing, focusRingStyle } from './useFocusRing';
+export { useKeyboardFocusRing, focusRingStyle, focusRingLayerStyle, NO_BROWSER_OUTLINE } from './useFocusRing';
 export type { FocusRingPlacement, KeyboardFocusRing } from './useFocusRing';
 
 export { PressableScale } from './PressableScale';
@@ -116,7 +116,8 @@ export { LoadingSkeleton } from './LoadingSkeleton';
 export type { LoadingSkeletonProps, LoadingSkeletonVariant } from './LoadingSkeleton';
 
 export { Avatar } from './Avatar';
-export type { AvatarProps, AvatarSize } from './Avatar';
+export type { AvatarProps, AvatarSize, AvatarDiameter, AvatarSizeName } from './Avatar';
+export { AVATAR_DIAMETERS } from './avatarScale';
 
 export { MockBadge } from './MockBadge';
 export type { MockBadgeProps } from './MockBadge';

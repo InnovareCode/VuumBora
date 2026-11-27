@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { isFocusVisibleEvent, isLinkActivationKey, linkKeyDownProps, type LinkKeyEvent } from '../src/linkKeyboard';
+import { isFocusVisibleEvent, isLinkActivationKey, isOwnFocusEvent, linkKeyDownProps, type LinkKeyEvent } from '../src/linkKeyboard';
 
 const press = (key: string, extra: Partial<LinkKeyEvent> = {}): LinkKeyEvent => ({ key, repeat: false, altKey: false, ...extra });
 
@@ -119,5 +119,24 @@ describe('isFocusVisibleEvent', () => {
     assert.equal(isFocusVisibleEvent({}), false);
     assert.equal(isFocusVisibleEvent(undefined), false);
     assert.equal(isFocusVisibleEvent(null), false);
+  });
+});
+
+describe('isOwnFocusEvent', () => {
+  it('foco do próprio contêiner conta', () => {
+    const node = {};
+    assert.equal(isOwnFocusEvent({ target: node, currentTarget: node }), true);
+  });
+
+  it('foco de um filho que borbulhou até o contêiner NÃO conta', () => {
+    assert.equal(isOwnFocusEvent({ target: {}, currentTarget: {} }), false);
+  });
+
+  it('sem alvo (nativo, evento vazio) não conta', () => {
+    assert.equal(isOwnFocusEvent({ target: {} }), false);
+    assert.equal(isOwnFocusEvent({ currentTarget: {} }), false);
+    assert.equal(isOwnFocusEvent({}), false);
+    assert.equal(isOwnFocusEvent(undefined), false);
+    assert.equal(isOwnFocusEvent(null), false);
   });
 });

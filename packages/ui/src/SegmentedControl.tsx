@@ -54,7 +54,8 @@ const SegmentedItem = memo(function SegmentedItem({ option, selected, onPress }:
       {...focusProps}
       onPress={onPress}
       accessibilityRole="tab"
-      accessibilityState={{ selected }}
+      // `aria-selected` direto: o react-native-web não traduz `accessibilityState` (mesmo achado da `BottomTabBar`).
+      aria-selected={selected}
       accessibilityLabel={option.label}
       style={focusVisible ? FOCUS_RING : undefined}
     >

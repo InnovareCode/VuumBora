@@ -15,16 +15,11 @@ export interface NetworkBannerProps {
  * tingido (nunca cor sozinha: tem texto). Não renderiza nada quando online — a tela nunca
  * reserva espaço vazio para ela.
  *
- * Medido de verdade em 22/11/2026 (`context.setOffline` do Playwright): funciona no
- * WebKit, mas NÃO aparece no Chromium headless — não é bug daqui. O Chromium expõe
- * `navigator.connection` (Network Information API); quando esse objeto existe, o
- * `@react-native-community/netinfo` escuta `connection.addEventListener('change', …)` em
- * vez de `window.addEventListener('online'/'offline', …)`, e `context.setOffline()` do
- * Playwright só dispara o segundo (confirmado: `navigator.onLine` muda e o evento
- * `offline` do `window` dispara normalmente nos dois motores). WebKit não tem
- * `navigator.connection`, por isso só lá o caminho medido bate com o caminho real do
- * componente. Em aparelho (iOS/Android, sem DOM) o NetInfo usa o módulo nativo de verdade
- * — nenhum dos dois caminhos web se aplica, e isso continua sem prova em aparelho.
+ * Web: até 27/11/2026 a faixa NÃO aparecia no Chromium com um corte que só dispara o
+ * `offline` do `window` (o `context.setOffline()` do Playwright, por exemplo) — o NetInfo lá
+ * escuta só `navigator.connection`. O `useNetworkStatus` agora soma os eventos do próprio
+ * navegador (`browserOnline.ts`), e a faixa aparece nos dois motores. Em aparelho
+ * (iOS/Android, sem DOM) vale só o módulo nativo do NetInfo — continua sem prova em aparelho.
  */
 export const NetworkBanner = memo(function NetworkBanner({ testID }: NetworkBannerProps) {
   const online = useNetworkStatus();

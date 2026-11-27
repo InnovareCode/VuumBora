@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@vuumbora/tokens';
 import { textStyle } from './typography';
-import { FOCUS_RING_WIDTH, useKeyboardFocusRing } from './useFocusRing';
+import { FOCUS_RING_WIDTH, NO_BROWSER_OUTLINE, useKeyboardFocusRing } from './useFocusRing';
 
 export interface BottomTabBarItem {
   readonly key: string;
@@ -25,8 +25,13 @@ export interface BottomTabBarProps {
 /** Navegação inferior fixa de 4 abas (ou menos). Ícone é injetado pelo app consumidor. */
 export const BottomTabBar = memo(function BottomTabBar({ items, activeKey, testID }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  // `tablist` em volta das abas: `role="tab"` sem dono não é uma aba para o leitor de tela (ARIA exige o pai).
   return (
-    <View style={[styles.root, { paddingBottom: Math.max(insets.bottom, theme.spacing['2']) }]} testID={testID}>
+    <View
+      style={[styles.root, { paddingBottom: Math.max(insets.bottom, theme.spacing['2']) }]}
+      testID={testID}
+      accessibilityRole="tablist"
+    >
       {items.map((item) => (
         <TabButton key={item.key} item={item} active={item.key === activeKey} />
       ))}
@@ -51,9 +56,7 @@ const FOCUS_RING_LAYER = {
   borderRadius: theme.radius.md,
   pointerEvents: 'none',
 } as const;
-// A camada substitui o contorno padrão do navegador (que ficaria por baixo dela, em dobro, no Chromium). Largura 0, e não
-// `outlineStyle: 'none'`, que o tipo de estilo do RN não aceita.
-const NO_BROWSER_OUTLINE = { outlineStyle: 'solid', outlineWidth: 0 } as const;
+// A camada substitui o contorno padrão do navegador (que ficaria por baixo dela, em dobro, no Chromium): `NO_BROWSER_OUTLINE`.
 
 interface TabButtonProps {
   readonly item: BottomTabBarItem;
@@ -69,7 +72,10 @@ const TabButton = memo(function TabButton({ item, active }: TabButtonProps) {
       {...focusProps}
       onPress={item.onPress}
       accessibilityRole="tab"
-      accessibilityState={{ selected: active }}
+      // `aria-selected`, e não `accessibilityState={{ selected }}`: o react-native-web 0.21 não traduz
+      // `accessibilityState` para `aria-*` (achado da Íris, onda 5 — nenhuma aba tinha `aria-selected` no DOM, o leitor de
+      // tela não sabia qual estava ativa). No iOS/Android o RN 0.88 lê `aria-selected` como o `selected` do estado.
+      aria-selected={active}
       accessibilityLabel={item.accessibilityLabel ?? item.label}
       style={[styles.tab, focusVisible && NO_BROWSER_OUTLINE]}
     >

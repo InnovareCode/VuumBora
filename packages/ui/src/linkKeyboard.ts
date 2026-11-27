@@ -70,3 +70,15 @@ export function isFocusVisibleEvent(event: unknown): boolean {
     return true;
   }
 }
+
+/**
+ * O evento de foco/desfoco é do PRÓPRIO elemento que o escuta, e não de um filho? No web o `onFocus`/`onBlur` do React
+ * borbulha (`focusin`/`focusout`): um contêiner que escuta foco recebe também o de cada botão dentro dele. Quem desenha
+ * anel no contêiner (a rolagem do `AppShell`) só reage quando `target === currentTarget`. Sem os dois campos (nativo, ou
+ * evento sem alvo) devolve `false`.
+ */
+export function isOwnFocusEvent(event: unknown): boolean {
+  const e = event as { readonly target?: unknown; readonly currentTarget?: unknown } | null | undefined;
+  if (!e || e.target == null || e.currentTarget == null) return false;
+  return e.target === e.currentTarget;
+}

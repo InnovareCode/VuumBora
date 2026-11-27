@@ -1,14 +1,29 @@
-import { memo, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
+import { memo, useCallback, useRef, useState, type ReactNode } from 'react';
+import {
+  Platform,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '@vuumbora/tokens';
 import { gradientColors, gradientLocations } from './gradient';
+import { isFocusVisibleEvent, isOwnFocusEvent } from './linkKeyboard';
+import { focusRingLayerStyle, NO_BROWSER_OUTLINE } from './useFocusRing';
 
 const COMPACT_WIDTH_BREAKPOINT = 375;
 
 const EDGES_WITH_FOOTER: readonly Edge[] = ['top', 'left', 'right'];
 const EDGES_DEFAULT: readonly Edge[] = ['top', 'right', 'bottom', 'left'];
+
+// Anel do contêiner de rolagem focado por teclado: 2pt para DENTRO da área rolável (ela encosta nas bordas da tela, um anel
+// por fora sairia da janela), com o raio de um campo.
+const SCROLL_FOCUS_RING = focusRingLayerStyle('inside', theme.radius.md);
 
 const SCREEN_GLOW_COLORS = gradientColors(theme.gradient.screen);
 const SCREEN_GLOW_LOCATIONS = gradientLocations(theme.gradient.screen);
@@ -52,6 +67,7 @@ export const AppShell = memo(function AppShell({
   // 20pt a partir daí (`screenPadding`) — o token compacto existia e ninguém usava (auditoria).
   const { width: windowWidth } = useWindowDimensions();
   const compact = windowWidth < COMPACT_WIDTH_BREAKPOINT;
+  const scrollFocus = useScrollFocusRing();
 
   // Auditoria B1 (causa raiz do "scrim que acaba antes do fim da tela" nas boas-vindas):
   // com `scroll`, este wrapper NÃO crescia (`!scroll && styles.flexFill` nunca aplicava
@@ -94,6 +110,9 @@ export const AppShell = memo(function AppShell({
         // teclado e exigiria um 2º toque — em formulário isso parece botão quebrado). `automaticallyAdjustKeyboardInsets`
         // (iOS) sobe o conteúdo acima do teclado; no Android quem faz isso é o `adjustResize` da janela.
         <ScrollView
+          {...scrollFocus.scrollProps}
+          // Sem o contorno `auto` do navegador por baixo da camada (quase preto, e metade fora da janela).
+          style={scrollFocus.ring ? NO_BROWSER_OUTLINE : undefined}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -104,10 +123,54 @@ export const AppShell = memo(function AppShell({
       ) : (
         content
       )}
+      {scroll && scrollFocus.ring ? (
+        <View style={[styles.scrollFocusFrame, { top: scrollFocus.ring.y, height: scrollFocus.ring.height }]}>
+          <View style={SCROLL_FOCUS_RING} />
+        </View>
+      ) : null}
       {footer}
     </SafeAreaView>
   );
 });
+
+interface ScrollFrame {
+  readonly y: number;
+  readonly height: number;
+}
+
+const NO_SCROLL_PROPS = {};
+
+/**
+ * Anel de foco do contêiner de rolagem (dívida da onda 4: P07, P07c, P08, M06). O Chromium torna focável por teclado o
+ * contêiner rolável que não tem nenhum alvo focável dentro ("keyboard-focusable scrollers") — certo, é como quem usa
+ * teclado rola com as setas. Mas o contorno dele é o `auto` do navegador, quase preto sobre o fundo escuro: o Tab
+ * parava num lugar invisível.
+ *
+ * O anel NÃO é `outline` no próprio `ScrollView`: no react-native-web os filhos (mapa, cartões) são pintados por cima do
+ * contorno do pai (mesma causa do anel do CTA, `focusRingLayerStyle`). Ele é uma camada irmã, DEPOIS da rolagem, na
+ * posição e altura que o `onLayout` dela mediu — sem embrulhar a rolagem num `View` novo (o layout das telas não muda).
+ * Só no web: fora dele não há foco de teclado de navegador e `scrollProps` fica vazio.
+ */
+function useScrollFocusRing() {
+  const isWeb = Platform.OS === 'web';
+  const frameRef = useRef<ScrollFrame | null>(null);
+  const [ring, setRing] = useState<ScrollFrame | null>(null);
+
+  const onLayout = useCallback((event: LayoutChangeEvent) => {
+    const { y, height } = event.nativeEvent.layout;
+    frameRef.current = { y, height };
+    setRing((current) => (current ? { y, height } : current));
+  }, []);
+  const onFocus = useCallback((event: unknown) => {
+    if (isOwnFocusEvent(event) && isFocusVisibleEvent(event) && frameRef.current) setRing(frameRef.current);
+  }, []);
+  const onBlur = useCallback((event: unknown) => {
+    if (isOwnFocusEvent(event)) setRing(null);
+  }, []);
+
+  const scrollProps = isWeb ? { onLayout, onFocus, onBlur } : NO_SCROLL_PROPS;
+  return { ring: isWeb ? ring : null, scrollProps };
+}
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.role.screen },
@@ -121,4 +184,5 @@ const styles = StyleSheet.create({
   // Altura aproxima o alcance do radial medido (120% x 420px a partir do topo) —
   // ver $description de gradient.screen sobre a conversão linear.
   glow: { position: 'absolute', top: 0, left: 0, right: 0, height: 420 },
+  scrollFocusFrame: { position: 'absolute', left: 0, right: 0, pointerEvents: 'none' },
 });

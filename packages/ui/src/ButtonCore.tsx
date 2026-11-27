@@ -19,7 +19,7 @@ import { withAlpha } from './colorAlpha';
 import { gradientColors, gradientLocations } from './gradient';
 import { PressableScale, type PressableScaleRenderState } from './PressableScale';
 import { glyphStyle, textStyle } from './typography';
-import { focusRingStyle, useKeyboardFocusRing } from './useFocusRing';
+import { focusRingLayerStyle, NO_BROWSER_OUTLINE, useKeyboardFocusRing } from './useFocusRing';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger';
 /** `prominent` força a altura de CTA principal (56pt, 52 com janela curta) em qualquer variante — §15: "Recusar e Aceitar da mesma altura" (M6). `primary` já é `prominent` por padrão. */
@@ -36,7 +36,9 @@ const DANGER_TINT = withAlpha(theme.role.dangerFill, 0.1);
 
 // Anel de foco de teclado, FORA do botão com vão de 2pt: separa o botão do fundo escuro sem tocar no rótulo, na borda de
 // contorno nem no gradiente. O contorno padrão do navegador some no WebKit (1,08:1) — ver `useFocusRing.ts`.
-const FOCUS_RING = focusRingStyle('outside', theme.radius.md);
+// CAMADA (último filho) e não `outline` do `Pressable`: a sombra do CTA mora no filho (gradiente) e, pintada depois do
+// contorno do pai, escurecia a base do anel ("anel cortado embaixo", Íris — M10 e outras; ver `focusRingLayerStyle`).
+const FOCUS_RING_LAYER = focusRingLayerStyle('outside', theme.radius.md);
 
 // "Brilho" do CTA medido na referência: 1px claro em cima + 1px quente embaixo,
 // NUNCA halo (ver docs/direcao-de-arte.md §0/§4). `boxShadow` com `inset` é a única
@@ -173,7 +175,7 @@ export const ButtonCore = memo(function ButtonCore({
       <PressableScale
         {...focusProps}
         onPress={handlePress}
-        style={focusVisible ? FOCUS_RING : undefined}
+        style={focusVisible ? NO_BROWSER_OUTLINE : undefined}
         disabled={!isInteractive}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel ?? label}
@@ -209,21 +211,23 @@ export const ButtonCore = memo(function ButtonCore({
             variant === 'primary' && !disabled ? { boxShadow: CTA_SHADOW } : undefined,
           ];
 
-          if (v.ctaGradient) {
-            return (
-              <LinearGradient colors={CTA_COLORS} locations={CTA_LOCATIONS} style={base}>
-                {content}
-              </LinearGradient>
-            );
-          }
-          if (v.overlayGradient) {
-            return (
-              <LinearGradient colors={OVERLAY_COLORS} locations={OVERLAY_LOCATIONS} style={base}>
-                {content}
-              </LinearGradient>
-            );
-          }
-          return <View style={base}>{content}</View>;
+          const surface = v.ctaGradient ? (
+            <LinearGradient colors={CTA_COLORS} locations={CTA_LOCATIONS} style={base}>
+              {content}
+            </LinearGradient>
+          ) : v.overlayGradient ? (
+            <LinearGradient colors={OVERLAY_COLORS} locations={OVERLAY_LOCATIONS} style={base}>
+              {content}
+            </LinearGradient>
+          ) : (
+            <View style={base}>{content}</View>
+          );
+          return (
+            <>
+              {surface}
+              {focusVisible ? <View style={FOCUS_RING_LAYER} /> : null}
+            </>
+          );
         }}
       </PressableScale>
       {error && errorMessage ? (

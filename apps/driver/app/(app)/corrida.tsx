@@ -26,8 +26,8 @@ import {
   tokens,
   useKeyboardFocusRing,
   type TextInputHandle,
+  useNetworkStatus,
 } from '@vuumbora/ui';
-import { useRobustOnlineStatus } from '../../src/lib/useRobustOnlineStatus';
 import { MoreOptionsSheet } from '../../src/components/ride/MoreOptionsSheet';
 import { useElapsedSeconds } from '../../src/components/ride/useElapsedSeconds';
 import { openEmergencyCall } from '../../src/support/openSupportChannel';
@@ -89,7 +89,7 @@ export default function RideInProgressScreen() {
   const compact = width < COMPACT_WIDTH_BREAKPOINT;
   const narrowAddress = width < 360;
   const panelPadding = compact ? theme.layout.screenPaddingCompact : theme.layout.screenPadding;
-  const online = useRobustOnlineStatus();
+  const online = useNetworkStatus();
   const offline = devEstado === 'sem-rede' || !online;
 
   const [phase, setPhase] = useState<RidePhase>(forcedPhase ?? 'en_route');
