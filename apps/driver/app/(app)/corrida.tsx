@@ -32,7 +32,7 @@ import { MoreOptionsSheet } from '../../src/components/ride/MoreOptionsSheet';
 import { useElapsedSeconds } from '../../src/components/ride/useElapsedSeconds';
 import { openEmergencyCall } from '../../src/support/openSupportChannel';
 import { openNavigation } from '../../src/navigation/openNavigation';
-import { ensureAssignedTrip, getDriverTripPort, MOCK_TRIP_ID, newIdempotencyKey } from '../../src/ride/driverRideClient';
+import { ensureAssignedTrip, getCurrentTripId, getDriverTripPort, newIdempotencyKey } from '../../src/ride/driverRideClient';
 import { formatDistanceKm, formatElapsedClock, formatPickupDistance, formatPickupEta } from '../../src/utils/offerFormat';
 
 const COMPACT_WIDTH_BREAKPOINT = 375;
@@ -183,8 +183,9 @@ export default function RideInProgressScreen() {
   async function attemptStart(pickupCode: string): Promise<void> {
     setStartLoading(true);
     await ensureAssignedTrip();
-    await getDriverTripPort().arrived(MOCK_TRIP_ID, newIdempotencyKey());
-    const result = await getDriverTripPort().start(MOCK_TRIP_ID, { pickupCode }, newIdempotencyKey());
+    const tripId = getCurrentTripId();
+    await getDriverTripPort().arrived(tripId, newIdempotencyKey());
+    const result = await getDriverTripPort().start(tripId, { pickupCode }, newIdempotencyKey());
     setStartLoading(false);
     if (result.ok) {
       setCodeError(undefined);
@@ -204,6 +205,40 @@ export default function RideInProgressScreen() {
       setCodeError('Código incorreto. Confira com o passageiro.');
       setCode('');
       codeInputRef.current?.focus();
+      return;
+    }
+    if (result.error.kind === 'conflict') {
+      // 409 (`invalid_transition`/`idempotency_key_reused`): a corrida mudou de fase POR FORA (outra
+      // aba, ou o próprio efeito de `phase==='arrived'` correndo de novo) — antes isso era ignorado
+      // em silêncio e a tela ficava presa em "Iniciar corrida" sem dizer por quê (achado real da
+      // Íris). Relê o estado de verdade (`status`) e mostra a fase que o SERVIDOR diz, nunca a que a
+      // tela assumia.
+      await syncPhaseWithServer();
+    }
+  }
+
+  /** Relê `DriverTripPort.status` e corrige `phase` para bater com o que o mock diz de verdade. */
+  async function syncPhaseWithServer(): Promise<void> {
+    const statusResult = await getDriverTripPort().status(getCurrentTripId());
+    if (!statusResult.ok) {
+      router.replace('/'); // não é mais o atribuído (ou a corrida sumiu) — sem para onde voltar aqui
+      return;
+    }
+    switch (statusResult.data.status) {
+      case 'driver_en_route':
+        setPhase('en_route');
+        return;
+      case 'driver_arrived':
+        setPhase('arrived');
+        return;
+      case 'in_progress':
+        setPhase('in_progress');
+        return;
+      case 'completed':
+        router.replace('/finalizada');
+        return;
+      default:
+        router.replace('/'); // cancelled/failed/requested/searching_driver/driver_assigned: sem tela aqui
     }
   }
 
@@ -233,7 +268,7 @@ export default function RideInProgressScreen() {
     handledArrivalRef.current = key;
     void (async () => {
       await ensureAssignedTrip();
-      await getDriverTripPort().arrived(MOCK_TRIP_ID, newIdempotencyKey());
+      await getDriverTripPort().arrived(getCurrentTripId(), newIdempotencyKey());
       if (devEstado === 'codigo-errado') {
         await attemptStart(DEV_WRONG_PICKUP_CODE);
       } else if (devEstado === 'bloqueado') {
@@ -473,7 +508,10 @@ export default function RideInProgressScreen() {
 
               {/* D-12: o PIN de embarque aparece SEMPRE no estado "chegou" (ficha M08 §2/§5) — nunca só
                   num estado de dev. `inputRef` é pra onde o foco vai quando o mock responde "código
-                  incorreto" (campo limpo + foco, igual a um formulário real). */}
+                  incorreto" (campo limpo + foco, igual a um formulário real). `placeholder` próprio
+                  (não o padrão do `CodeInput`, "0000" = `'0'.repeat(length)`): o código simulado
+                  TAMBÉM é "0000" (`driverRideClient.ts`), e o campo vazio "sugerindo" a resposta
+                  certa era um achado real da Íris. */}
               <View style={styles.codeBlock} testID="corrida-codigo-embarque">
                 <CodeInput
                   label="Código de embarque"
@@ -483,6 +521,7 @@ export default function RideInProgressScreen() {
                     setCode(text);
                     setCodeError(undefined); // qualquer edição nova limpa o erro anterior, como um campo normal
                   }}
+                  placeholder="••••"
                   error={Boolean(codeError)}
                   inputRef={codeInputRef}
                   testID="corrida-codigo-input"

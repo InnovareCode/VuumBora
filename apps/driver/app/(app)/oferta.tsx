@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { BackHandler, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Car, MapPin } from 'lucide-react-native';
@@ -20,6 +20,7 @@ import {
   useSecondsUntil,
 } from '@vuumbora/ui';
 import { useRobustOnlineStatus } from '../../src/lib/useRobustOnlineStatus';
+import { startNewOfferCycle } from '../../src/ride/driverRideClient';
 import { OfferCountdown } from '../../src/components/ride/OfferCountdown';
 import { formatPickupDistance, formatPickupEta, formatTripDistanceRange, formatTripDurationRange } from '../../src/utils/offerFormat';
 
@@ -27,6 +28,8 @@ const OFFER_TTL_S = 15;
 const SHORT_WINDOW_HEIGHT = 640;
 /** M06 §5 ("contador em zero"): sem resposta do servidor em 3 s depois de zerar, a tela fecha sozinha. */
 const AUTO_EXPIRE_AFTER_ZERO_MS = 3000;
+/** M06 §5: qualquer oferta revogada (tomada/expirada/cancelada) volta à M05 sozinha em 2 s. */
+const REVOKED_AUTO_CLOSE_MS = 2000;
 
 interface MockOffer {
   readonly pickupNeighborhood: string;
@@ -102,6 +105,12 @@ export default function RideOfferScreen() {
   const compactHeight = windowHeight < SHORT_WINDOW_HEIGHT;
   const online = useRobustOnlineStatus();
 
+  // Uma oferta NOVA = um `tripId` NOVO no mock (`driverRideClient`) — síncrono no 1º render (não um
+  // `useEffect`), para já valer antes de qualquer toque em "Aceitar". Sem isto, uma 2ª corrida na
+  // MESMA sessão (voltar à M05 e receber outra oferta) reusava o `tripId` já `completed`/`in_progress`
+  // da primeira, e `arrived`/`start` quebravam com erro silencioso — achado real da Íris.
+  useState(startNewOfferCycle);
+
   const offerData = forcedState === 'texto-longo' ? LONG_TEXT_OFFER : DEFAULT_OFFER;
   const offline = forcedState === 'sem-rede' || !online;
   const forcedRevokedReason =
@@ -129,13 +138,36 @@ export default function RideOfferScreen() {
   }, [secondsLeft, autoExpired, forcedRevokedReason, accepting, declining]);
 
   const revokedReason = forcedRevokedReason ?? (autoExpired ? 'expired' : undefined);
+  const navigatedAwayRef = useRef(false);
 
-  // Voltar do Android NÃO fecha a oferta (D-34): recusar é uma decisão, não um gesto acidental.
+  function goBackToPanel() {
+    if (navigatedAwayRef.current) return;
+    navigatedAwayRef.current = true;
+    router.replace('/');
+  }
+
+  // M06 §5: QUALQUER oferta revogada (tomada, expirada ou cancelada — forçada por `devEstado` ou
+  // pelo contador de verdade) volta à M05 sozinha depois de 2 s. Antes disso não sobrava NENHUMA
+  // saída: o rodapé sumia (`revokedReason ? undefined : <FooterActions>`) e a rota ficava presa em
+  // `/oferta` — achado real da Íris com `m06-saida.mjs`.
+  useEffect(() => {
+    if (!revokedReason) return undefined;
+    const timer = setTimeout(goBackToPanel, REVOKED_AUTO_CLOSE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `goBackToPanel` só lê o ref, não precisa disparar o efeito de novo.
+  }, [revokedReason]);
+
+  // Voltar do Android NÃO fecha a oferta enquanto ela está ATIVA (D-34): recusar é uma decisão, não
+  // um gesto acidental. Revogada, porém, o voltar passa a ser a MESMA saída do botão visível —
+  // travar o back aqui também (como antes) deixava a tela sem NENHUMA saída por teclado/hardware.
   useEffect(() => {
     if (Platform.OS !== 'android') return undefined;
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (revokedReason) goBackToPanel();
+      return true;
+    });
     return () => subscription.remove();
-  }, []);
+  }, [revokedReason]);
 
   function handleAccept() {
     if (forcedState || accepting || declining || offline || revokedReason) return;
@@ -157,7 +189,13 @@ export default function RideOfferScreen() {
     <AppShell
       scroll
       footer={
-        revokedReason ? undefined : (
+        revokedReason ? (
+          // Saída visível nos 2 s antes do fechamento automático (ver efeito acima) — sem isto, a
+          // única forma de sair era esperar o `setTimeout`, sem nenhum controle na tela.
+          <FooterActions elevated={false} testID="oferta-revogada-footer">
+            <PrimaryButton label="Voltar ao painel" onPress={goBackToPanel} testID="back-to-panel-button" />
+          </FooterActions>
+        ) : (
           <FooterActions elevated={false} testID="oferta-footer">
             {acceptNetworkError ? <InlineAlert tone="warning" message="Sem conexão. Tentando de novo…" testID="oferta-erro-rede" /> : null}
             <PrimaryButton
