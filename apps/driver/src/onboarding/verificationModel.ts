@@ -83,6 +83,11 @@ export function isPending(item: ChecklistItem): boolean {
   return item.state === 'todo' || item.state === 'rejected' || item.state === 'expired';
 }
 
+/** "Falta 1 de 7" / "Faltam 3 de 7": o verbo concorda com o número que falta. */
+export function pendingLabel(pending: number, total: number): string {
+  return `${pending === 1 ? 'Falta' : 'Faltam'} ${pending} de ${total}`;
+}
+
 /** "Faltam {pending} de {total}" — só o que é obrigatório conta. */
 export function checklistProgress(items: readonly ChecklistItem[]): { readonly pending: number; readonly total: number } {
   const required = items.filter((item) => item.required);
@@ -207,7 +212,7 @@ export function summarizeVerification(verification: DriverVerification, today: s
       return {
         key: 'pending_documents',
         tone: 'info',
-        title: `Faltam ${pending} de ${total} etapas do cadastro`,
+        title: `${pendingLabel(pending, total)} etapas do cadastro`,
         message: next ? `Próxima etapa: ${next.label}.` : 'Confira o que falta enviar.',
         action: { label: pending === total ? 'Começar cadastro' : 'Continuar cadastro', target: { to: 'checklist' } },
       };
@@ -268,7 +273,7 @@ export function shortStatusLabel(verification: DriverVerification, today: string
       return 'Ainda não aberto';
     case 'pending_documents': {
       const { pending, total } = checklistProgress(buildChecklist(verification, today));
-      return `Faltam ${pending} de ${total}`;
+      return pendingLabel(pending, total);
     }
     case 'under_review':
       return 'Em análise';

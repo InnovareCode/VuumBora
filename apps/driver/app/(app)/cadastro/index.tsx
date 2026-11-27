@@ -27,6 +27,7 @@ import {
   notStartedSummary,
   summarizeVerification,
   type ChecklistItem,
+  pendingLabel,
 } from '../../../src/onboarding/verificationModel';
 import { useSession } from '../../../src/session/SessionProvider';
 
@@ -117,14 +118,14 @@ export default function CadastroScreen() {
 
             <View style={styles.progressBlock}>
               <Text style={styles.progressText} testID="cadastro-progresso-texto">
-                {progress.pending === 0 ? 'Tudo enviado' : `Faltam ${progress.pending} de ${progress.total}`}
+                {progress.pending === 0 ? 'Tudo enviado' : pendingLabel(progress.pending, progress.total)}
               </Text>
               <ProgressBar
                 fraction={progress.total === 0 ? 1 : (progress.total - progress.pending) / progress.total}
                 accessibilityLabel={
                   progress.pending === 0
                     ? 'Todas as etapas do cadastro enviadas'
-                    : `Faltam ${progress.pending} de ${progress.total} etapas do cadastro`
+                    : `${pendingLabel(progress.pending, progress.total)} etapas do cadastro`
                 }
                 testID="cadastro-progresso"
               />
