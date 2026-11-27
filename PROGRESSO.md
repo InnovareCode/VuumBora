@@ -2,6 +2,8 @@
 
 Estado do projeto entre sessões. Atualizar ao fim de cada marco.
 
+**Ordem do que falta e estimativa por etapa: [`docs/cronograma.md`](docs/cronograma.md)** (27/11/2026).
+
 ## Estado em 23/11/2026 (madrugada): S1 EM PRODUÇÃO e onda 5 na main
 
 **Produção (publicada pelo dono em 22-23/11, conferida por `tools/producao/verificar-pos-deploy.mjs`):**
